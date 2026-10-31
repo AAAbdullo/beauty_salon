@@ -7,6 +7,7 @@ import 'features/auth/onboarding_registration_screen.dart';
 import 'features/client_home/client_home_screen.dart';
 import 'features/salons_map/salons_map_screen.dart';
 import 'features/salon_detail/salon_detail_screen.dart';
+import 'features/salon_detail/master_profile_screen.dart';
 import 'features/booking/booking_screen.dart';
 import 'features/booking/payment_screen.dart';
 import 'features/my_bookings/my_bookings_screen.dart';
@@ -14,6 +15,7 @@ import 'features/subscription_credits/credits_screen.dart';
 import 'features/client_qr/client_qr_modal.dart';
 import 'features/profile_settings/client_profile_screen.dart';
 import 'features/profile_settings/settings_screen.dart';
+import 'features/favorites/favorites_screen.dart';
 import 'features/master_cabinet/dashboard/master_dashboard_screen.dart';
 import 'features/master_cabinet/schedule/master_schedule_screen.dart';
 import 'features/master_cabinet/qr_scanner/master_qr_scanner_screen.dart';
@@ -63,6 +65,7 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
   // Стек внутренних переходов экранов
   String _activeSubScreen = '';
   String _selectedSalonName = 'Nur Beauty';
+  String _selectedMasterName = 'Алена';
 
   @override
   Widget build(BuildContext context) {
@@ -123,6 +126,19 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
         salonName: _selectedSalonName,
         onBack: () => setState(() => _activeSubScreen = ''),
         onBookNow: () => setState(() => _activeSubScreen = 'booking'),
+        onMasterTap: (masterName) {
+          setState(() {
+            _selectedMasterName = masterName;
+            _activeSubScreen = 'master_profile';
+          });
+        },
+      );
+    }
+    if (_activeSubScreen == 'master_profile') {
+      return MasterProfileScreen(
+        masterName: _selectedMasterName,
+        onBack: () => setState(() => _activeSubScreen = 'salon_detail'),
+        onBookMaster: () => setState(() => _activeSubScreen = 'booking'),
       );
     }
     if (_activeSubScreen == 'booking') {
@@ -155,6 +171,29 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
               content: Text('Запись успешно оформлена! Списано 34 кр.'),
             ),
           );
+        },
+      );
+    }
+    if (_activeSubScreen == 'favorites') {
+      return FavoritesScreen(
+        onBack: () => setState(() => _activeSubScreen = ''),
+        onSalonTap: (salonName) {
+          setState(() {
+            _selectedSalonName = salonName;
+            _activeSubScreen = 'salon_detail';
+          });
+        },
+        onMasterTap: (masterName) {
+          setState(() {
+            _selectedMasterName = masterName;
+            _activeSubScreen = 'master_profile';
+          });
+        },
+        onBookSalon: (salonName) {
+          setState(() {
+            _selectedSalonName = salonName;
+            _activeSubScreen = 'booking';
+          });
         },
       );
     }
@@ -207,6 +246,7 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
             _selectedSalonName = name;
             _activeSubScreen = 'salon_detail';
           }),
+          onOpenFavorites: () => setState(() => _activeSubScreen = 'favorites'),
         );
       case 1:
         return SalonsMapScreen(
@@ -227,6 +267,7 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
         return ClientProfileScreen(
           onOpenSettings: () => setState(() => _activeSubScreen = 'settings'),
           onOpenQr: () => ClientQrModal.show(context),
+          onOpenFavorites: () => setState(() => _activeSubScreen = 'favorites'),
         );
     }
   }

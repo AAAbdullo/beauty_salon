@@ -1,36 +1,48 @@
 import 'package:flutter/material.dart';
+import '../../core/services/app_state_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/badges/app_status_badge.dart';
 import '../../core/widgets/buttons/app_gradient_button.dart';
 import '../../core/widgets/cards/app_card.dart';
+import 'master_profile_screen.dart';
 
 class SalonDetailScreen extends StatefulWidget {
   final String salonName;
   final VoidCallback onBack;
   final VoidCallback onBookNow;
+  final Function(String masterName)? onMasterTap;
 
   const SalonDetailScreen({
     super.key,
     required this.salonName,
     required this.onBack,
     required this.onBookNow,
+    this.onMasterTap,
   });
 
   @override
   State<SalonDetailScreen> createState() => _SalonDetailScreenState();
 }
 
-class _SalonDetailScreenState extends State<SalonDetailScreen> with SingleTickerProviderStateMixin {
+class _SalonDetailScreenState extends State<SalonDetailScreen>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  final _appState = AppStateService();
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
+    _appState.addListener(_onStateChanged);
+  }
+
+  void _onStateChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    _appState.removeListener(_onStateChanged);
     _tabController.dispose();
     super.dispose();
   }
@@ -90,7 +102,11 @@ class _SalonDetailScreenState extends State<SalonDetailScreen> with SingleTicker
         CircleAvatar(
           backgroundColor: AppColors.surface,
           child: IconButton(
-            icon: const Icon(Icons.share_outlined, color: AppColors.ink, size: 20),
+            icon: const Icon(
+              Icons.share_outlined,
+              color: AppColors.ink,
+              size: 20,
+            ),
             onPressed: () {},
           ),
         ),
@@ -98,8 +114,30 @@ class _SalonDetailScreenState extends State<SalonDetailScreen> with SingleTicker
         CircleAvatar(
           backgroundColor: AppColors.surface,
           child: IconButton(
-            icon: const Icon(Icons.favorite_border, color: AppColors.primary, size: 20),
-            onPressed: () {},
+            icon: Icon(
+              _appState.isSalonFavorite(widget.salonName)
+                  ? Icons.favorite
+                  : Icons.favorite_border,
+              color: AppColors.primary,
+              size: 20,
+            ),
+            onPressed: () {
+              final isFav = _appState.isSalonFavorite(widget.salonName);
+              _appState.toggleSalonFavorite(widget.salonName);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  backgroundColor: AppColors.ink,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  content: Text(
+                    !isFav
+                        ? 'Салон «${widget.salonName}» добавлен в Избранное'
+                        : 'Салон «${widget.salonName}» удален из Избранного',
+                  ),
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+            },
           ),
         ),
         const SizedBox(width: 16),
@@ -124,16 +162,30 @@ class _SalonDetailScreenState extends State<SalonDetailScreen> with SingleTicker
               right: 16,
               bottom: 16,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.black54,
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: const Row(
                   children: [
-                    Icon(Icons.photo_library_outlined, size: 14, color: Colors.white),
+                    Icon(
+                      Icons.photo_library_outlined,
+                      size: 14,
+                      color: Colors.white,
+                    ),
                     SizedBox(width: 4),
-                    Text('1/12', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                    Text(
+                      '1/12',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -155,7 +207,10 @@ class _SalonDetailScreenState extends State<SalonDetailScreen> with SingleTicker
               children: [
                 Text(
                   widget.salonName,
-                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
                 const SizedBox(width: 6),
                 const Icon(Icons.verified, color: AppColors.primary, size: 20),
@@ -166,26 +221,45 @@ class _SalonDetailScreenState extends State<SalonDetailScreen> with SingleTicker
               decoration: BoxDecoration(
                 color: const Color(0xFFFFF7E6),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.gold.withValues(alpha: 0.5)),
+                border: Border.all(
+                  color: AppColors.gold.withValues(alpha: 0.5),
+                ),
               ),
               child: const Row(
                 children: [
-                  Icon(Icons.monetization_on_outlined, size: 14, color: AppColors.gold),
+                  Icon(
+                    Icons.monetization_on_outlined,
+                    size: 14,
+                    color: AppColors.gold,
+                  ),
                   SizedBox(width: 4),
-                  Text('86 кредитов', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF8A5D00))),
+                  Text(
+                    '86 кредитов',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF8A5D00),
+                    ),
+                  ),
                 ],
               ),
             ),
           ],
         ),
         const SizedBox(height: 4),
-        const Text('Маникюр · Педикюр · Брови', style: TextStyle(fontSize: 13, color: AppColors.muted)),
+        const Text(
+          'Маникюр · Педикюр · Брови',
+          style: TextStyle(fontSize: 13, color: AppColors.muted),
+        ),
         const SizedBox(height: 6),
         const Row(
           children: [
             Icon(Icons.star, size: 15, color: AppColors.primary),
             SizedBox(width: 4),
-            Text('4.8 (126 отзывов)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+            Text(
+              '4.8 (126 отзывов)',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+            ),
             Spacer(),
             AppStatusBadge(text: 'Открыто до 21:00'),
           ],
@@ -193,13 +267,27 @@ class _SalonDetailScreenState extends State<SalonDetailScreen> with SingleTicker
         const SizedBox(height: 6),
         Row(
           children: [
-            const Icon(Icons.location_on_outlined, size: 14, color: AppColors.muted),
+            const Icon(
+              Icons.location_on_outlined,
+              size: 14,
+              color: AppColors.muted,
+            ),
             const SizedBox(width: 4),
-            const Text('0,6 км · Ташкент', style: TextStyle(fontSize: 12, color: AppColors.muted)),
+            const Text(
+              '0,6 км · Ташкент',
+              style: TextStyle(fontSize: 12, color: AppColors.muted),
+            ),
             const SizedBox(width: 8),
             GestureDetector(
               onTap: () {},
-              child: const Text('На карте >', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primaryText)),
+              child: const Text(
+                'На карте >',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.primaryText,
+                ),
+              ),
             ),
           ],
         ),
@@ -233,7 +321,11 @@ class _SalonDetailScreenState extends State<SalonDetailScreen> with SingleTicker
               Text(
                 a['title'] as String,
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: AppColors.ink),
+                style: const TextStyle(
+                  fontSize: 9,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.ink,
+                ),
               ),
             ],
           ),
@@ -272,15 +364,26 @@ class _SalonDetailScreenState extends State<SalonDetailScreen> with SingleTicker
 
   Widget _buildPopularServices() {
     final services = [
-      {'name': 'Маникюр классический', 'time': '60 мин', 'price': '150 000 сум'},
-      {'name': 'Педикюр классический', 'time': '90 мин', 'price': '200 000 сум'},
+      {
+        'name': 'Маникюр классический',
+        'time': '60 мин',
+        'price': '150 000 сум',
+      },
+      {
+        'name': 'Педикюр классический',
+        'time': '90 мин',
+        'price': '200 000 сум',
+      },
       {'name': 'Окрашивание бровей', 'time': '40 мин', 'price': '80 000 сум'},
     ];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Популярные услуги', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+        const Text(
+          'Популярные услуги',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+        ),
         const SizedBox(height: 12),
         SizedBox(
           height: 175,
@@ -304,12 +407,30 @@ class _SalonDetailScreenState extends State<SalonDetailScreen> with SingleTicker
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: const Center(
-                          child: Icon(Icons.spa, color: AppColors.primary, size: 30),
+                          child: Icon(
+                            Icons.spa,
+                            color: AppColors.primary,
+                            size: 30,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 6),
-                      Text(s['name']!, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
-                      Text(s['time']!, style: const TextStyle(fontSize: 10, color: AppColors.muted)),
+                      Text(
+                        s['name']!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Text(
+                        s['time']!,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          color: AppColors.muted,
+                        ),
+                      ),
                       const Spacer(),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -319,7 +440,11 @@ class _SalonDetailScreenState extends State<SalonDetailScreen> with SingleTicker
                               s['price']!,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.primaryText),
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.primaryText,
+                              ),
                             ),
                           ),
                           Container(
@@ -329,7 +454,11 @@ class _SalonDetailScreenState extends State<SalonDetailScreen> with SingleTicker
                               color: AppColors.primary,
                               shape: BoxShape.circle,
                             ),
-                            child: const Icon(Icons.add, color: Colors.white, size: 16),
+                            child: const Icon(
+                              Icons.add,
+                              color: Colors.white,
+                              size: 16,
+                            ),
                           ),
                         ],
                       ),
@@ -355,7 +484,10 @@ class _SalonDetailScreenState extends State<SalonDetailScreen> with SingleTicker
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Мастера салона', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+        const Text(
+          'Мастера салона',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+        ),
         const SizedBox(height: 12),
         SizedBox(
           height: 120,
@@ -365,45 +497,96 @@ class _SalonDetailScreenState extends State<SalonDetailScreen> with SingleTicker
             separatorBuilder: (_, index) => const SizedBox(width: 14),
             itemBuilder: (context, index) {
               final m = masters[index];
-              return Column(
-                children: [
-                  Stack(
-                    children: [
-                      Container(
-                        width: 58,
-                        height: 58,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: AppColors.primary, width: 2),
-                          color: AppColors.primaryTint,
+              return InkWell(
+                onTap: () {
+                  if (widget.onMasterTap != null) {
+                    widget.onMasterTap!(m['name']!);
+                  } else {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => MasterProfileScreen(
+                          masterName: m['name']!,
+                          onBack: () => Navigator.pop(context),
+                          onBookMaster: () {
+                            Navigator.pop(context);
+                            widget.onBookNow();
+                          },
                         ),
-                        child: const Icon(Icons.person, color: AppColors.primary, size: 36),
                       ),
-                      Positioned(
-                        bottom: 2,
-                        right: 2,
-                        child: Container(
-                          width: 12,
-                          height: 12,
-                          decoration: const BoxDecoration(
-                            color: AppColors.success,
+                    );
+                  }
+                },
+                borderRadius: BorderRadius.circular(16),
+                child: Column(
+                  children: [
+                    Stack(
+                      children: [
+                        Container(
+                          width: 58,
+                          height: 58,
+                          decoration: BoxDecoration(
                             shape: BoxShape.circle,
+                            border: Border.all(
+                              color: AppColors.primary,
+                              width: 2,
+                            ),
+                            color: AppColors.primaryTint,
+                          ),
+                          child: const Icon(
+                            Icons.person,
+                            color: AppColors.primary,
+                            size: 36,
                           ),
                         ),
+                        Positioned(
+                          bottom: 2,
+                          right: 2,
+                          child: Container(
+                            width: 12,
+                            height: 12,
+                            decoration: const BoxDecoration(
+                              color: AppColors.success,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      m['name']!,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Text(m['name']!, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-                  Text(m['role']!, style: const TextStyle(fontSize: 9, color: AppColors.muted)),
-                  Row(
-                    children: [
-                      const Icon(Icons.star, size: 10, color: AppColors.primary),
-                      const SizedBox(width: 2),
-                      Text(m['rating']!, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600)),
-                    ],
-                  ),
-                ],
+                    ),
+                    Text(
+                      m['role']!,
+                      style: const TextStyle(
+                        fontSize: 9,
+                        color: AppColors.muted,
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.star,
+                          size: 10,
+                          color: AppColors.primary,
+                        ),
+                        const SizedBox(width: 2),
+                        Text(
+                          m['rating']!,
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               );
             },
           ),
@@ -416,7 +599,10 @@ class _SalonDetailScreenState extends State<SalonDetailScreen> with SingleTicker
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Фото салона', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+        const Text(
+          'Фото салона',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+        ),
         const SizedBox(height: 12),
         Row(
           children: [
@@ -427,7 +613,10 @@ class _SalonDetailScreenState extends State<SalonDetailScreen> with SingleTicker
                   color: Colors.pink.shade50,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(Icons.camera_alt_outlined, color: AppColors.primary),
+                child: const Icon(
+                  Icons.camera_alt_outlined,
+                  color: AppColors.primary,
+                ),
               ),
             ),
             const SizedBox(width: 8),
@@ -438,7 +627,10 @@ class _SalonDetailScreenState extends State<SalonDetailScreen> with SingleTicker
                   color: Colors.pink.shade50,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(Icons.camera_alt_outlined, color: AppColors.primary),
+                child: const Icon(
+                  Icons.camera_alt_outlined,
+                  color: AppColors.primary,
+                ),
               ),
             ),
             const SizedBox(width: 8),
@@ -450,7 +642,13 @@ class _SalonDetailScreenState extends State<SalonDetailScreen> with SingleTicker
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Center(
-                  child: Text('+8', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink)),
+                  child: Text(
+                    '+8',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.ink,
+                    ),
+                  ),
                 ),
               ),
             ),

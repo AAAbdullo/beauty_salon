@@ -7,11 +7,13 @@ import '../../core/widgets/cards/app_card.dart';
 class ClientProfileScreen extends StatefulWidget {
   final VoidCallback onOpenSettings;
   final VoidCallback onOpenQr;
+  final VoidCallback? onOpenFavorites;
 
   const ClientProfileScreen({
     super.key,
     required this.onOpenSettings,
     required this.onOpenQr,
+    this.onOpenFavorites,
   });
 
   @override
@@ -180,7 +182,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
   Widget _buildStatsRow() {
     final stats = [
       {'val': '${_appState.bookings.length}', 'label': 'Записей', 'icon': Icons.calendar_today_outlined},
-      {'val': '12', 'label': 'Любимых', 'icon': Icons.favorite_border},
+      {'val': '${_appState.totalFavoritesCount}', 'label': 'Любимых', 'icon': Icons.favorite_border, 'action': widget.onOpenFavorites},
       {'val': '1 900', 'label': 'Бонусных баллов', 'icon': Icons.star_border},
       {'val': '${_appState.clientCredits}', 'label': 'Кредитов', 'icon': Icons.account_balance_wallet_outlined},
     ];
@@ -192,16 +194,20 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
           return Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: AppCard(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Column(
-                  children: [
-                    Icon(s['icon'] as IconData, size: 18, color: AppColors.primary),
-                    const SizedBox(height: 6),
-                    Text(s['val'] as String, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 2),
-                    Text(s['label'] as String, textAlign: TextAlign.center, maxLines: 1, style: const TextStyle(fontSize: 9, color: AppColors.muted)),
-                  ],
+              child: InkWell(
+                onTap: s['action'] as VoidCallback?,
+                borderRadius: BorderRadius.circular(16),
+                child: AppCard(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Column(
+                    children: [
+                      Icon(s['icon'] as IconData, size: 18, color: AppColors.primary),
+                      const SizedBox(height: 6),
+                      Text(s['val'] as String, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 2),
+                      Text(s['label'] as String, textAlign: TextAlign.center, maxLines: 1, style: const TextStyle(fontSize: 9, color: AppColors.muted)),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -278,7 +284,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
     final actions = [
       {'title': 'Мои записи', 'icon': Icons.calendar_month_outlined},
       {'title': 'Оплата и кредиты', 'icon': Icons.credit_card_outlined},
-      {'title': 'Избранное', 'icon': Icons.favorite_border},
+      {'title': 'Избранное', 'icon': Icons.favorite_border, 'action': widget.onOpenFavorites},
       {'title': 'Отзывы', 'icon': Icons.chat_bubble_outline},
       {'title': 'Адреса салонов', 'icon': Icons.location_on_outlined},
       {'title': 'Бонусы и промокоды', 'icon': Icons.card_giftcard_outlined},

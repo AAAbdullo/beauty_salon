@@ -6,12 +6,16 @@ class BookingItem {
   final String salonName;
   final String serviceName;
   final String masterName;
-  final String date;
-  final String time;
+  String date;
+  String time;
   final int credits;
   final int sumPrice;
   final String paymentMethod;
   String status; // 'active', 'completed', 'cancelled'
+  int? reviewRating;
+  List<String>? reviewTags;
+  String? reviewComment;
+  DateTime? reviewDate;
 
   BookingItem({
     required this.id,
@@ -24,6 +28,10 @@ class BookingItem {
     required this.sumPrice,
     required this.paymentMethod,
     this.status = 'active',
+    this.reviewRating,
+    this.reviewTags,
+    this.reviewComment,
+    this.reviewDate,
   });
 }
 
@@ -55,6 +63,41 @@ class AppStateService extends ChangeNotifier {
     clientPhone = phone;
     clientBirthDate = birthDate;
     clientGender = gender;
+    notifyListeners();
+  }
+
+  // Избранные салоны и мастера (ТЗ M-15)
+  final Set<String> _favoriteSalonNames = {'Nur Beauty', 'Mira Hair'};
+  final Set<String> _favoriteMasterNames = {'Алена', 'Сабина'};
+
+  Set<String> get favoriteSalonNames => Set.unmodifiable(_favoriteSalonNames);
+  Set<String> get favoriteMasterNames => Set.unmodifiable(_favoriteMasterNames);
+  int get totalFavoritesCount => _favoriteSalonNames.length + _favoriteMasterNames.length;
+
+  bool isSalonFavorite(String salonName) => _favoriteSalonNames.contains(salonName);
+  bool isMasterFavorite(String masterName) =>
+      _favoriteMasterNames.contains(masterName) ||
+      _favoriteMasterNames.any((fav) => masterName.contains(fav) || fav.contains(masterName));
+
+  /// Переключение статуса «Избранное» для салона (M-15)
+  /// [BACKEND NOTE]: При подключении NestJS заменяется на POST /api/v1/favorites/salons/:id
+  void toggleSalonFavorite(String salonName) {
+    if (_favoriteSalonNames.contains(salonName)) {
+      _favoriteSalonNames.remove(salonName);
+    } else {
+      _favoriteSalonNames.add(salonName);
+    }
+    notifyListeners();
+  }
+
+  /// Переключение статуса «Избранное» для мастера (M-15)
+  /// [BACKEND NOTE]: При подключении NestJS заменяется на POST /api/v1/favorites/masters/:id
+  void toggleMasterFavorite(String masterName) {
+    if (isMasterFavorite(masterName)) {
+      _favoriteMasterNames.removeWhere((fav) => masterName.contains(fav) || fav.contains(masterName));
+    } else {
+      _favoriteMasterNames.add(masterName);
+    }
     notifyListeners();
   }
 
@@ -104,6 +147,10 @@ class AppStateService extends ChangeNotifier {
       sumPrice: 90000,
       paymentMethod: 'Онлайн оплата',
       status: 'completed',
+      reviewRating: 5,
+      reviewTags: ['Профессионализм мастера', 'Чистота и гигиена'],
+      reviewComment: 'Очень понравилась стрижка! Мастер Дилноза учла все пожелания.',
+      reviewDate: DateTime(2026, 9, 28, 12, 30),
     ),
   ];
 
@@ -164,6 +211,40 @@ class AppStateService extends ChangeNotifier {
         clientCredits += b.credits;
       }
 
+      notifyListeners();
+    }
+  }
+
+  /// Перенос времени бронирования (M-10)
+  /// [BACKEND NOTE]: При интеграции с NestJS заменяется на PATCH /api/v1/bookings/:id/reschedule
+  void rescheduleBooking({
+    required String bookingId,
+    required String newDate,
+    required String newTime,
+  }) {
+    final index = _bookings.indexWhere((b) => b.id == bookingId);
+    if (index != -1) {
+      _bookings[index].date = newDate;
+      _bookings[index].time = newTime;
+      notifyListeners();
+    }
+  }
+
+  /// Добавление оценки и отзыва о визите (M-13)
+  /// [BACKEND NOTE]: При интеграции с NestJS заменяется на POST /api/v1/bookings/:id/review
+  /// body: { "rating": rating, "tags": tags, "comment": comment }
+  void addReview({
+    required String bookingId,
+    required int rating,
+    required List<String> tags,
+    required String comment,
+  }) {
+    final index = _bookings.indexWhere((b) => b.id == bookingId);
+    if (index != -1) {
+      _bookings[index].reviewRating = rating;
+      _bookings[index].reviewTags = tags;
+      _bookings[index].reviewComment = comment;
+      _bookings[index].reviewDate = DateTime.now();
       notifyListeners();
     }
   }

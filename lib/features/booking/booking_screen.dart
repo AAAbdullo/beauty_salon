@@ -1,8 +1,14 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/buttons/app_gradient_button.dart';
 import '../../core/widgets/cards/app_card.dart';
 
+/// Экран бронирования слота (ТЗ M-08)
+/// - Выбор даты (горизонтальный календарь на 7 дней)
+/// - Выбор слотов времени
+/// - Выбор мастера
+/// - Таймер удержания слота на 10 минут (ТЗ: slot 10 daqiqa ushlab turiladi)
 class BookingScreen extends StatefulWidget {
   final VoidCallback onBack;
   final VoidCallback onPaymentStep;
@@ -22,6 +28,10 @@ class _BookingScreenState extends State<BookingScreen> {
   String _selectedTime = '12:00';
   int _selectedMasterIndex = 0;
   int _selectedPaymentMethod = 0; // 0 - Кредиты, 1 - Онлайн, 2 - В салоне
+
+  // ТЗ M-08: Таймер удержания слота на 10 минут (600 секунд)
+  Timer? _holdTimer;
+  int _holdSecondsLeft = 600; // 10 минут
 
   final _days = [
     {'day': 'Сб', 'date': '12'},
@@ -56,27 +66,96 @@ class _BookingScreenState extends State<BookingScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _startHoldTimer();
+  }
+
+  @override
+  void dispose() {
+    _holdTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startHoldTimer() {
+    _holdTimer?.cancel();
+    setState(() => _holdSecondsLeft = 600); // 10 минут
+    _holdTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_holdSecondsLeft > 0) {
+        setState(() => _holdSecondsLeft--);
+      } else {
+        timer.cancel();
+        _showTimeoutDialog();
+      }
+    });
+  }
+
+  void _onSlotSelected(String slotTime) {
+    setState(() {
+      _selectedTime = slotTime;
+    });
+    // При смене слота запускаем 10 минут удержания заново
+    _startHoldTimer();
+  }
+
+  void _showTimeoutDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Row(
+            children: [
+              Icon(Icons.timer_off_outlined, color: AppColors.primary),
+              SizedBox(width: 8),
+              Text('Время брони истекло', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+            ],
+          ),
+          content: const Text(
+            '10 минут удержания слота истекли. Пожалуйста, выберите удобное время повторно.',
+            style: TextStyle(fontSize: 13, color: AppColors.muted),
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _startHoldTimer();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+              child: const Text('Продлить бронь', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  String _formatTimer(int totalSeconds) {
+    final minutes = (totalSeconds ~/ 60).toString().padLeft(2, '0');
+    final seconds = (totalSeconds % 60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.background,
       appBar: AppBar(
+        title: const Text('Запись на услугу', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+        centerTitle: true,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: AppColors.ink),
           onPressed: widget.onBack,
         ),
-        title: const Column(
-          children: [
-            Text('Запись', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink)),
-            Text('Шаг 2 из 3 · Выбор времени', style: TextStyle(fontSize: 12, color: AppColors.muted)),
-          ],
-        ),
-        centerTitle: true,
-        backgroundColor: Colors.transparent,
-        elevation: 0,
       ),
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppGradients.page,
-        ),
+        decoration: const BoxDecoration(gradient: AppGradients.page),
         child: Column(
           children: [
             Expanded(
@@ -85,6 +164,8 @@ class _BookingScreenState extends State<BookingScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    _buildHoldTimerBanner(),
+                    const SizedBox(height: 14),
                     _buildServiceSummary(),
                     const SizedBox(height: 20),
                     _buildDateSelector(),
@@ -102,6 +183,58 @@ class _BookingScreenState extends State<BookingScreen> {
             _buildBottomConfirmation(),
           ],
         ),
+      ),
+    );
+  }
+
+  /// ТЗ M-08: Индикатор удержания слота на 10 минут
+  Widget _buildHoldTimerBanner() {
+    final isLowTime = _holdSecondsLeft < 120;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: isLowTime ? const Color(0xFFFFECEF) : AppColors.primaryTint,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isLowTime ? AppColors.primary : AppColors.primary.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.access_time_filled,
+            size: 20,
+            color: isLowTime ? Colors.red : AppColors.primary,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Text(
+                      'Слот зарезервирован на: ',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.ink),
+                    ),
+                    Text(
+                      _formatTimer(_holdSecondsLeft),
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                        color: isLowTime ? Colors.red : AppColors.primaryText,
+                      ),
+                    ),
+                  ],
+                ),
+                const Text(
+                  'ТЗ: слот удерживается 10 минут для оплаты',
+                  style: TextStyle(fontSize: 10, color: AppColors.muted),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -142,13 +275,6 @@ class _BookingScreenState extends State<BookingScreen> {
               ],
             ),
           ),
-          const Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text('150 000 сум', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
-              Text('34 кр.', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primaryText)),
-            ],
-          ),
         ],
       ),
     );
@@ -156,19 +282,9 @@ class _BookingScreenState extends State<BookingScreen> {
 
   Widget _buildDateSelector() {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text('Выберите дату', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
-            Row(
-              children: [
-                Text('Октябрь 2024', style: TextStyle(fontSize: 13, color: AppColors.muted, fontWeight: FontWeight.w600)),
-                Icon(Icons.chevron_right, size: 18, color: AppColors.muted),
-              ],
-            ),
-          ],
-        ),
+        const Text('Выберите дату', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
         const SizedBox(height: 12),
         SizedBox(
           height: 66,
@@ -180,22 +296,18 @@ class _BookingScreenState extends State<BookingScreen> {
               final d = _days[index];
               final isSelected = index == _selectedDayIndex;
               return InkWell(
-                onTap: () => setState(() => _selectedDayIndex = index),
+                onTap: () {
+                  setState(() => _selectedDayIndex = index);
+                  _startHoldTimer();
+                },
                 borderRadius: BorderRadius.circular(16),
                 child: Container(
                   width: AppSizes.dateWidth,
-                  height: AppSizes.dateHeight,
                   decoration: BoxDecoration(
                     color: isSelected ? AppColors.primary : AppColors.surface,
                     borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: isSelected
-                            ? AppColors.primary.withValues(alpha: 0.3)
-                            : Colors.black.withValues(alpha: 0.03),
-                        blurRadius: 8,
-                        offset: const Offset(0, 3),
-                      ),
+                    boxShadow: const [
+                      BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2)),
                     ],
                   ),
                   child: Column(
@@ -218,13 +330,6 @@ class _BookingScreenState extends State<BookingScreen> {
                           color: isSelected ? Colors.white : AppColors.ink,
                         ),
                       ),
-                      Text(
-                        'Окт',
-                        style: TextStyle(
-                          fontSize: 9,
-                          color: isSelected ? Colors.white70 : AppColors.muted,
-                        ),
-                      ),
                     ],
                   ),
                 ),
@@ -240,11 +345,14 @@ class _BookingScreenState extends State<BookingScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Row(
+        Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('Доступное время', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
-            Text('Время вашего города', style: TextStyle(fontSize: 11, color: AppColors.muted)),
+            const Text('Доступное время', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+            Text(
+              'Выбрано: $_selectedTime',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primaryText),
+            ),
           ],
         ),
         const SizedBox(height: 12),
@@ -252,41 +360,46 @@ class _BookingScreenState extends State<BookingScreen> {
           spacing: 8,
           runSpacing: 8,
           children: _timeSlots.map((slot) {
-            final isSelected = slot['time'] == _selectedTime;
+            final isSelected = _selectedTime == slot['time'];
             return InkWell(
-              onTap: () => setState(() => _selectedTime = slot['time']!),
-              borderRadius: BorderRadius.circular(12),
+              onTap: () => _onSlotSelected(slot['time']!),
+              borderRadius: BorderRadius.circular(14),
               child: Container(
                 width: (MediaQuery.of(context).size.width - 32 - 24) / 4,
-                height: AppSizes.slotHeight,
+                padding: const EdgeInsets.symmetric(vertical: 8),
                 decoration: BoxDecoration(
                   color: isSelected ? AppColors.primary : AppColors.surface,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: isSelected ? AppColors.primary : const Color(0xFFF3DCE8),
+                    width: 1,
+                  ),
                   boxShadow: [
-                    BoxShadow(
-                      color: isSelected
-                          ? AppColors.primary.withValues(alpha: 0.3)
-                          : Colors.black.withValues(alpha: 0.03),
-                      blurRadius: 6,
-                    ),
+                    if (isSelected)
+                      BoxShadow(
+                        color: AppColors.primary.withValues(alpha: 0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
                   ],
                 ),
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
                       slot['time']!,
                       style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
                         color: isSelected ? Colors.white : AppColors.ink,
                       ),
                     ),
+                    const SizedBox(height: 2),
                     Text(
                       slot['cost']!,
                       style: TextStyle(
-                        fontSize: 9,
-                        color: isSelected ? Colors.white70 : AppColors.muted,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: isSelected ? Colors.white70 : AppColors.primaryText,
                       ),
                     ),
                   ],
@@ -301,17 +414,12 @@ class _BookingScreenState extends State<BookingScreen> {
 
   Widget _buildMasterSelector() {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text('Выберите мастера', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
-            Text('Любой мастер >', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primaryText)),
-          ],
-        ),
+        const Text('Мастер', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
         const SizedBox(height: 12),
         SizedBox(
-          height: 105,
+          height: 80,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: _masters.length,
@@ -323,26 +431,45 @@ class _BookingScreenState extends State<BookingScreen> {
                 onTap: () => setState(() => _selectedMasterIndex = index),
                 borderRadius: BorderRadius.circular(16),
                 child: Container(
-                  width: 82,
-                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  width: 130,
+                  padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color: isSelected ? AppColors.primaryTint : AppColors.surface,
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
-                      color: isSelected ? AppColors.primary : Colors.transparent,
+                      color: isSelected ? AppColors.primary : const Color(0xFFF3DCE8),
                       width: 1.5,
                     ),
                   ),
-                  child: Column(
+                  child: Row(
                     children: [
-                      CircleAvatar(
-                        radius: 20,
-                        backgroundColor: AppColors.primary.withValues(alpha: 0.15),
-                        child: const Icon(Icons.person, color: AppColors.primary, size: 24),
+                      Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: isSelected ? AppColors.primary : AppColors.primaryTint,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(Icons.person, size: 22, color: isSelected ? Colors.white : AppColors.primary),
                       ),
-                      const SizedBox(height: 4),
-                      Text(m['name']!, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
-                      Text('★ ${m["rating"]!}', style: const TextStyle(fontSize: 9, color: AppColors.muted)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(m['name']!, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+                            Text(m['spec']!, style: const TextStyle(fontSize: 10, color: AppColors.muted)),
+                            Row(
+                              children: [
+                                const Icon(Icons.star, size: 10, color: AppColors.primary),
+                                const SizedBox(width: 2),
+                                Text(m['rating']!, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -358,7 +485,7 @@ class _BookingScreenState extends State<BookingScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Способ записи', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+        const Text('Способ оплаты', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
         const SizedBox(height: 12),
         Row(
           children: [
@@ -366,16 +493,16 @@ class _BookingScreenState extends State<BookingScreen> {
               child: _buildPayOption(
                 index: 0,
                 title: 'Кредиты',
-                subtitle: '34 кр. · баланс 86',
-                icon: Icons.monetization_on_outlined,
+                subtitle: 'Баланс: 86',
+                icon: Icons.account_balance_wallet,
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
               child: _buildPayOption(
                 index: 1,
-                title: 'Онлайн оплата',
-                subtitle: 'Карта или Click',
+                title: 'Онлайн',
+                subtitle: 'Click, Payme',
                 icon: Icons.credit_card,
               ),
             ),
@@ -384,8 +511,8 @@ class _BookingScreenState extends State<BookingScreen> {
               child: _buildPayOption(
                 index: 2,
                 title: 'В салоне',
-                subtitle: 'Наличными',
-                icon: Icons.storefront,
+                subtitle: 'При визите',
+                icon: Icons.store,
               ),
             ),
           ],
@@ -430,6 +557,7 @@ class _BookingScreenState extends State<BookingScreen> {
   }
 
   Widget _buildBottomConfirmation() {
+    final priceLabel = _selectedPaymentMethod == 0 ? '34 кр.' : '150 000 сум';
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -447,7 +575,7 @@ class _BookingScreenState extends State<BookingScreen> {
         child: Column(
           children: [
             AppGradientButton(
-              text: 'Подтвердить запись · 34 кр.',
+              text: 'Подтвердить запись · $priceLabel',
               onPressed: widget.onPaymentStep,
             ),
             const SizedBox(height: 6),

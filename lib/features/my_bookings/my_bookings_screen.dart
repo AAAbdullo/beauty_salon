@@ -5,6 +5,8 @@ import '../../core/widgets/badges/app_status_badge.dart';
 import '../../core/widgets/buttons/app_pill_button.dart';
 import '../../core/widgets/cards/app_card.dart';
 import '../client_qr/client_qr_modal.dart';
+import 'leave_review_modal.dart';
+import 'reschedule_booking_modal.dart';
 
 class MyBookingsScreen extends StatefulWidget {
   final VoidCallback onBookNew;
@@ -201,14 +203,26 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
                     children: [
                       Expanded(
                         child: OutlinedButton.icon(
-                          onPressed: () => _confirmCancel(b),
+                          onPressed: () async {
+                            final res = await RescheduleBookingModal.show(context, b);
+                            if (res == true && context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  backgroundColor: AppColors.ink,
+                                  behavior: SnackBarBehavior.floating,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  content: Text('Запись успешно перенесена на ${b.date}, ${b.time}'),
+                                ),
+                              );
+                            }
+                          },
                           style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Color(0xFFF3DCE8)),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            side: const BorderSide(color: AppColors.primary),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                             padding: const EdgeInsets.symmetric(vertical: 8),
                           ),
-                          icon: const Icon(Icons.close, size: 16, color: AppColors.muted),
-                          label: const Text('Отменить', style: TextStyle(color: AppColors.muted, fontSize: 12, fontWeight: FontWeight.w700)),
+                          icon: const Icon(Icons.edit_calendar_outlined, size: 16, color: AppColors.primary),
+                          label: const Text('Перенести', style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w700)),
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -217,7 +231,8 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
                           onPressed: () => ClientQrModal.show(context, bookingTitle: b.serviceName, salonName: b.salonName),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primary,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                             padding: const EdgeInsets.symmetric(vertical: 8),
                           ),
                           icon: const Icon(Icons.qr_code, size: 16, color: Colors.white),
@@ -226,6 +241,100 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
                       ),
                     ],
                   ),
+                  const SizedBox(height: 4),
+                  Center(
+                    child: TextButton.icon(
+                      onPressed: () => _confirmCancel(b),
+                      icon: const Icon(Icons.close, size: 14, color: AppColors.muted),
+                      label: const Text('Отменить запись', style: TextStyle(color: AppColors.muted, fontSize: 12)),
+                    ),
+                  ),
+                ] else if (b.status == 'completed') ...[
+                  const Divider(height: 20, color: Color(0xFFF3DCE8)),
+                  if (b.reviewRating != null) ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.background,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFFF3DCE8)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Row(
+                                children: List.generate(5, (sIndex) => Icon(
+                                  sIndex < (b.reviewRating ?? 0) ? Icons.star_rounded : Icons.star_outline_rounded,
+                                  size: 18,
+                                  color: const Color(0xFFFFA800),
+                                )),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Ваша оценка: ${b.reviewRating}.0',
+                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.ink),
+                              ),
+                            ],
+                          ),
+                          if (b.reviewTags != null && b.reviewTags!.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 4,
+                              children: b.reviewTags!.map((tag) => Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: AppColors.surface,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: const Color(0xFFF3DCE8)),
+                                ),
+                                child: Text(tag, style: const TextStyle(fontSize: 10, color: AppColors.muted, fontWeight: FontWeight.w600)),
+                              )).toList(),
+                            ),
+                          ],
+                          if (b.reviewComment != null && b.reviewComment!.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              '«${b.reviewComment}»',
+                              style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: AppColors.ink),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ] else ...[
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () async {
+                          final res = await LeaveReviewModal.show(context, b);
+                          if (res == true && context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                backgroundColor: AppColors.ink,
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                content: const Text('Спасибо за отзыв! Ваша оценка сохранена.'),
+                              ),
+                            );
+                          }
+                        },
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Color(0xFFFFA800)),
+                          backgroundColor: const Color(0xFFFFF9E6),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                        ),
+                        icon: const Icon(Icons.star_rounded, size: 18, color: Color(0xFFFFA800)),
+                        label: const Text(
+                          'Оставить отзыв о визите',
+                          style: TextStyle(color: Color(0xFFD48200), fontSize: 12, fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ],
             ),
