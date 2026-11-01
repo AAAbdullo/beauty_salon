@@ -221,6 +221,10 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
   // Выбранный салон (для мини-окна)
   SalonModel? _selectedSalon;
 
+  // Данные активных сессий маршрутизации Yandex MapKit (сохраняем ссылки по ТЗ Yandex)
+  DrivingSession? _drivingSession;
+  PedestrianSession? _pedestrianSession;
+
   // Данные активных маршрутов (по ТЗ и туториалам Yandex MapKit)
   PolylineMapObject? _primaryRoutePolyline;
   PolylineMapObject? _alternativeRoutePolyline;
@@ -249,6 +253,13 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
     }
 
     _refreshMapObjects();
+  }
+
+  @override
+  void dispose() {
+    _drivingSession?.close();
+    _pedestrianSession?.close();
+    super.dispose();
   }
 
   /// Обновление списка пинов и объектов на карте
@@ -426,7 +437,16 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
   }
 
   /// Построение маршрутов по официальной документации Yandex MapKit (map_routing & map_routes)
-  Future<void> _buildRouteToSalon(SalonModel salon, {bool isWalking = false}) async {
+  Future<void> _buildRouteToSalon(SalonModel salon, {required bool isWalking}) async {
+    // 1. Отменяем и закрываем предыдущую сессию по документации Yandex MapKit
+    await _drivingSession?.cancel();
+    await _drivingSession?.close();
+    _drivingSession = null;
+
+    await _pedestrianSession?.cancel();
+    await _pedestrianSession?.close();
+    _pedestrianSession = null;
+
     setState(() {
       _isBuildingRoute = true;
       _isWalkingRoute = isWalking;
@@ -438,39 +458,64 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
     String? durationText;
     String? altDurationText;
 
-    // 1. Запрос к Yandex MapKit Router API
+    // 2. Запрос к роутеру Yandex MapKit (Driving или Pedestrian)
     try {
       if (isWalking) {
+        // Пешеходная маршрутизация YMKPedestrianRouter (YandexPedestrian)
         final sessionWithResult = await YandexPedestrian.requestRoutes(
           points: [
             RequestPoint(point: _userLocation, requestPointType: RequestPointType.wayPoint),
             RequestPoint(point: salon.point, requestPointType: RequestPointType.wayPoint),
           ],
           fitnessOptions: const FitnessOptions(avoidSteep: false, avoidStairs: false),
-          timeOptions: const TimeOptions(),
+          timeOptions: TimeOptions(departureTime: DateTime.now()),
         );
+        _pedestrianSession = sessionWithResult.$1;
         final result = await sessionWithResult.$2;
-        if (result.routes != null && result.routes!.isNotEmpty) {
-          primaryPoints = result.routes!.first.geometry.points;
-          final weight = result.routes!.first.metadata.weight;
+
+        if (result.error != null) {
+          debugPrint('YandexPedestrian error: ${result.error}');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Маршрут пешком: ${result.error}')),
+            );
+          }
+        } else if (result.routes != null && result.routes!.isNotEmpty) {
+          final first = result.routes!.first;
+          primaryPoints = first.geometry.points;
+          final weight = first.metadata.weight;
           distanceText = weight.walkingDistance.text;
           durationText = '${weight.time.text} пешком';
+
+          if (result.routes!.length > 1) {
+            final second = result.routes![1];
+            alternativePoints = second.geometry.points;
+            altDurationText = '${second.metadata.weight.time.text} пешком';
+          }
         }
       } else {
-        // Автомобильные маршруты (с альтернативными путями по туториалу map_routes.html)
+        // Автомобильная маршрутизация YMKDrivingRouter (YandexDriving)
         final sessionWithResult = await YandexDriving.requestRoutes(
           points: [
             RequestPoint(point: _userLocation, requestPointType: RequestPointType.wayPoint),
             RequestPoint(point: salon.point, requestPointType: RequestPointType.wayPoint),
           ],
           drivingOptions: const DrivingOptions(
-            initialAzimuth: 0,
-            routesCount: 2, // Основной и альтернативный маршруты
+            routesCount: 2, // Основной и альтернативный варианты
             avoidanceFlags: DrivingAvoidanceFlags(),
           ),
         );
+        _drivingSession = sessionWithResult.$1;
         final result = await sessionWithResult.$2;
-        if (result.routes != null && result.routes!.isNotEmpty) {
+
+        if (result.error != null) {
+          debugPrint('YandexDriving error: ${result.error}');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Маршрут на авто: ${result.error}')),
+            );
+          }
+        } else if (result.routes != null && result.routes!.isNotEmpty) {
           final first = result.routes![0];
           primaryPoints = first.geometry.points;
           distanceText = first.metadata.weight.distance.text;
@@ -483,30 +528,23 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
           }
         }
       }
-    } catch (_) {
-      // Игнорируем сетевые или лицензионные ограничения роутера
+    } catch (e) {
+      debugPrint('Routing exception: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка построения маршрута Yandex MapKit: $e')),
+        );
+      }
     }
 
-    // 2. Fallback: если Router API не вернул геометрию — строим реалистичную сетку улиц Ташкента
     if (primaryPoints.isEmpty) {
-      primaryPoints = _generateTashkentStreetRoute(_userLocation, salon.point, variant: 1);
-      alternativePoints = _generateTashkentStreetRoute(_userLocation, salon.point, variant: 2);
-
-      final distKm = _calculateDistance(_userLocation, salon.point) * 1.25;
-      distanceText = distKm < 1.0
-          ? '${(distKm * 1000).round()} м'
-          : '${distKm.toStringAsFixed(1)} км';
-
-      final mins = isWalking
-          ? math.max(3, (distKm / 4.8 * 60).round())
-          : math.max(2, (distKm / 24.0 * 60).round());
-
-      durationText = isWalking ? '~$mins мин пешком' : '~$mins мин на авто';
-      altDurationText = '~$mins мин';
+      setState(() {
+        _isBuildingRoute = false;
+      });
+      return;
     }
 
-    // 3. Создаем полилинии маршрутов (по tutorial: map_routes.html)
-    // Основной маршрут: яркий фирменный цвет, толстая линия, белый кант
+    // 3. Создаем полилинии маршрутов строго по геометрии Yandex MapKit
     final primaryPolyline = PolylineMapObject(
       mapId: const MapObjectId('route_primary'),
       polyline: Polyline(points: primaryPoints),
@@ -517,7 +555,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
       zIndex: 10.0,
     );
 
-    // Альтернативный маршрут: приглушенный цвет, тоньше, кликабелен
+    // Альтернативный маршрут: приглушенный цвет, кликабелен для смены
     PolylineMapObject? alternativePolyline;
     if (alternativePoints.isNotEmpty) {
       alternativePolyline = PolylineMapObject(
@@ -591,6 +629,11 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
 
   /// Сброс текущего маршрута
   void _clearRoute() {
+    _drivingSession?.close();
+    _drivingSession = null;
+    _pedestrianSession?.close();
+    _pedestrianSession = null;
+
     setState(() {
       _primaryRoutePolyline = null;
       _alternativeRoutePolyline = null;
@@ -599,67 +642,10 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
       _primaryRouteDuration = null;
       _alternativeRouteDuration = null;
       _hasAlternative = false;
+      _isWalkingRoute = false;
     });
 
     _refreshMapObjects();
-  }
-
-  /// Генерация реалистичного пути по улицам Ташкента
-  List<Point> _generateTashkentStreetRoute(Point from, Point to, {int variant = 1}) {
-    final List<Point> points = [from];
-    final latDiff = to.latitude - from.latitude;
-    final lonDiff = to.longitude - from.longitude;
-
-    final split1 = variant == 1 ? 0.40 : 0.65;
-    final split2 = variant == 1 ? 0.60 : 0.85;
-
-    final intermediate1 = Point(
-      latitude: from.latitude + latDiff * split1,
-      longitude: from.longitude + lonDiff * (variant == 1 ? 0.08 : 0.40),
-    );
-
-    final intermediate2 = Point(
-      latitude: from.latitude + latDiff * split2,
-      longitude: from.longitude + lonDiff * (variant == 1 ? 0.85 : 0.95),
-    );
-
-    for (double t = 0.1; t <= 0.9; t += 0.2) {
-      points.add(_interpolate(from, intermediate1, t));
-    }
-    points.add(intermediate1);
-
-    for (double t = 0.1; t <= 0.9; t += 0.2) {
-      points.add(_interpolate(intermediate1, intermediate2, t));
-    }
-    points.add(intermediate2);
-
-    for (double t = 0.1; t <= 0.9; t += 0.2) {
-      points.add(_interpolate(intermediate2, to, t));
-    }
-    points.add(to);
-
-    return points;
-  }
-
-  Point _interpolate(Point a, Point b, double t) {
-    return Point(
-      latitude: a.latitude + (b.latitude - a.latitude) * t,
-      longitude: a.longitude + (b.longitude - a.longitude) * t,
-    );
-  }
-
-  /// Расчет расстояния по формуле гаверсинусов (км)
-  double _calculateDistance(Point p1, Point p2) {
-    const double r = 6371.0;
-    final dLat = (p2.latitude - p1.latitude) * (math.pi / 180.0);
-    final dLon = (p2.longitude - p1.longitude) * (math.pi / 180.0);
-    final lat1 = p1.latitude * (math.pi / 180.0);
-    final lat2 = p2.latitude * (math.pi / 180.0);
-
-    final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
-        math.sin(dLon / 2) * math.sin(dLon / 2) * math.cos(lat1) * math.cos(lat2);
-    final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
-    return r * c;
   }
 
   /// Открытие модального окна фильтров
@@ -1104,17 +1090,63 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
 
             const SizedBox(height: 12),
 
-            // Блок активного маршрута
+            // Выбор типа маршрута Yandex MapKit: Авто или Пешком
+            Row(
+              children: [
+                Expanded(
+                  child: _buildRouteTypeButton(
+                    salon: salon,
+                    isWalking: false,
+                    label: 'На авто',
+                    icon: Icons.directions_car,
+                    isActive: isRouteActive && !_isWalkingRoute,
+                    isLoading: _isBuildingRoute && !_isWalkingRoute,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _buildRouteTypeButton(
+                    salon: salon,
+                    isWalking: true,
+                    label: 'Пешком',
+                    icon: Icons.directions_walk,
+                    isActive: isRouteActive && _isWalkingRoute,
+                    isLoading: _isBuildingRoute && _isWalkingRoute,
+                  ),
+                ),
+                if (isRouteActive) ...[
+                  const SizedBox(width: 8),
+                  InkWell(
+                    onTap: _clearRoute,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.redAccent.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.close, color: Colors.redAccent, size: 20),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+
+            // Информационный блок рассчитанного маршрута
             if (isRouteActive) ...[
+              const SizedBox(height: 10),
               Container(
-                margin: const EdgeInsets.only(bottom: 12),
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
                   color: AppColors.background,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                  border: Border.all(
+                    color: (_isWalkingRoute ? const Color(0xFF247659) : AppColors.primary)
+                        .withValues(alpha: 0.25),
+                  ),
                 ),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1123,53 +1155,27 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                           children: [
                             Icon(
                               _isWalkingRoute ? Icons.directions_walk : Icons.directions_car,
+                              size: 16,
                               color: _isWalkingRoute ? const Color(0xFF247659) : AppColors.primary,
-                              size: 20,
                             ),
-                            const SizedBox(width: 8),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  _primaryRouteDuration ?? 'Маршрут построен',
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w800,
-                                    color: AppColors.ink,
-                                  ),
-                                ),
-                                Text(
-                                  'Расстояние: ${_primaryRouteDistance ?? salon.distance}',
-                                  style: const TextStyle(fontSize: 11, color: AppColors.muted),
-                                ),
-                              ],
+                            const SizedBox(width: 6),
+                            Text(
+                              _primaryRouteDuration ?? 'Маршрут построен',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.ink,
+                              ),
                             ),
                           ],
                         ),
-                        Row(
-                          children: [
-                            // Переключатель авто/пешком
-                            InkWell(
-                              onTap: () => _buildRouteToSalon(salon, isWalking: !_isWalkingRoute),
-                              child: Container(
-                                padding: const EdgeInsets.all(6),
-                                decoration: BoxDecoration(
-                                  color: AppColors.surface,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Icon(
-                                  _isWalkingRoute ? Icons.directions_car : Icons.directions_walk,
-                                  size: 16,
-                                  color: AppColors.ink,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            InkWell(
-                              onTap: _clearRoute,
-                              child: const Icon(Icons.close, size: 18, color: Colors.redAccent),
-                            ),
-                          ],
+                        Text(
+                          'Расстояние: ${_primaryRouteDistance ?? salon.distance}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.muted,
+                          ),
                         ),
                       ],
                     ),
@@ -1179,10 +1185,10 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                         onTap: _swapActiveRoute,
                         child: Row(
                           children: [
-                            const Icon(Icons.alt_route, size: 14, color: AppColors.muted),
+                            const Icon(Icons.alt_route, size: 14, color: AppColors.primary),
                             const SizedBox(width: 4),
                             Text(
-                              'Есть альтернативный путь (${_alternativeRouteDuration ?? "другой маршрут"})',
+                              'Есть 2-й вариант (${_alternativeRouteDuration ?? ""}) · Нажмите чтобы переключить',
                               style: const TextStyle(
                                 fontSize: 11,
                                 color: AppColors.primaryText,
@@ -1198,46 +1204,82 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
               ),
             ],
 
-            // Кнопки действий: Построить маршрут и Записаться
-            Row(
-              children: [
-                Expanded(
-                  flex: 5,
-                  child: OutlinedButton.icon(
-                    onPressed: _isBuildingRoute
-                        ? null
-                        : () => _buildRouteToSalon(salon, isWalking: false),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.primary,
-                      side: const BorderSide(color: AppColors.primary, width: 1.5),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                    ),
-                    icon: _isBuildingRoute
-                        ? const SizedBox(
-                            width: 14,
-                            height: 14,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.directions_outlined, size: 18),
-                    label: Text(
-                      isRouteActive ? 'Обновить' : 'Маршрут',
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-                    ),
+            const SizedBox(height: 12),
+
+            // Кнопка перехода к записи
+            AppGradientButton(
+              text: 'Записаться в салон',
+              height: 44,
+              onPressed: () => widget.onSelectSalon(salon.name),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Кнопка выбора режима маршрута (На авто / Пешком)
+  Widget _buildRouteTypeButton({
+    required SalonModel salon,
+    required bool isWalking,
+    required String label,
+    required IconData icon,
+    required bool isActive,
+    required bool isLoading,
+  }) {
+    final activeColor = isWalking ? const Color(0xFF247659) : AppColors.primary;
+
+    return InkWell(
+      onTap: isLoading ? null : () => _buildRouteToSalon(salon, isWalking: isWalking),
+      borderRadius: BorderRadius.circular(16),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
+        decoration: BoxDecoration(
+          color: isActive ? activeColor : AppColors.background,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isActive ? activeColor : Colors.black12,
+            width: 1.5,
+          ),
+          boxShadow: isActive
+              ? [
+                  BoxShadow(
+                    color: activeColor.withValues(alpha: 0.28),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (isLoading)
+              SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    isActive ? Colors.white : activeColor,
                   ),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  flex: 6,
-                  child: AppGradientButton(
-                    text: 'Записаться',
-                    height: 44,
-                    onPressed: () => widget.onSelectSalon(salon.name),
-                  ),
-                ),
-              ],
+              )
+            else
+              Icon(
+                icon,
+                size: 17,
+                color: isActive ? Colors.white : AppColors.ink,
+              ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: isActive ? Colors.white : AppColors.ink,
+              ),
             ),
           ],
         ),
@@ -1350,7 +1392,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                                   ),
                                   onPressed: () {
                                     _onSalonPinTapped(salon);
-                                    _buildRouteToSalon(salon);
+                                    _buildRouteToSalon(salon, isWalking: false);
                                   },
                                 ),
                                 AppPillButton(
