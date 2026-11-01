@@ -59,10 +59,11 @@ class SalonFilterParams {
     double? minPrice,
     double? maxPrice,
     bool clearDistrict = false,
+    bool clearCategory = false,
   }) {
     return SalonFilterParams(
       district: clearDistrict ? null : (district ?? this.district),
-      serviceCategory: serviceCategory ?? this.serviceCategory,
+      serviceCategory: clearCategory ? null : (serviceCategory ?? this.serviceCategory),
       onlyWomen: onlyWomen ?? this.onlyWomen,
       homeVisit: homeVisit ?? this.homeVisit,
       creditsOnly: creditsOnly ?? this.creditsOnly,

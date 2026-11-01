@@ -53,6 +53,10 @@
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
 	<string>Main</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Для отображения салонов красоты рядом с вами на карте Ташкента</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Для сканирования QR-кода визита клиента</string>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
