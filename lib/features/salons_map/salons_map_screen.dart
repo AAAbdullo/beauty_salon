@@ -199,7 +199,6 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
   );
 
   bool _isRealGpsActive = false;
-  bool _isTrafficEnabled = false;
 
   int _selectedCategoryIndex = 0;
   final List<String> _categories = const [
@@ -380,24 +379,6 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
           'Геолокация: центрировано на Ташкенте. В симуляторе iOS: Features -> Location -> Custom Location (41.311, 69.279).',
         ),
         duration: Duration(seconds: 4),
-      ),
-    );
-  }
-
-  /// Переключение отображения пробок на карте (Yandex Traffic Layer)
-  Future<void> _toggleTraffic() async {
-    if (_mapController == null) return;
-    final newState = !_isTrafficEnabled;
-    await _mapController!.toggleTrafficLayer(visible: newState);
-    if (!mounted) return;
-    setState(() => _isTrafficEnabled = newState);
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          newState ? 'Слой дорожных пробок включен' : 'Слой дорожных пробок отключен',
-        ),
-        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -728,6 +709,11 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
             onMapCreated: (YandexMapController controller) async {
               _mapController = controller;
 
+              // Автоматически включаем отображение пробок на карте
+              try {
+                await controller.toggleTrafficLayer(visible: true);
+              } catch (_) {}
+
               // Включаем нативный слой пользователя
               try {
                 await controller.toggleUserLayer(
@@ -772,10 +758,12 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
             child: _buildHeader(context),
           ),
 
-          // 3. Плавающие контролы карты (пробки, GPS, зум, сброс)
+          // 3. Кнопка определения местоположения (и сброс активного маршрута)
           Positioned(
             right: 16,
-            bottom: _selectedSalon != null ? (bottomNavOffset + 245.0) : (bottomNavOffset + 16.0),
+            bottom: _selectedSalon != null
+                ? (bottomNavOffset + (_primaryRoutePolyline != null ? 288.0 : 232.0))
+                : 260.0,
             child: _buildMapControls(),
           ),
 
@@ -922,53 +910,29 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
     );
   }
 
-  /// Кнопки управления картой
+  /// Кнопка управления картой (центрирование геопозиции пользователя и сброс маршрута)
   Widget _buildMapControls() {
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        // 1. Сброс маршрута
+        // 1. Сброс маршрута (если построен активный маршрут)
         if (_primaryRoutePolyline != null) ...[
           FloatingActionButton.small(
             heroTag: 'clear_route_btn',
             backgroundColor: Colors.white,
+            elevation: 4,
             onPressed: _clearRoute,
-            child: const Icon(Icons.close, color: Colors.redAccent),
+            child: const Icon(Icons.close, color: Colors.redAccent, size: 20),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
         ],
-        // 2. Тумблер пробок Яндекс
-        FloatingActionButton.small(
-          heroTag: 'traffic_btn',
-          backgroundColor: _isTrafficEnabled ? const Color(0xFF1AAA4C) : AppColors.surface,
-          onPressed: _toggleTraffic,
-          child: Icon(
-            Icons.traffic,
-            color: _isTrafficEnabled ? Colors.white : AppColors.ink,
-          ),
-        ),
-        const SizedBox(height: 8),
-        // 3. Определение реального местоположения
+        // 2. Кнопка определения текущего местоположения пользователя
         FloatingActionButton.small(
           heroTag: 'my_location_btn',
           backgroundColor: AppColors.surface,
+          elevation: 4,
           onPressed: _detectAndCenterRealLocation,
-          child: const Icon(Icons.my_location, color: AppColors.primary),
-        ),
-        const SizedBox(height: 8),
-        // 4. Зум +
-        FloatingActionButton.small(
-          heroTag: 'zoom_in_btn',
-          backgroundColor: AppColors.surface,
-          onPressed: () => _mapController?.moveCamera(CameraUpdate.zoomIn()),
-          child: const Icon(Icons.add, color: AppColors.ink),
-        ),
-        const SizedBox(height: 8),
-        // 5. Зум -
-        FloatingActionButton.small(
-          heroTag: 'zoom_out_btn',
-          backgroundColor: AppColors.surface,
-          onPressed: () => _mapController?.moveCamera(CameraUpdate.zoomOut()),
-          child: const Icon(Icons.remove, color: AppColors.ink),
+          child: const Icon(Icons.my_location, color: AppColors.primary, size: 22),
         ),
       ],
     );
