@@ -15,6 +15,50 @@ import '../client_home/search_filter_modal.dart';
 /// Генератор стилизованных векторных пинов салонов для карты Yandex MapKit
 class SalonPinHelper {
   static final Map<String, BitmapDescriptor> _cache = {};
+  static BitmapDescriptor? _userPinCache;
+
+  /// Векторный маркер локации пользователя с пульсирующим ореолом
+  static Future<BitmapDescriptor> getUserLocationPin() async {
+    if (_userPinCache != null) return _userPinCache!;
+
+    final pictureRecorder = ui.PictureRecorder();
+    final canvas = Canvas(pictureRecorder);
+    const double size = 96.0;
+    const double center = 48.0;
+
+    final paint = Paint()..isAntiAlias = true;
+
+    // 1. Внешний полупрозрачный ореол
+    paint.color = AppColors.primary.withValues(alpha: 0.22);
+    paint.style = PaintingStyle.fill;
+    canvas.drawCircle(const Offset(center, center), 42, paint);
+
+    // 2. Мягкая тень под центральным маркером
+    final shadowPaint = Paint()
+      ..color = Colors.black.withValues(alpha: 0.25)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
+    canvas.drawCircle(const Offset(center, center + 2), 22, shadowPaint);
+
+    // 3. Белый контрастный ободок
+    paint.color = Colors.white;
+    paint.style = PaintingStyle.fill;
+    canvas.drawCircle(const Offset(center, center), 22, paint);
+
+    // 4. Фирменный акцентный маркер пользователя
+    paint.color = AppColors.primary;
+    canvas.drawCircle(const Offset(center, center), 17, paint);
+
+    // 5. Внутренняя белая точка
+    paint.color = Colors.white;
+    canvas.drawCircle(const Offset(center, center), 6, paint);
+
+    final picture = pictureRecorder.endRecording();
+    final image = await picture.toImage(size.toInt(), size.toInt());
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+    final descriptor = BitmapDescriptor.fromBytes(byteData!.buffer.asUint8List());
+    _userPinCache = descriptor;
+    return descriptor;
+  }
 
   static IconData getIconForServices(String services) {
     final lower = services.toLowerCase();
@@ -212,7 +256,8 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
   Future<void> _refreshMapObjects() async {
     _mapObjects.clear();
 
-    // 1. Пин текущей геолокации пользователя (если нативный слой выключен или для гарантированной видимости)
+    // 1. Пин текущей геолокации пользователя (гарантированное отображение векторного Retina-пина)
+    final userPin = await SalonPinHelper.getUserLocationPin();
     _mapObjects.add(
       PlacemarkMapObject(
         mapId: const MapObjectId('user_location_marker'),
@@ -221,8 +266,8 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
         zIndex: 10.0,
         icon: PlacemarkIcon.single(
           PlacemarkIconStyle(
-            image: BitmapDescriptor.fromAssetImage('web/icons/Icon-192.png'),
-            scale: 0.22,
+            image: userPin,
+            scale: 0.85,
           ),
         ),
       ),
@@ -302,20 +347,41 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
     if (_mapController == null) return;
 
     try {
-      final userPos = await _mapController!.getUserCameraPosition();
-      if (userPos != null) {
-        setState(() {
-          _userLocation = userPos.target;
-          _isRealGpsActive = true;
-        });
-        await _zoomToPoint(_userLocation, zoom: 16.0);
-        await _refreshMapObjects();
-        return;
-      }
+      await _mapController!.toggleUserLayer(
+        visible: true,
+        headingEnabled: true,
+        autoZoomEnabled: false,
+      );
     } catch (_) {}
 
-    // Fallback на центр Ташкента
+    for (int attempt = 0; attempt < 6; attempt++) {
+      try {
+        final userPos = await _mapController!.getUserCameraPosition();
+        if (userPos != null) {
+          setState(() {
+            _userLocation = userPos.target;
+            _isRealGpsActive = true;
+          });
+          await _zoomToPoint(_userLocation, zoom: 16.0);
+          await _refreshMapObjects();
+          return;
+        }
+      } catch (_) {}
+      await Future.delayed(const Duration(milliseconds: 500));
+    }
+
+    // Если всё еще null (в симуляторе или пока GPS ищет сигнал)
     await _zoomToPoint(_userLocation, zoom: 15.0);
+    await _refreshMapObjects();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Геолокация: центрировано на Ташкенте. В симуляторе iOS: Features -> Location -> Custom Location (41.311, 69.279).',
+        ),
+        duration: Duration(seconds: 4),
+      ),
+    );
   }
 
   /// Переключение отображения пробок на карте (Yandex Traffic Layer)
@@ -650,6 +716,9 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Высота отступа с учетом FloatingBottomBar (высота 64 + отступы 16 + SafeArea)
+    final bottomNavOffset = MediaQuery.of(context).padding.bottom + 92.0;
+
     return Scaffold(
       body: Stack(
         children: [
@@ -677,6 +746,13 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
               _detectAndCenterRealLocation();
             },
             onUserLocationAdded: (UserLocationView view) async {
+              if (mounted) {
+                setState(() {
+                  _userLocation = view.pin.point;
+                  _isRealGpsActive = true;
+                });
+                _refreshMapObjects();
+              }
               return view.copyWith(
                 pin: view.pin.copyWith(opacity: 1.0),
                 arrow: view.arrow.copyWith(opacity: 1.0),
@@ -699,22 +775,22 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
           // 3. Плавающие контролы карты (пробки, GPS, зум, сброс)
           Positioned(
             right: 16,
-            bottom: _selectedSalon != null ? 330 : 250,
+            bottom: _selectedSalon != null ? (bottomNavOffset + 245.0) : (bottomNavOffset + 16.0),
             child: _buildMapControls(),
           ),
 
-          // 4. Информационное МИНИ-ОКНО выбранного салона
+          // 4. Информационное МИНИ-ОКНО выбранного салона (плавает ровно над FloatingBottomBar)
           if (_selectedSalon != null)
             Positioned(
               left: 16,
               right: 16,
-              bottom: 24,
+              bottom: bottomNavOffset,
               child: _buildSalonMiniWindow(_selectedSalon!),
             ),
 
           // 5. Выдвижной нижний список (когда салон не выбран)
           if (_selectedSalon == null)
-            _buildDraggableSalonsList(),
+            _buildDraggableSalonsList(bottomNavOffset),
         ],
       ),
     );
@@ -1206,7 +1282,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
   }
 
   /// Выдвижной нижний лист со списком салонов
-  Widget _buildDraggableSalonsList() {
+  Widget _buildDraggableSalonsList(double bottomNavOffset) {
     return DraggableScrollableSheet(
       initialChildSize: 0.30,
       minChildSize: 0.14,
@@ -1226,7 +1302,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
           ),
           child: ListView.builder(
             controller: scrollController,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: EdgeInsets.fromLTRB(16, 12, 16, bottomNavOffset + 16),
             itemCount: _salons.length + 1,
             itemBuilder: (context, index) {
               if (index == 0) {
