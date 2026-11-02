@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -5,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:yandex_mapkit/yandex_mapkit.dart';
 import '../../core/models/salon_filter_params.dart';
 import '../../core/services/salons_repository.dart';
+import '../../core/services/voice_guidance_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/badges/app_status_badge.dart';
 import '../../core/widgets/buttons/app_gradient_button.dart';
@@ -238,6 +240,19 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
   String? _primaryRouteDuration;
   String? _alternativeRouteDuration;
 
+  final VoiceGuidanceService _voiceGuidance = VoiceGuidanceService();
+
+  // Режим активной 3D навигации (как в Яндекс Навигаторе)
+  bool _isNavigating = false;
+  int _navStepIndex = 0;
+  Timer? _navSimulationTimer;
+  double _currentSpeedKmh = 0.0;
+  double _currentHeading = 0.0;
+  String _nextManeuverText = 'Двигайтесь по улице';
+  String _nextManeuverDistanceText = '250 м';
+  IconData _nextManeuverIcon = Icons.straight;
+  List<Point> _currentRoutePoints = [];
+
   final List<MapObject> _mapObjects = [];
 
   @override
@@ -257,6 +272,8 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
 
   @override
   void dispose() {
+    _navSimulationTimer?.cancel();
+    _voiceGuidance.stop();
     _drivingSession?.close();
     _pedestrianSession?.close();
     super.dispose();
@@ -600,6 +617,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
       _primaryRouteDuration = durationText;
       _alternativeRouteDuration = altDurationText;
       _hasAlternative = alternativePoints.isNotEmpty;
+      _currentRoutePoints = primaryPoints;
     });
 
     await _refreshMapObjects();
@@ -622,6 +640,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
       );
       _primaryRouteDuration = _alternativeRouteDuration;
       _alternativeRouteDuration = tempDuration;
+      _currentRoutePoints = _primaryRoutePolyline!.polyline.points;
     });
 
     _refreshMapObjects();
@@ -629,6 +648,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
 
   /// Сброс текущего маршрута
   void _clearRoute() {
+    _stopNavigationMode(isCompleted: false);
     _drivingSession?.close();
     _drivingSession = null;
     _pedestrianSession?.close();
@@ -643,7 +663,220 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
       _alternativeRouteDuration = null;
       _hasAlternative = false;
       _isWalkingRoute = false;
+      _currentRoutePoints = [];
     });
+
+    _refreshMapObjects();
+  }
+
+  /// Расчет азимута (направления в градусах 0-360) между двумя координатами
+  double _calculateBearing(Point from, Point to) {
+    final lat1 = from.latitude * math.pi / 180.0;
+    final lon1 = from.longitude * math.pi / 180.0;
+    final lat2 = to.latitude * math.pi / 180.0;
+    final lon2 = to.longitude * math.pi / 180.0;
+    final dLon = lon2 - lon1;
+
+    final y = math.sin(dLon) * math.cos(lat2);
+    final x = math.cos(lat1) * math.sin(lat2) -
+        math.sin(lat1) * math.cos(lat2) * math.cos(dLon);
+    final radians = math.atan2(y, x);
+    return (radians * 180.0 / math.pi + 360.0) % 360.0;
+  }
+
+  /// Расчет расстояния в метрах (формула Haversine)
+  double _calculateDistanceMeters(Point p1, Point p2) {
+    const earthRadius = 6371000.0; // метры
+    final dLat = (p2.latitude - p1.latitude) * math.pi / 180.0;
+    final dLon = (p2.longitude - p1.longitude) * math.pi / 180.0;
+    final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(p1.latitude * math.pi / 180.0) *
+            math.cos(p2.latitude * math.pi / 180.0) *
+            math.sin(dLon / 2) *
+            math.sin(dLon / 2);
+    final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+    return earthRadius * c;
+  }
+
+  /// Запуск режима активной 3D навигации (как в Яндекс Навигаторе)
+  void _startNavigationMode() {
+    if (_currentRoutePoints.isEmpty) return;
+
+    setState(() {
+      _isNavigating = true;
+      _navStepIndex = 0;
+      _currentSpeedKmh = _isWalkingRoute ? 4.8 : 38.0;
+    });
+
+    // 1. Начальный азимут
+    double initialHeading = 0.0;
+    if (_currentRoutePoints.length > 1) {
+      initialHeading = _calculateBearing(_userLocation, _currentRoutePoints[1]);
+    }
+    _currentHeading = initialHeading;
+
+    // 2. Опускаем камеру за пользователем в 3D ракурс (tilt: 55.0, zoom: 17.8)
+    _mapController?.moveCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target: _userLocation,
+          zoom: 17.8,
+          tilt: 55.0,
+          azimuth: initialHeading,
+        ),
+      ),
+      animation: const MapAnimation(type: MapAnimationType.smooth, duration: 1.2),
+    );
+
+    // 3. Голосовое оповещение на старте
+    _voiceGuidance.speak(
+      _isWalkingRoute
+          ? 'Маршрут пешком построен. Двигайтесь прямо.'
+          : 'Маршрут построен. Поехали! Двигайтесь прямо.',
+    );
+
+    _updateNextManeuver(0);
+
+    // 4. Таймер симуляции движения по маршруту со слежением камеры
+    _navSimulationTimer?.cancel();
+    _navSimulationTimer = Timer.periodic(const Duration(milliseconds: 1400), (timer) {
+      if (!mounted || !_isNavigating) {
+        timer.cancel();
+        return;
+      }
+
+      if (_navStepIndex < _currentRoutePoints.length - 1) {
+        _navStepIndex++;
+        final nextPoint = _currentRoutePoints[_navStepIndex];
+        final nextHeading = _calculateBearing(_userLocation, nextPoint);
+
+        final rand = (math.Random().nextDouble() - 0.5) * 4.0;
+        final baseSpeed = _isWalkingRoute ? 4.8 : 38.0;
+        final newSpeed = math.max(0.0, baseSpeed + rand);
+
+        setState(() {
+          _userLocation = nextPoint;
+          _currentHeading = nextHeading;
+          _currentSpeedKmh = newSpeed;
+        });
+
+        // Камера непрерывно следует по направлению движения в 3D
+        _mapController?.moveCamera(
+          CameraUpdate.newCameraPosition(
+            CameraPosition(
+              target: _userLocation,
+              zoom: 17.8,
+              tilt: 55.0,
+              azimuth: nextHeading,
+            ),
+          ),
+          animation: const MapAnimation(type: MapAnimationType.smooth, duration: 1.0),
+        );
+
+        _updateNextManeuver(_navStepIndex);
+        _refreshMapObjects();
+      } else {
+        timer.cancel();
+        _voiceGuidance.speak('Вы прибыли в салон ${_selectedSalon?.name ?? ""}');
+        _stopNavigationMode(isCompleted: true);
+      }
+    });
+  }
+
+  /// Обновление карточки следующего маневра и озвучки поворотов
+  void _updateNextManeuver(int currentIndex) {
+    if (_currentRoutePoints.length <= currentIndex + 1) {
+      _nextManeuverText = 'Пункт назначения';
+      _nextManeuverDistanceText = '0 м';
+      _nextManeuverIcon = Icons.flag;
+      return;
+    }
+
+    int turnIndex = -1;
+    double turnBearing = _currentHeading;
+    double distToTurn = 0.0;
+
+    for (int i = currentIndex; i < _currentRoutePoints.length - 1; i++) {
+      distToTurn += _calculateDistanceMeters(_currentRoutePoints[i], _currentRoutePoints[i + 1]);
+      final b1 = _calculateBearing(_currentRoutePoints[i], _currentRoutePoints[i + 1]);
+      if (i + 2 < _currentRoutePoints.length) {
+        final b2 = _calculateBearing(_currentRoutePoints[i + 1], _currentRoutePoints[i + 2]);
+        final diff = (b2 - b1 + 540) % 360 - 180;
+        if (diff.abs() > 25) {
+          turnIndex = i + 1;
+          turnBearing = diff;
+          break;
+        }
+      }
+    }
+
+    if (turnIndex != -1) {
+      final isRight = turnBearing > 0;
+      _nextManeuverIcon = isRight ? Icons.turn_right : Icons.turn_left;
+      _nextManeuverDistanceText = distToTurn > 1000
+          ? '${(distToTurn / 1000).toStringAsFixed(1)} км'
+          : '${distToTurn.round()} м';
+      _nextManeuverText = isRight ? 'Поворот направо' : 'Поворот налево';
+
+      // Озвучка при приближении к повороту
+      if (distToTurn <= 160 && distToTurn > 100) {
+        _voiceGuidance.speak('Через 150 метров ${isRight ? "поверните направо" : "поверните налево"}');
+      } else if (distToTurn <= 40 && distToTurn > 10) {
+        _voiceGuidance.speak(isRight ? 'Поверните направо' : 'Поверните налево');
+      }
+    } else {
+      _nextManeuverIcon = Icons.straight;
+      _nextManeuverDistanceText = 'Прямо';
+      _nextManeuverText = 'Двигайтесь по улице';
+    }
+  }
+
+  /// Центрирование камеры в 3D ракурсе позади пользователя
+  void _recenterNavigationCamera() {
+    _mapController?.moveCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target: _userLocation,
+          zoom: 17.8,
+          tilt: 55.0,
+          azimuth: _currentHeading,
+        ),
+      ),
+      animation: const MapAnimation(type: MapAnimationType.smooth, duration: 0.8),
+    );
+  }
+
+  /// Остановка режима навигации и сброс камеры в 2D обзор
+  void _stopNavigationMode({bool isCompleted = false}) {
+    _navSimulationTimer?.cancel();
+    _navSimulationTimer = null;
+    _voiceGuidance.stop();
+
+    setState(() {
+      _isNavigating = false;
+      _currentSpeedKmh = 0.0;
+    });
+
+    _mapController?.moveCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target: _userLocation,
+          zoom: 15.5,
+          tilt: 0.0,
+          azimuth: 0.0,
+        ),
+      ),
+      animation: const MapAnimation(type: MapAnimationType.smooth, duration: 1.0),
+    );
+
+    if (isCompleted && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.primary,
+          content: Text('Вы успешно прибыли в салон ${_selectedSalon?.name ?? ""}!'),
+        ),
+      );
+    }
 
     _refreshMapObjects();
   }
@@ -736,25 +969,29 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
             },
           ),
 
-          // 2. Верхняя шапка с поиском и фильтрами
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: _buildHeader(context),
-          ),
+          // 2. Верхняя шапка с поиском и фильтрами (или HUD навигации)
+          if (!_isNavigating)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: _buildHeader(context),
+            )
+          else
+            _buildNavigationTopHud(context),
 
-          // 3. Кнопка определения местоположения (и сброс активного маршрута)
-          Positioned(
-            right: 16,
-            bottom: _selectedSalon != null
-                ? (bottomNavOffset + (_primaryRoutePolyline != null ? 288.0 : 232.0))
-                : 260.0,
-            child: _buildMapControls(),
-          ),
+          // 3. Кнопка определения местоположения (поднята строго выше карточки салона)
+          if (!_isNavigating)
+            Positioned(
+              right: 16,
+              bottom: _selectedSalon != null
+                  ? (bottomNavOffset + (_primaryRoutePolyline != null ? 360.0 : 250.0))
+                  : 260.0,
+              child: _buildMapControls(),
+            ),
 
           // 4. Информационное МИНИ-ОКНО выбранного салона (плавает ровно над FloatingBottomBar)
-          if (_selectedSalon != null)
+          if (!_isNavigating && _selectedSalon != null)
             Positioned(
               left: 16,
               right: 16,
@@ -762,8 +999,12 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
               child: _buildSalonMiniWindow(_selectedSalon!),
             ),
 
-          // 5. Выдвижной нижний список (когда салон не выбран)
-          if (_selectedSalon == null)
+          // 5. Нижний HUD навигатора со спидометром
+          if (_isNavigating)
+            _buildNavigationBottomHud(context),
+
+          // 6. Выдвижной нижний список (когда салон не выбран и нет навигации)
+          if (!_isNavigating && _selectedSalon == null)
             _buildDraggableSalonsList(bottomNavOffset),
         ],
       ),
@@ -896,31 +1137,14 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
     );
   }
 
-  /// Кнопка управления картой (центрирование геопозиции пользователя и сброс маршрута)
+  /// Кнопка управления картой (центрирование геопозиции пользователя)
   Widget _buildMapControls() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // 1. Сброс маршрута (если построен активный маршрут)
-        if (_primaryRoutePolyline != null) ...[
-          FloatingActionButton.small(
-            heroTag: 'clear_route_btn',
-            backgroundColor: Colors.white,
-            elevation: 4,
-            onPressed: _clearRoute,
-            child: const Icon(Icons.close, color: Colors.redAccent, size: 20),
-          ),
-          const SizedBox(height: 10),
-        ],
-        // 2. Кнопка определения текущего местоположения пользователя
-        FloatingActionButton.small(
-          heroTag: 'my_location_btn',
-          backgroundColor: AppColors.surface,
-          elevation: 4,
-          onPressed: _detectAndCenterRealLocation,
-          child: const Icon(Icons.my_location, color: AppColors.primary, size: 22),
-        ),
-      ],
+    return FloatingActionButton.small(
+      heroTag: 'my_location_btn',
+      backgroundColor: AppColors.surface,
+      elevation: 4,
+      onPressed: _detectAndCenterRealLocation,
+      child: const Icon(Icons.my_location, color: AppColors.primary, size: 22),
     );
   }
 
@@ -1206,13 +1430,246 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
 
             const SizedBox(height: 12),
 
-            // Кнопка перехода к записи
-            AppGradientButton(
-              text: 'Записаться в салон',
-              height: 44,
-              onPressed: () => widget.onSelectSalon(salon.name),
-            ),
+            // Кнопка перехода к активной навигации или записи
+            if (isRouteActive) ...[
+              Row(
+                children: [
+                  Expanded(
+                    flex: 4,
+                    child: AppGradientButton(
+                      text: _isWalkingRoute ? '🚶 Пойти' : '🚗 Поехали',
+                      icon: const Icon(Icons.navigation_rounded, color: Colors.white, size: 18),
+                      height: 44,
+                      onPressed: _startNavigationMode,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 3,
+                    child: OutlinedButton(
+                      onPressed: () => widget.onSelectSalon(salon.name),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: AppColors.primary, width: 1.5),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      child: const Text(
+                        'Записаться',
+                        style: TextStyle(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 13,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ] else ...[
+              AppGradientButton(
+                text: 'Записаться в салон',
+                height: 44,
+                onPressed: () => widget.onSelectSalon(salon.name),
+              ),
+            ],
           ],
+        ),
+      ),
+    );
+  }
+
+  /// Верхний HUD активного навигатора (карточка маневра, звук и завершение)
+  Widget _buildNavigationTopHud(BuildContext context) {
+    return Positioned(
+      top: MediaQuery.of(context).padding.top + 8,
+      left: 16,
+      right: 16,
+      child: Material(
+        color: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E293B),
+            borderRadius: BorderRadius.circular(22),
+            boxShadow: const [
+              BoxShadow(color: Colors.black38, blurRadius: 16, offset: Offset(0, 6)),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: (_isWalkingRoute ? const Color(0xFF10B981) : AppColors.primary),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(_nextManeuverIcon, color: Colors.white, size: 26),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _nextManeuverDistanceText,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                    Text(
+                      _nextManeuverText,
+                      style: const TextStyle(
+                        color: Color(0xFF94A3B8),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: Icon(
+                  _voiceGuidance.isMuted ? Icons.volume_off : Icons.volume_up,
+                  color: _voiceGuidance.isMuted ? Colors.white38 : AppColors.gold,
+                ),
+                tooltip: _voiceGuidance.isMuted ? 'Включить озвучку' : 'Отключить озвучку',
+                onPressed: () {
+                  setState(() {
+                    _voiceGuidance.toggleMute();
+                  });
+                  if (!_voiceGuidance.isMuted) {
+                    _voiceGuidance.speak('Озвучка включена');
+                  }
+                },
+              ),
+              IconButton(
+                icon: const Icon(Icons.close, color: Colors.white70),
+                tooltip: 'Завершить маршрут',
+                onPressed: () => _stopNavigationMode(isCompleted: false),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Нижний HUD активного навигатора со спидометром и временем прибытия
+  Widget _buildNavigationBottomHud(BuildContext context) {
+    return Positioned(
+      left: 16,
+      right: 16,
+      bottom: 24,
+      child: Material(
+        color: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: const [
+              BoxShadow(color: Colors.black26, blurRadius: 20, offset: Offset(0, 8)),
+            ],
+          ),
+          child: Row(
+            children: [
+              // Спидометр
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                decoration: BoxDecoration(
+                  color: AppColors.background,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFF3DCE8)),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _isWalkingRoute
+                          ? _currentSpeedKmh.toStringAsFixed(1)
+                          : _currentSpeedKmh.round().toString(),
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                        color: _currentSpeedKmh > 60 ? Colors.redAccent : AppColors.ink,
+                      ),
+                    ),
+                    const Text(
+                      'км/ч',
+                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.muted),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 14),
+              // Время, дистанция и пункт назначения
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          _primaryRouteDuration ?? 'В пути',
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.ink,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          width: 4,
+                          height: 4,
+                          decoration: const BoxDecoration(
+                            color: AppColors.muted,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          _primaryRouteDistance ?? '',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.muted,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'Цель: ${_selectedSalon?.name ?? "Салон"}',
+                      style: const TextStyle(fontSize: 12, color: AppColors.primaryText, fontWeight: FontWeight.w700),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Кнопка центрирования камеры в 3D
+              IconButton.filledTonal(
+                style: IconButton.styleFrom(
+                  backgroundColor: AppColors.primaryTint,
+                  foregroundColor: AppColors.primary,
+                ),
+                onPressed: _recenterNavigationCamera,
+                icon: const Icon(Icons.navigation_outlined, size: 22),
+                tooltip: 'По центру в 3D',
+              ),
+            ],
+          ),
         ),
       ),
     );

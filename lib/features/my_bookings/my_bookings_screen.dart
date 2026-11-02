@@ -43,14 +43,83 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
   }
 
   void _confirmCancel(BookingItem booking) {
+    final diff = booking.timeUntilAppointment;
+    final int hours = diff.isNegative ? 0 : diff.inHours;
+    final int minutes = diff.isNegative ? 0 : (diff.inMinutes % 60);
+    final remainingStr = diff.isNegative
+        ? 'время визита уже наступило'
+        : '$hours ч $minutes мин';
+
+    // Строгое правило сервиса: отмена запрещена, если до визита осталось менее 2 часов (< 120 минут)
+    if (!booking.canCancel) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Row(
+            children: [
+              Icon(Icons.lock_clock, color: Colors.redAccent, size: 24),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text('Отмена невозможна', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'По правилам сервиса отмена визита разрешена строго не позднее чем за 2 часа до начала записи.',
+                style: TextStyle(fontSize: 13, color: AppColors.ink, height: 1.4),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFECEF),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.redAccent.withValues(alpha: 0.2)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.timer_outlined, color: AppColors.primary, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'До вашего приёма осталось: $remainingStr (менее 2 часов). Запись зафиксирована за мастером, списание подтверждено.',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.primaryText),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Понятно', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    // Если осталось >= 2 часов (120 минут)
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('Отменить запись?', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
         content: Text(
-          'При отмене более чем за 4 часа до визита ${booking.paymentMethod == "Кредиты" ? "вам вернется ${booking.credits} кредитов." : "деньги вернутся полностью."}',
-          style: const TextStyle(fontSize: 13, color: AppColors.muted),
+          'До визита осталось $hours ч $minutes мин (более 2 часов).\n\nПри отмене ${booking.paymentMethod == "Кредиты" ? "вам полностью вернутся ${booking.credits} кредитов на баланс." : "деньги вернутся полностью."}',
+          style: const TextStyle(fontSize: 13, color: AppColors.muted, height: 1.4),
         ),
         actions: [
           TextButton(
@@ -64,13 +133,18 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
             onPressed: () {
-              _appState.cancelBooking(booking.id);
+              final ok = _appState.cancelBooking(booking.id);
               Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Запись отменена. Кредиты возвращены на баланс.')),
-              );
+              if (ok) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    backgroundColor: AppColors.ink,
+                    content: Text('Запись отменена. Кредиты успешно возвращены на баланс.'),
+                  ),
+                );
+              }
             },
-            child: const Text('Отменить', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+            child: const Text('Отменить и вернуть', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -241,12 +315,25 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
                       ),
                     ],
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 6),
                   Center(
                     child: TextButton.icon(
                       onPressed: () => _confirmCancel(b),
-                      icon: const Icon(Icons.close, size: 14, color: AppColors.muted),
-                      label: const Text('Отменить запись', style: TextStyle(color: AppColors.muted, fontSize: 12)),
+                      icon: Icon(
+                        b.canCancel ? Icons.close : Icons.lock_clock,
+                        size: 14,
+                        color: b.canCancel ? AppColors.muted : AppColors.primary,
+                      ),
+                      label: Text(
+                        b.canCancel
+                            ? 'Отменить запись (доступно > 2 ч)'
+                            : 'Отмена заблокирована (< 2 ч до визита)',
+                        style: TextStyle(
+                          color: b.canCancel ? AppColors.muted : AppColors.primaryText,
+                          fontSize: 11,
+                          fontWeight: b.canCancel ? FontWeight.w500 : FontWeight.w700,
+                        ),
+                      ),
                     ),
                   ),
                 ] else if (b.status == 'completed') ...[

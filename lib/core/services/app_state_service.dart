@@ -16,6 +16,7 @@ class BookingItem {
   List<String>? reviewTags;
   String? reviewComment;
   DateTime? reviewDate;
+  DateTime? appointmentDateTime;
 
   BookingItem({
     required this.id,
@@ -32,7 +33,53 @@ class BookingItem {
     this.reviewTags,
     this.reviewComment,
     this.reviewDate,
+    this.appointmentDateTime,
   });
+
+  /// Вычисленная дата и время визита
+  DateTime get resolvedDateTime {
+    if (appointmentDateTime != null) return appointmentDateTime!;
+    final now = DateTime.now();
+    int hour = 16;
+    int minute = 30;
+    if (time.contains(':')) {
+      final parts = time.split(':');
+      hour = int.tryParse(parts[0].trim()) ?? 16;
+      minute = int.tryParse(parts[1].trim()) ?? 30;
+    }
+
+    final lowerDate = date.toLowerCase();
+    if (lowerDate.contains('сегодня')) {
+      return DateTime(now.year, now.month, now.day, hour, minute);
+    }
+    if (lowerDate.contains('завтра')) {
+      final tomorrow = now.add(const Duration(days: 1));
+      return DateTime(tomorrow.year, tomorrow.month, tomorrow.day, hour, minute);
+    }
+
+    final months = {
+      'янв': 1, 'фев': 2, 'мар': 3, 'апр': 4, 'май': 5, 'мая': 5,
+      'июн': 6, 'июл': 7, 'авг': 8, 'сен': 9, 'окт': 10, 'ноя': 11, 'дек': 12
+    };
+    for (final entry in months.entries) {
+      if (lowerDate.contains(entry.key)) {
+        final dayMatch = RegExp(r'\d+').firstMatch(lowerDate);
+        final day = dayMatch != null ? int.parse(dayMatch.group(0)!) : 1;
+        return DateTime(now.year, entry.value, day, hour, minute);
+      }
+    }
+
+    return DateTime(now.year, now.month, now.day, hour, minute);
+  }
+
+  /// Проверка правила сервиса: отмена разрешена строго не менее чем за 2 часа (>= 120 минут)
+  /// Если осталось < 120 мин (например, 1 ч 59 мин или меньше), отмена строго блокируется!
+  bool get canCancel {
+    final diff = resolvedDateTime.difference(DateTime.now());
+    return diff.inMinutes >= 120;
+  }
+
+  Duration get timeUntilAppointment => resolvedDateTime.difference(DateTime.now());
 }
 
 /// Синглтон-сервис локального состояния (Mock Data Store)
@@ -118,11 +165,27 @@ class AppStateService extends ChangeNotifier {
       serviceName: 'Маникюр классический',
       masterName: 'Алена',
       date: 'Сегодня',
-      time: '16:30',
+      time: '17:30',
       credits: 34,
       sumPrice: 150000,
       paymentMethod: 'Кредиты',
       status: 'active',
+      // Осталось ~1 час 20 минут (< 2 часов) для проверки блокировки отмены
+      appointmentDateTime: DateTime.now().add(const Duration(minutes: 80)),
+    ),
+    BookingItem(
+      id: 'b-005',
+      salonName: 'Elite Barber & Style',
+      serviceName: 'Стрижка и стайлинг',
+      masterName: 'Тимур',
+      date: 'Завтра',
+      time: '14:00',
+      credits: 26,
+      sumPrice: 110000,
+      paymentMethod: 'Кредиты',
+      status: 'active',
+      // Осталось > 2 часов для проверки успешной отмены с возвратом кредитов
+      appointmentDateTime: DateTime.now().add(const Duration(hours: 22)),
     ),
     BookingItem(
       id: 'b-002',
@@ -199,11 +262,14 @@ class AppStateService extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Отмена бронирования (возврат кредитов)
-  void cancelBooking(String bookingId) {
+  /// Отмена бронирования (с проверкой правила 2 часов)
+  bool cancelBooking(String bookingId) {
     final index = _bookings.indexWhere((b) => b.id == bookingId);
     if (index != -1) {
       final b = _bookings[index];
+      if (!b.canCancel) {
+        return false; // Отмена строго заблокирована (до визита осталось менее 2 часов)
+      }
       b.status = 'cancelled';
 
       // Возврат кредитов по правилу ТЗ
@@ -212,7 +278,9 @@ class AppStateService extends ChangeNotifier {
       }
 
       notifyListeners();
+      return true;
     }
+    return false;
   }
 
   /// Перенос времени бронирования (M-10)
