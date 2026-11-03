@@ -270,7 +270,21 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           const Text('Клиент', style: TextStyle(color: AppColors.muted, fontSize: 13)),
-                          Text(_scannedClientName, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
+                          Row(
+                            children: [
+                              ClipOval(
+                                child: Image.asset(
+                                  'assets/images/clients/client_zulfiya.jpg',
+                                  width: 24,
+                                  height: 24,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, _, _) => const Icon(Icons.person, size: 18),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(_scannedClientName, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
+                            ],
+                          ),
                         ],
                       ),
                       const Divider(height: 20, color: Color(0xFFF3DCE8)),

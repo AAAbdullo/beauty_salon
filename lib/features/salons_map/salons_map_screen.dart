@@ -1173,8 +1173,24 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
           children: [
             // Хедер карточки
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: Image.asset(
+                    salon.imageAsset,
+                    width: 50,
+                    height: 50,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => Container(
+                      width: 50,
+                      height: 50,
+                      color: AppColors.primaryTint,
+                      child: const Icon(Icons.storefront, color: AppColors.primary, size: 26),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,

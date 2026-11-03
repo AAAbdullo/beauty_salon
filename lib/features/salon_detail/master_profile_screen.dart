@@ -166,8 +166,16 @@ class _MasterProfileScreenState extends State<MasterProfileScreen> with SingleTi
                           BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 4)),
                         ],
                       ),
-                      child: const Center(
-                        child: Icon(Icons.person, size: 55, color: AppColors.primary),
+                      child: ClipOval(
+                        child: Image.asset(
+                          _master.avatarAsset,
+                          width: 90,
+                          height: 90,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => const Center(
+                            child: Icon(Icons.person, size: 55, color: AppColors.primary),
+                          ),
+                        ),
                       ),
                     ),
                     Positioned(
@@ -424,6 +432,7 @@ class _MasterProfileScreenState extends State<MasterProfileScreen> with SingleTi
       ),
       delegate: SliverChildBuilderDelegate(
         (context, index) {
+          final imgAsset = _master.portfolioImages[index];
           return ClipRRect(
             borderRadius: BorderRadius.circular(16),
             child: Container(
@@ -431,8 +440,12 @@ class _MasterProfileScreenState extends State<MasterProfileScreen> with SingleTi
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  const Center(
-                    child: Icon(Icons.photo_camera_back_outlined, size: 40, color: AppColors.primary),
+                  Image.asset(
+                    imgAsset,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => const Center(
+                      child: Icon(Icons.photo_camera_back_outlined, size: 40, color: AppColors.primary),
+                    ),
                   ),
                   Positioned(
                     bottom: 8,

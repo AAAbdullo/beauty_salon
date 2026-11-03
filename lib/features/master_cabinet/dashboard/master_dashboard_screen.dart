@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/services/app_state_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/buttons/app_pill_button.dart';
 import '../../../core/widgets/cards/app_card.dart';
@@ -81,6 +82,7 @@ class MasterDashboardScreen extends StatelessWidget {
   }
 
   Widget _buildMasterHeader() {
+    final appState = AppStateService();
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSizes.screenPadding),
       child: Row(
@@ -93,9 +95,19 @@ class MasterDashboardScreen extends StatelessWidget {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(color: AppColors.primary, width: 2),
-                  color: AppColors.primaryTint,
                 ),
-                child: const Icon(Icons.person, color: AppColors.primary, size: 44),
+                child: ClipOval(
+                  child: Image.asset(
+                    appState.masterAvatar,
+                    width: 72,
+                    height: 72,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => Container(
+                      color: AppColors.primaryTint,
+                      child: const Icon(Icons.person, color: AppColors.primary, size: 44),
+                    ),
+                  ),
+                ),
               ),
               Positioned(
                 bottom: 2,

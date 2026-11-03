@@ -91,6 +91,7 @@ class AppStateService extends ChangeNotifier {
   // Состояние клиента
   String clientName = 'Wazow';
   String clientPhone = '+998 90 123 45 67';
+  String clientAvatar = 'assets/images/clients/client_wazow.jpg';
   int clientCredits = 86;
   int usedCredits = 14;
   int totalCreditsPlan = 20;
@@ -151,6 +152,7 @@ class AppStateService extends ChangeNotifier {
   // Состояние мастера
   String masterName = 'Sabina Nur';
   String masterSalon = 'Nur Beauty';
+  String masterAvatar = 'assets/images/masters/master_sabina.jpg';
   int masterVisitsToday = 8;
   int masterMonthlyVisits = 21;
   int masterDailyRevenue = 2450000;

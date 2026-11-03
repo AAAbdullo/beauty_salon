@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/services/app_state_service.dart';
+import '../../core/services/salons_repository.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/badges/app_status_badge.dart';
 import '../../core/widgets/buttons/app_gradient_button.dart';
@@ -85,6 +86,12 @@ class _SalonDetailScreenState extends State<SalonDetailScreen>
   }
 
   Widget _buildSliverAppBar() {
+    final allSalons = SalonsRepository().getSalons(null);
+    final salon = allSalons.firstWhere(
+      (s) => s.name == widget.salonName,
+      orElse: () => allSalons.first,
+    );
+
     return SliverAppBar(
       expandedHeight: 250,
       pinned: true,
@@ -146,16 +153,33 @@ class _SalonDetailScreenState extends State<SalonDetailScreen>
         background: Stack(
           fit: StackFit.expand,
           children: [
-            Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFFFFD1DC), Color(0xFFFFB6C1)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+            Image.asset(
+              salon.imageAsset,
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Color(0xFFFFD1DC), Color(0xFFFFB6C1)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                ),
+                child: const Center(
+                  child: Icon(Icons.storefront, size: 80, color: Colors.white70),
                 ),
               ),
-              child: const Center(
-                child: Icon(Icons.storefront, size: 80, color: Colors.white70),
+            ),
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withValues(alpha: 0.35),
+                    Colors.transparent,
+                    Colors.black.withValues(alpha: 0.55),
+                  ],
+                ),
               ),
             ),
             Positioned(
@@ -475,10 +499,11 @@ class _SalonDetailScreenState extends State<SalonDetailScreen>
 
   Widget _buildMastersSection() {
     final masters = [
-      {'name': 'Алена', 'role': 'Маникюр · Педикюр', 'rating': '4.9'},
-      {'name': 'Сабина', 'role': 'Брови · Ресницы', 'rating': '4.8'},
-      {'name': 'Дилноза', 'role': 'Стрижки · Укладка', 'rating': '4.7'},
-      {'name': 'Мадина', 'role': 'Косметология', 'rating': '4.9'},
+      {'name': 'Алена', 'role': 'Маникюр · Педикюр', 'rating': '4.9', 'avatar': 'assets/images/masters/master_alena.jpg'},
+      {'name': 'Сабина', 'role': 'Брови · Ресницы', 'rating': '4.8', 'avatar': 'assets/images/masters/master_sabina.jpg'},
+      {'name': 'Дилноза', 'role': 'Стрижки · Укладка', 'rating': '4.7', 'avatar': 'assets/images/masters/master_dilnoza.jpg'},
+      {'name': 'Мадина', 'role': 'Косметология', 'rating': '4.9', 'avatar': 'assets/images/masters/master_madina.jpg'},
+      {'name': 'Тимур', 'role': 'Барбер · Стиль', 'rating': '4.8', 'avatar': 'assets/images/masters/master_timur.jpg'},
     ];
 
     return Column(
@@ -490,7 +515,7 @@ class _SalonDetailScreenState extends State<SalonDetailScreen>
         ),
         const SizedBox(height: 12),
         SizedBox(
-          height: 120,
+          height: 124,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: masters.length,
@@ -523,20 +548,30 @@ class _SalonDetailScreenState extends State<SalonDetailScreen>
                     Stack(
                       children: [
                         Container(
-                          width: 58,
-                          height: 58,
+                          width: 60,
+                          height: 60,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             border: Border.all(
                               color: AppColors.primary,
                               width: 2,
                             ),
-                            color: AppColors.primaryTint,
                           ),
-                          child: const Icon(
-                            Icons.person,
-                            color: AppColors.primary,
-                            size: 36,
+                          child: ClipOval(
+                            child: Image.asset(
+                              m['avatar']!,
+                              width: 60,
+                              height: 60,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, _, _) => Container(
+                                color: AppColors.primaryTint,
+                                child: const Icon(
+                                  Icons.person,
+                                  color: AppColors.primary,
+                                  size: 36,
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                         Positioned(
@@ -596,63 +631,47 @@ class _SalonDetailScreenState extends State<SalonDetailScreen>
   }
 
   Widget _buildSalonPhotos() {
+    final photos = [
+      'assets/images/salons/salon_nur_beauty.jpg',
+      'assets/images/salons/salon_mira_hair.jpg',
+      'assets/images/salons/salon_lola_studio.jpg',
+      'assets/images/portfolio/portfolio_manicure_1.jpg',
+      'assets/images/portfolio/portfolio_hair_1.jpg',
+      'assets/images/portfolio/portfolio_brows_1.jpg',
+    ];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Фото салона',
+          'Фото салона и работ',
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: Container(
-                height: 70,
-                decoration: BoxDecoration(
-                  color: Colors.pink.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Icons.camera_alt_outlined,
-                  color: AppColors.primary,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Container(
-                height: 70,
-                decoration: BoxDecoration(
-                  color: Colors.pink.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Icons.camera_alt_outlined,
-                  color: AppColors.primary,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Container(
-                height: 70,
-                decoration: BoxDecoration(
-                  color: Colors.pink.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Center(
-                  child: Text(
-                    '+8',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.ink,
-                    ),
+        SizedBox(
+          height: 85,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: photos.length,
+            separatorBuilder: (_, index) => const SizedBox(width: 10),
+            itemBuilder: (context, index) {
+              return ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: Image.asset(
+                  photos[index],
+                  width: 120,
+                  height: 85,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => Container(
+                    width: 120,
+                    height: 85,
+                    color: Colors.pink.shade50,
+                    child: const Icon(Icons.camera_alt_outlined, color: AppColors.primary),
                   ),
                 ),
-              ),
-            ),
-          ],
+              );
+            },
+          ),
         ),
       ],
     );

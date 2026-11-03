@@ -19,6 +19,7 @@ class SalonModel {
   final int minPriceSum;
   final int minCredits;
   final Point point; // Гео-координаты для Yandex MapKit
+  final String imageAsset; // Фотография интерьера/фасада салона
 
   const SalonModel({
     required this.id,
@@ -37,6 +38,7 @@ class SalonModel {
     required this.minPriceSum,
     required this.minCredits,
     required this.point,
+    this.imageAsset = 'assets/images/salons/salon_nur_beauty.jpg',
   });
 
   /// Для будущего парсинга из JSON ответа бэкенда
@@ -95,6 +97,7 @@ class SalonsRepository {
       minPriceSum: 150000,
       minCredits: 34,
       point: Point(latitude: 41.314500, longitude: 69.285000),
+      imageAsset: 'assets/images/salons/salon_nur_beauty.jpg',
     ),
     SalonModel(
       id: 's-002',
@@ -113,6 +116,7 @@ class SalonsRepository {
       minPriceSum: 120000,
       minCredits: 28,
       point: Point(latitude: 41.305000, longitude: 69.292000),
+      imageAsset: 'assets/images/salons/salon_lola_studio.jpg',
     ),
     SalonModel(
       id: 's-003',
@@ -131,6 +135,7 @@ class SalonsRepository {
       minPriceSum: 180000,
       minCredits: 40,
       point: Point(latitude: 41.318000, longitude: 69.262000),
+      imageAsset: 'assets/images/salons/salon_mira_hair.jpg',
     ),
     SalonModel(
       id: 's-004',
@@ -221,6 +226,7 @@ class SalonsRepository {
       minPriceSum: 110000,
       minCredits: 26,
       point: Point(latitude: 41.339000, longitude: 69.245000),
+      imageAsset: 'assets/images/salons/salon_elite_barber.jpg',
     ),
     SalonModel(
       id: 's-009',

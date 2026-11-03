@@ -11,6 +11,7 @@ class MasterProfileModel {
   final int reviewsCount;
   final int experienceYears;
   final String about;
+  final String avatarAsset;
   final List<String> portfolioImages;
   final List<MasterServiceItem> services;
   final List<MasterReviewItem> reviews;
@@ -24,6 +25,7 @@ class MasterProfileModel {
     required this.reviewsCount,
     required this.experienceYears,
     required this.about,
+    this.avatarAsset = 'assets/images/masters/master_alena.jpg',
     required this.portfolioImages,
     required this.services,
     required this.reviews,
@@ -78,13 +80,13 @@ class MastersRepository {
       rating: 4.9,
       reviewsCount: 124,
       experienceYears: 6,
+      avatarAsset: 'assets/images/masters/master_alena.jpg',
       about:
           'Сертифицированный специалист по аппаратному и комбинированному маникюру, наращиванию и smart-педикюру. Работаю со сложной кутикулой и спа-уходом.',
       portfolioImages: [
-        'web/icons/Icon-192.png',
-        'web/icons/Icon-512.png',
-        'web/icons/Icon-192.png',
-        'web/icons/Icon-512.png',
+        'assets/images/portfolio/portfolio_manicure_1.jpg',
+        'assets/images/portfolio/portfolio_brows_1.jpg',
+        'assets/images/portfolio/portfolio_hair_1.jpg',
       ],
       services: [
         MasterServiceItem(
@@ -141,11 +143,12 @@ class MastersRepository {
       rating: 4.8,
       reviewsCount: 92,
       experienceYears: 4,
+      avatarAsset: 'assets/images/masters/master_sabina.jpg',
       about:
           'Эксперт по архитектуре бровей, ламинированию ресниц и долговременной укладке. Подбираю форму строго под анатомию лица.',
       portfolioImages: [
-        'web/icons/Icon-192.png',
-        'web/icons/Icon-512.png',
+        'assets/images/portfolio/portfolio_brows_1.jpg',
+        'assets/images/portfolio/portfolio_manicure_1.jpg',
       ],
       services: [
         MasterServiceItem(
@@ -167,6 +170,112 @@ class MastersRepository {
           rating: 5.0,
           date: 'Неделю назад',
           comment: 'Бровки естественные, без черных перетемнений. Спасибо Сабине!',
+        ),
+      ],
+    ),
+    'Дилноза': const MasterProfileModel(
+      id: 'm-003',
+      name: 'Дилноза Каримова',
+      salonName: 'Mira Hair',
+      specialty: 'Топ-стилист по волосам',
+      rating: 4.9,
+      reviewsCount: 145,
+      experienceYears: 7,
+      avatarAsset: 'assets/images/masters/master_dilnoza.jpg',
+      about:
+          'Колорист-эксперт: аиртач, балаяж, сложное окрашивание, авторские женские стрижки и салонный уход.',
+      portfolioImages: [
+        'assets/images/portfolio/portfolio_hair_1.jpg',
+        'assets/images/portfolio/portfolio_brows_1.jpg',
+      ],
+      services: [
+        MasterServiceItem(
+          name: 'Женская стрижка + брашинг',
+          duration: '60 мин',
+          creditsPrice: 32,
+          sumPrice: 140000,
+        ),
+        MasterServiceItem(
+          name: 'Сложное окрашивание Balayage',
+          duration: '180 мин',
+          creditsPrice: 85,
+          sumPrice: 420000,
+        ),
+      ],
+      reviews: [
+        MasterReviewItem(
+          authorName: 'Нилуфар Х.',
+          rating: 5.0,
+          date: '2 дня назад',
+          comment: 'Цвет волос получился именно такой, как на фото из Pinterest! Дилноза — супер профи.',
+        ),
+      ],
+    ),
+    'Мадина': const MasterProfileModel(
+      id: 'm-004',
+      name: 'Мадина Умарова',
+      salonName: 'Nur Beauty',
+      specialty: 'Косметолог-эстетист',
+      rating: 4.9,
+      reviewsCount: 78,
+      experienceYears: 5,
+      avatarAsset: 'assets/images/masters/master_madina.jpg',
+      about:
+          'Медицинское образование. Уходовые процедуры, ультразвуковая чистка, безинъекционная мезотерапия и пилинги.',
+      portfolioImages: [
+        'assets/images/portfolio/portfolio_brows_1.jpg',
+      ],
+      services: [
+        MasterServiceItem(
+          name: 'Комбинированная чистка лица',
+          duration: '90 мин',
+          creditsPrice: 45,
+          sumPrice: 200000,
+        ),
+      ],
+      reviews: [
+        MasterReviewItem(
+          authorName: 'Елена П.',
+          rating: 5.0,
+          date: 'Вчера',
+          comment: 'Кожа после процедуры сияет! Очень деликатный подход.',
+        ),
+      ],
+    ),
+    'Тимур': const MasterProfileModel(
+      id: 'm-005',
+      name: 'Тимур Алиев',
+      salonName: 'Elite Barber & Style',
+      specialty: 'Топ-барбер',
+      rating: 4.8,
+      reviewsCount: 110,
+      experienceYears: 6,
+      avatarAsset: 'assets/images/masters/master_timur.jpg',
+      about:
+          'Классические и трендовые мужские стрижки, королевское бритье опасной бритвой, камуфляж седины и оформление бороды.',
+      portfolioImages: [
+        'assets/images/portfolio/portfolio_hair_1.jpg',
+      ],
+      services: [
+        MasterServiceItem(
+          name: 'Мужская стрижка + мытье + стайлинг',
+          duration: '45 мин',
+          creditsPrice: 26,
+          sumPrice: 110000,
+        ),
+        MasterServiceItem(
+          name: 'Моделирование бороды и усов',
+          duration: '30 мин',
+          creditsPrice: 18,
+          sumPrice: 80000,
+        ),
+      ],
+      reviews: [
+        MasterReviewItem(
+          authorName: 'Сардор Б.',
+          rating: 5.0,
+          date: 'Вчера',
+          comment: 'Четкие контуры, стрижка держит форму даже через 3 недели. Отличный барбер.',
         ),
       ],
     ),

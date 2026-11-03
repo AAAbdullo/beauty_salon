@@ -125,9 +125,19 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(color: AppColors.primary, width: 2),
-                  color: AppColors.primaryTint,
                 ),
-                child: const Icon(Icons.person, size: 45, color: AppColors.primary),
+                child: ClipOval(
+                  child: Image.asset(
+                    _appState.clientAvatar,
+                    width: 74,
+                    height: 74,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => Container(
+                      color: AppColors.primaryTint,
+                      child: const Icon(Icons.person, size: 45, color: AppColors.primary),
+                    ),
+                  ),
+                ),
               ),
               Positioned(
                 bottom: 2,

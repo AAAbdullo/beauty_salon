@@ -66,6 +66,10 @@ flutter:
   assets:
     - web/favicon.png
     - web/icons/Icon-192.png
+    - assets/images/salons/
+    - assets/images/masters/
+    - assets/images/clients/
+    - assets/images/portfolio/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

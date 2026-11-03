@@ -581,14 +581,20 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                         children: [
                           Stack(
                             children: [
-                              Container(
-                                height: 105,
-                                decoration: BoxDecoration(
-                                  color: Colors.pink.shade50,
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                child: const Center(
-                                  child: Icon(Icons.storefront, size: 40, color: AppColors.primary),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(14),
+                                child: Image.asset(
+                                  s.imageAsset,
+                                  height: 105,
+                                  width: double.infinity,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, _, _) => Container(
+                                    height: 105,
+                                    color: Colors.pink.shade50,
+                                    child: const Center(
+                                      child: Icon(Icons.storefront, size: 40, color: AppColors.primary),
+                                    ),
+                                  ),
                                 ),
                               ),
                               Positioned(
