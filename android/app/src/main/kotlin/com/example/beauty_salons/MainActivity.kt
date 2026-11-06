@@ -5,7 +5,6 @@ import androidx.annotation.NonNull
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
-import com.yandex.mapkit.MapKitFactory
 import java.util.Locale
 
 class MainActivity : FlutterActivity(), TextToSpeech.OnInitListener {
@@ -13,7 +12,6 @@ class MainActivity : FlutterActivity(), TextToSpeech.OnInitListener {
     private var isTtsReady = false
 
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
-        MapKitFactory.setApiKey("a7b20b8e-db40-4187-9f36-3e3c1a8d5db4")
         super.configureFlutterEngine(flutterEngine)
 
         tts = TextToSpeech(this, this)

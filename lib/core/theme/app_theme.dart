@@ -62,7 +62,32 @@ class AppGradients {
 }
 
 TextTheme _textTheme(Color ink, Color muted) {
-  final base = GoogleFonts.manropeTextTheme();
+  // google_fonts 9 возвращает TextTheme из пакета material_ui, который не совместим
+  // с TextTheme из flutter/material. TextStyle у них общий, поэтому шрифт Manrope
+  // применяем к каждому стилю вручную (GoogleFonts.manrope подгружает нужную толщину).
+  final themed = _textThemeBase(ink, muted);
+  TextStyle? manrope(TextStyle? style) => style == null ? null : GoogleFonts.manrope(textStyle: style);
+  return TextTheme(
+    displayLarge: manrope(themed.displayLarge),
+    displayMedium: manrope(themed.displayMedium),
+    displaySmall: manrope(themed.displaySmall),
+    headlineLarge: manrope(themed.headlineLarge),
+    headlineMedium: manrope(themed.headlineMedium),
+    headlineSmall: manrope(themed.headlineSmall),
+    titleLarge: manrope(themed.titleLarge),
+    titleMedium: manrope(themed.titleMedium),
+    titleSmall: manrope(themed.titleSmall),
+    bodyLarge: manrope(themed.bodyLarge),
+    bodyMedium: manrope(themed.bodyMedium),
+    bodySmall: manrope(themed.bodySmall),
+    labelLarge: manrope(themed.labelLarge),
+    labelMedium: manrope(themed.labelMedium),
+    labelSmall: manrope(themed.labelSmall),
+  );
+}
+
+TextTheme _textThemeBase(Color ink, Color muted) {
+  final base = ThemeData.light().textTheme;
   return base.copyWith(
     headlineLarge: base.headlineLarge?.copyWith(fontSize: 26, fontWeight: FontWeight.w800, color: ink),
     headlineMedium: base.headlineMedium?.copyWith(fontSize: 22, fontWeight: FontWeight.w800, color: ink),

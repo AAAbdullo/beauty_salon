@@ -10,7 +10,10 @@
 
 * **Фреймворк**: Flutter 3.x (Dart 3.x), Material 3.
 * **Шрифты**: Google Fonts `Manrope` (зафиксирован на `google_fonts: ^6.2.1` во избежание конфликтов TextTheme).
-* **Карты**: **Yandex MapKit Full SDK** (`yandex_mapkit: ^4.3.0`, режим `full`). Нативный ключ для Ташкента: `a7b20b8e-db40-4187-9f36-3e3c1a8d5db4`.
+* **Карты**: **Yandex MapKit Full SDK** (`yandex_mapkit: ^4.3.0`, режим `full`). Ключ API **не хранится в git**:
+  * Android: `android/local.properties` → `YANDEX_MAPKIT_API_KEY=...` (или переменная окружения на CI) → `BuildConfig.YANDEX_MAPKIT_API_KEY`.
+  * Ключ в кабинете Яндекса ограничен ID приложения `com.abdullo.beautySalons` (Android `applicationId` и iOS bundle ID совпадают) — при смене ID обновить ограничение.
+  * iOS: `ios/Flutter/Secrets.xcconfig` (шаблон — `Secrets.xcconfig.example`) → `Info.plist` → `YandexMapKitApiKey`.
 * **QR**: `qr_flutter: ^4.1.0` (генерация клиентского динамического QR), `mobile_scanner: ^5.2.3` (сканер визитов в кабинете мастера).
 * **Архитектурный подход**: Feature-first, чистая изоляция бизнес-логики и UI.
 * **Состояние данных сейчас**: Реактивный синглтон-сервис `AppStateService` (`ChangeNotifier`) + типизированные мок-репозитории (`SalonsRepository`, `MastersRepository`).
@@ -42,7 +45,7 @@
        _ application: UIApplication,
        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
      ) -> Bool {
-       YMKMapKit.setApiKey("a7b20b8e-db40-4187-9f36-3e3c1a8d5db4")
+       YMKMapKit.setApiKey(Bundle.main.object(forInfoDictionaryKey: "YandexMapKitApiKey") as? String ?? "")
        GeneratedPluginRegistrant.register(with: self)
        return super.application(application, didFinishLaunchingWithOptions: launchOptions)
      }

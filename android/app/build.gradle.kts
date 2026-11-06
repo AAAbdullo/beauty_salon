@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -20,8 +22,8 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.beauty_salons"
+        // Должен совпадать с ограничением ключа Yandex MapKit в кабинете разработчика.
+        applicationId = "com.abdullo.beautySalons"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 26
@@ -29,6 +31,21 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         multiDexEnabled = true
+
+        // Ключ Yandex MapKit не хранится в git: берётся из android/local.properties
+        // (YANDEX_MAPKIT_API_KEY=...) или из переменной окружения на CI.
+        val localProps = Properties().apply {
+            val file = rootProject.file("local.properties")
+            if (file.exists()) file.inputStream().use { load(it) }
+        }
+        val mapkitKey = localProps.getProperty("YANDEX_MAPKIT_API_KEY")
+            ?: System.getenv("YANDEX_MAPKIT_API_KEY")
+            ?: ""
+        buildConfigField("String", "YANDEX_MAPKIT_API_KEY", "\"$mapkitKey\"")
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 
     buildTypes {

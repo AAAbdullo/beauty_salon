@@ -11,14 +11,15 @@ import AVFoundation
 
   override init() {
     super.init()
-    YMKMapKit.setApiKey("a7b20b8e-db40-4187-9f36-3e3c1a8d5db4")
+    // Ключ берётся из ios/Flutter/Secrets.xcconfig (не в git) через Info.plist.
+    let mapkitKey = Bundle.main.object(forInfoDictionaryKey: "YandexMapKitApiKey") as? String ?? ""
+    YMKMapKit.setApiKey(mapkitKey)
   }
 
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
-    YMKMapKit.setApiKey("a7b20b8e-db40-4187-9f36-3e3c1a8d5db4")
 
     // Инициализация и системный запрос разрешения на геопозицию для Yandex MapKit
     locationManager = CLLocationManager()
@@ -76,8 +77,10 @@ import AVFoundation
   }
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
-    YMKMapKit.setApiKey("a7b20b8e-db40-4187-9f36-3e3c1a8d5db4")
-    setupTtsChannel(binaryMessenger: engineBridge.binaryMessenger)
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    // У FlutterImplicitEngineBridge нет binaryMessenger — берём его через registrar.
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "BeautySalonTts") {
+      setupTtsChannel(binaryMessenger: registrar.messenger())
+    }
   }
 }
