@@ -76,13 +76,13 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
     if (_subStack.isNotEmpty) _subStack.removeLast();
   });
 
-  void _openSalon(String name) {
-    _selectedSalonName = name;
+  void _openSalon(String salonId) {
+    _selectedSalonId = salonId;
     _push('salon_detail');
   }
 
-  void _openMaster(String name) {
-    _selectedMasterName = name;
+  void _openMaster(String masterId) {
+    _selectedMasterId = masterId;
     _push('master_profile');
   }
 
@@ -90,34 +90,35 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
     _subStack.clear();
     _clientTabIndex = index;
     _bookingsInitialTab = bookingsTab;
-    if (index != 1) _mapFocusSalon = null;
+    if (index != 1) _mapFocusSalonId = null;
   });
 
-  String _selectedSalonName = 'Nur Beauty';
-  String _selectedMasterName = 'Алена';
+  // Салоны и мастера в навигации — только по id
+  String _selectedSalonId = '';
+  String _selectedMasterId = '';
 
   // Параметры записи (M-08): откуда пришли — салон, мастер, услуга
-  String? _bookingMasterName;
+  String? _bookingMasterId;
   MasterServiceItem? _bookingService;
   BookingDraft? _pendingDraft;
 
   // Салон, который нужно показать на карте («На карте» из карточки салона)
-  String? _mapFocusSalon;
+  String? _mapFocusSalonId;
 
   // Вкладка «Мои записи», которую открыть (0 — активные, 1 — прошедшие)
   int _bookingsInitialTab = 0;
 
-  void _startBooking({required String salonName, String? masterName, MasterServiceItem? service}) {
-    _selectedSalonName = salonName;
-    _bookingMasterName = masterName;
+  void _startBooking({required String salonId, String? masterId, MasterServiceItem? service}) {
+    _selectedSalonId = salonId;
+    _bookingMasterId = masterId;
     _bookingService = service;
     _push('booking');
   }
 
-  void _showSalonOnMap(String salonName) {
+  void _showSalonOnMap(String salonId) {
     setState(() {
       _subStack.clear();
-      _mapFocusSalon = salonName;
+      _mapFocusSalonId = salonId;
       _clientTabIndex = 1;
     });
   }
@@ -133,8 +134,11 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
 
   void _finalizeBooking(BookingDraft draft, String paymentMethod) {
     AppStateService().createBooking(
+      salonId: draft.salonId,
       salonName: draft.salonName,
+      serviceId: draft.serviceId,
       serviceName: draft.serviceName,
+      masterId: draft.masterId,
       masterName: draft.masterName,
       dateTime: draft.dateTime,
       credits: draft.credits,
@@ -217,32 +221,33 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
     // Внутренние подэкраны
     if (_activeSubScreen == 'salon_detail') {
       return SalonDetailScreen(
-        key: ValueKey('salon_$_selectedSalonName'),
-        salonName: _selectedSalonName,
+        key: ValueKey('salon_$_selectedSalonId'),
+        salonId: _selectedSalonId,
         onBack: _pop,
-        onBook: ({masterName, service}) =>
-            _startBooking(salonName: _selectedSalonName, masterName: masterName, service: service),
+        onBook: ({masterId, service}) =>
+            _startBooking(salonId: _selectedSalonId, masterId: masterId, service: service),
         onMasterTap: _openMaster,
         onShowOnMap: _showSalonOnMap,
       );
     }
     if (_activeSubScreen == 'master_profile') {
       return MasterProfileScreen(
-        key: ValueKey('master_$_selectedMasterName'),
-        masterName: _selectedMasterName,
+        key: ValueKey('master_$_selectedMasterId'),
+        masterId: _selectedMasterId,
         onBack: _pop,
         onBookMaster: (service) {
-          final master = MastersRepository().getMaster(_selectedMasterName);
-          _startBooking(salonName: master.salonName, masterName: master.shortName, service: service);
+          final master = MastersRepository().getMasterById(_selectedMasterId);
+          if (master == null) return;
+          _startBooking(salonId: master.salonId, masterId: master.id, service: service);
         },
         onOpenSalon: _openSalon,
       );
     }
     if (_activeSubScreen == 'booking') {
       return BookingScreen(
-        key: ValueKey('booking_${_selectedSalonName}_${_bookingMasterName}_${_bookingService?.name}'),
-        salonName: _selectedSalonName,
-        initialMasterName: _bookingMasterName,
+        key: ValueKey('booking_${_selectedSalonId}_${_bookingMasterId}_${_bookingService?.id}'),
+        salonId: _selectedSalonId,
+        initialMasterId: _bookingMasterId,
         initialService: _bookingService,
         onBack: _pop,
         onConfirm: _onBookingConfirmed,
@@ -261,7 +266,7 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
         onBack: _pop,
         onSalonTap: _openSalon,
         onMasterTap: _openMaster,
-        onBookSalon: (salonName) => _startBooking(salonName: salonName),
+        onBookSalon: (salonId) => _startBooking(salonId: salonId),
       );
     }
     if (_activeSubScreen == 'notifications') {
@@ -276,7 +281,8 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
             case AppNotificationType.credits:
               _goToClientTab(3);
             case AppNotificationType.promo:
-              _openSalon('Lola Studio');
+              final salonId = notification.salonId;
+              if (salonId != null) _openSalon(salonId);
           }
         },
       );
@@ -332,8 +338,8 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
         );
       case 1:
         return SalonsMapScreen(
-          key: ValueKey('map_$_mapFocusSalon'),
-          initialSalonName: _mapFocusSalon,
+          key: ValueKey('map_$_mapFocusSalonId'),
+          initialSalonId: _mapFocusSalonId,
           onBack: () => _goToClientTab(0),
           onSelectSalon: _openSalon,
         );

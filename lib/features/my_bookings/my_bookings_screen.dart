@@ -254,7 +254,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
                   children: [
                     Expanded(
                       child: GestureDetector(
-                        onTap: widget.onOpenSalon == null ? null : () => widget.onOpenSalon!(b.salonName),
+                        onTap: widget.onOpenSalon == null ? null : () => widget.onOpenSalon!(b.salonId),
                         child: Text(
                           b.salonName,
                           maxLines: 1,
@@ -264,9 +264,9 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
                       ),
                     ),
                     const SizedBox(width: 8),
-                    if (b.status == 'active')
+                    if (b.status == BookingStatus.active)
                       const AppStatusBadge(text: 'Подтверждено')
-                    else if (b.status == 'completed')
+                    else if (b.status == BookingStatus.completed)
                       AppStatusBadge(
                         text: 'Завершено',
                         backgroundColor: Colors.grey.shade200,
@@ -367,7 +367,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
                       ),
                     ),
                   ),
-                ] else if (b.status == 'completed') ...[
+                ] else if (b.status == BookingStatus.completed) ...[
                   const Divider(height: 20, color: Color(0xFFF3DCE8)),
                   if (b.reviewRating != null) ...[
                     Container(

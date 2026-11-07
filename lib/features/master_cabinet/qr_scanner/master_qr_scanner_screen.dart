@@ -71,7 +71,7 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
   /// Демо для симулятора (камеры нет): «клиент» показывает QR ближайшей записи в этот салон
   void _simulateClientQr() {
     final appState = AppStateService();
-    final candidates = appState.activeBookings.where((b) => b.salonName == appState.masterSalon);
+    final candidates = appState.activeBookings.where((b) => b.salonId == appState.masterSalonId);
     if (candidates.isEmpty) {
       setState(() {
         _errorMessage = 'Нет активных записей в салон ${appState.masterSalon} для проверки.';

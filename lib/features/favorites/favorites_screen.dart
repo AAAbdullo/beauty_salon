@@ -57,12 +57,12 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     // Получаем избранные салоны и мастера
     final allSalons = _salonsRepo.getSalons();
     final favoriteSalons = allSalons
-        .where((s) => _appState.isSalonFavorite(s.name))
+        .where((s) => _appState.isSalonFavorite(s.id))
         .toList();
 
     final allMasters = _mastersRepo.getMasters();
     final favoriteMasters = allMasters
-        .where((m) => _appState.isMasterFavorite(m.name))
+        .where((m) => _appState.isMasterFavorite(m.id))
         .toList();
 
     return Scaffold(
@@ -153,7 +153,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
           child: AppCard(
             padding: const EdgeInsets.all(14),
             child: InkWell(
-              onTap: () => widget.onSalonTap(s.name),
+              onTap: () => widget.onSalonTap(s.id),
               borderRadius: BorderRadius.circular(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -237,7 +237,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                       ),
                       IconButton(
                         onPressed: () {
-                          _appState.toggleSalonFavorite(s.name);
+                          _appState.toggleSalonFavorite(s.id);
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               backgroundColor: AppColors.ink,
@@ -250,7 +250,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                                 label: 'Отменить',
                                 textColor: AppColors.primaryBright,
                                 onPressed: () =>
-                                    _appState.toggleSalonFavorite(s.name),
+                                    _appState.toggleSalonFavorite(s.id),
                               ),
                             ),
                           );
@@ -293,7 +293,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                     width: double.infinity,
                     height: 38,
                     child: ElevatedButton(
-                      onPressed: () => widget.onBookSalon(s.name),
+                      onPressed: () => widget.onBookSalon(s.id),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         elevation: 0,
@@ -340,7 +340,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
           child: AppCard(
             padding: const EdgeInsets.all(14),
             child: InkWell(
-              onTap: () => widget.onMasterTap(m.shortName),
+              onTap: () => widget.onMasterTap(m.id),
               borderRadius: BorderRadius.circular(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -451,7 +451,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                       ),
                       IconButton(
                         onPressed: () {
-                          _appState.toggleMasterFavorite(m.shortName);
+                          _appState.toggleMasterFavorite(m.id);
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               backgroundColor: AppColors.ink,
@@ -464,7 +464,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                                 label: 'Отменить',
                                 textColor: AppColors.primaryBright,
                                 onPressed: () =>
-                                    _appState.toggleMasterFavorite(m.shortName),
+                                    _appState.toggleMasterFavorite(m.id),
                               ),
                             ),
                           );
@@ -482,7 +482,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                     width: double.infinity,
                     height: 38,
                     child: OutlinedButton(
-                      onPressed: () => widget.onMasterTap(m.shortName),
+                      onPressed: () => widget.onMasterTap(m.id),
                       style: OutlinedButton.styleFrom(
                         side: const BorderSide(color: AppColors.primary),
                         shape: RoundedRectangleBorder(

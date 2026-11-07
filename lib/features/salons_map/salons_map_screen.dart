@@ -177,15 +177,15 @@ class SalonPinHelper {
 }
 
 class SalonsMapScreen extends StatefulWidget {
-  final Function(String salonName) onSelectSalon;
+  final ValueChanged<String> onSelectSalon; // id салона
   final VoidCallback onBack;
-  final String? initialSalonName;
+  final String? initialSalonId;
 
   const SalonsMapScreen({
     super.key,
     required this.onSelectSalon,
     required this.onBack,
-    this.initialSalonName,
+    this.initialSalonId,
   });
 
   @override
@@ -262,8 +262,8 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
     super.initState();
     _salons = _repository.getSalons(_filterParams);
 
-    if (widget.initialSalonName != null) {
-      final found = _salons.where((s) => s.name == widget.initialSalonName).toList();
+    if (widget.initialSalonId != null) {
+      final found = _salons.where((s) => s.id == widget.initialSalonId).toList();
       if (found.isNotEmpty) {
         _selectedSalon = found.first;
       }
@@ -1473,7 +1473,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                   Expanded(
                     flex: 3,
                     child: OutlinedButton(
-                      onPressed: () => widget.onSelectSalon(salon.name),
+                      onPressed: () => widget.onSelectSalon(salon.id),
                       style: OutlinedButton.styleFrom(
                         side: const BorderSide(color: AppColors.primary, width: 1.5),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -1497,7 +1497,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
               AppGradientButton(
                 text: 'Записаться в салон',
                 height: 44,
-                onPressed: () => widget.onSelectSalon(salon.name),
+                onPressed: () => widget.onSelectSalon(salon.id),
               ),
             ],
           ],
@@ -1880,7 +1880,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                                 ),
                                 AppPillButton(
                                   text: 'Записаться',
-                                  onPressed: () => widget.onSelectSalon(salon.name),
+                                  onPressed: () => widget.onSelectSalon(salon.id),
                                 ),
                               ],
                             ),

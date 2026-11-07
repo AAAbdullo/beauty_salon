@@ -7,33 +7,68 @@ import '../../core/utils/formatters.dart';
 import '../../core/widgets/buttons/app_pill_button.dart';
 import '../../core/widgets/cards/app_card.dart';
 import '../../core/widgets/sheets/app_sheet.dart';
+import '../../core/widgets/states/not_found_screen.dart';
 import 'photo_viewer.dart';
 
 /// Экран отдельного мастера (ТЗ M-07: Usta sahifasi)
 /// Портфолио, услуги, отзывы, рейтинг, прямая запись
-class MasterProfileScreen extends StatefulWidget {
-  final String masterName;
+class MasterProfileScreen extends StatelessWidget {
+  final String masterId;
   final VoidCallback onBack;
 
   /// Запись к мастеру; [service] — если клиент выбрал конкретную услугу
   final ValueChanged<MasterServiceItem?> onBookMaster;
 
-  /// Открыть салон мастера
+  /// Открыть салон мастера (передаётся id салона)
   final ValueChanged<String>? onOpenSalon;
 
   const MasterProfileScreen({
     super.key,
-    required this.masterName,
+    required this.masterId,
     required this.onBack,
     required this.onBookMaster,
     this.onOpenSalon,
   });
 
   @override
-  State<MasterProfileScreen> createState() => _MasterProfileScreenState();
+  Widget build(BuildContext context) {
+    final master = MastersRepository().getMasterById(masterId);
+    if (master == null) {
+      return NotFoundScreen(
+        title: 'Мастер',
+        message: 'Мастер не найден. Возможно, он больше не работает в салоне.',
+        onBack: onBack,
+      );
+    }
+    return _MasterProfileView(
+      key: ValueKey(master.id),
+      master: master,
+      onBack: onBack,
+      onBookMaster: onBookMaster,
+      onOpenSalon: onOpenSalon,
+    );
+  }
 }
 
-class _MasterProfileScreenState extends State<MasterProfileScreen> with SingleTickerProviderStateMixin {
+class _MasterProfileView extends StatefulWidget {
+  final MasterProfileModel master;
+  final VoidCallback onBack;
+  final ValueChanged<MasterServiceItem?> onBookMaster;
+  final ValueChanged<String>? onOpenSalon;
+
+  const _MasterProfileView({
+    super.key,
+    required this.master,
+    required this.onBack,
+    required this.onBookMaster,
+    this.onOpenSalon,
+  });
+
+  @override
+  State<_MasterProfileView> createState() => _MasterProfileViewState();
+}
+
+class _MasterProfileViewState extends State<_MasterProfileView> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   late MasterProfileModel _master;
   final _appState = AppStateService();
@@ -42,7 +77,7 @@ class _MasterProfileScreenState extends State<MasterProfileScreen> with SingleTi
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-    _master = MastersRepository().getMaster(widget.masterName);
+    _master = widget.master;
     _appState.addListener(_onStateChanged);
   }
 
@@ -109,13 +144,13 @@ class _MasterProfileScreenState extends State<MasterProfileScreen> with SingleTi
           backgroundColor: AppColors.surface,
           child: IconButton(
             icon: Icon(
-              _appState.isMasterFavorite(_master.shortName) ? Icons.favorite : Icons.favorite_border,
+              _appState.isMasterFavorite(_master.id) ? Icons.favorite : Icons.favorite_border,
               color: AppColors.primary,
               size: 20,
             ),
             onPressed: () {
-              final isFav = _appState.isMasterFavorite(_master.shortName);
-              _appState.toggleMasterFavorite(_master.shortName);
+              final isFav = _appState.isMasterFavorite(_master.id);
+              _appState.toggleMasterFavorite(_master.id);
               showAppSnack(
                 context,
                 isFav ? 'Удалено из Избранного: ${_master.name}' : 'Добавлено в Избранное: ${_master.name}',
@@ -226,7 +261,7 @@ class _MasterProfileScreenState extends State<MasterProfileScreen> with SingleTi
         ),
         const SizedBox(height: 6),
         GestureDetector(
-          onTap: widget.onOpenSalon == null ? null : () => widget.onOpenSalon!(_master.salonName),
+          onTap: widget.onOpenSalon == null ? null : () => widget.onOpenSalon!(_master.salonId),
           child: Row(
             children: [
               const Icon(Icons.storefront, size: 14, color: AppColors.muted),

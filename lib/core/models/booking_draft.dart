@@ -3,11 +3,16 @@
 ///
 /// БЭКЕНД-ИНТЕГРАЦИЯ: соответствует телу POST /api/v1/bookings.
 class BookingDraft {
+  final String salonId;
   final String salonName;
+  final String serviceId;
   final String serviceName;
   final String durationLabel;
 
-  /// Короткое имя мастера или «Любой мастер»
+  /// `null` — клиент выбрал «Любой мастер»
+  final String? masterId;
+
+  /// Короткое имя мастера или «Любой мастер» (для отображения)
   final String masterName;
   final DateTime dateTime;
 
@@ -16,9 +21,12 @@ class BookingDraft {
   final int sumPrice;
 
   const BookingDraft({
+    required this.salonId,
     required this.salonName,
+    required this.serviceId,
     required this.serviceName,
     required this.durationLabel,
+    this.masterId,
     required this.masterName,
     required this.dateTime,
     required this.credits,

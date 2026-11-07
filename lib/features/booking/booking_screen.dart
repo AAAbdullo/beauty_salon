@@ -5,10 +5,12 @@ import '../../core/services/app_state_service.dart';
 import '../../core/services/masters_repository.dart';
 import '../../core/services/salons_repository.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/clock.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/buttons/app_gradient_button.dart';
 import '../../core/widgets/cards/app_card.dart';
 import '../../core/widgets/sheets/app_sheet.dart';
+import '../../core/widgets/states/not_found_screen.dart';
 
 /// Экран бронирования слота (ТЗ M-08)
 /// - Выбор услуги и мастера салона
@@ -16,8 +18,10 @@ import '../../core/widgets/sheets/app_sheet.dart';
 /// - Таймер удержания выбранного слота на 10 минут
 /// - Способ оплаты: кредиты (с проверкой баланса, заморозки и лимита K-03), онлайн, в салоне
 class BookingScreen extends StatefulWidget {
-  final String salonName;
-  final String? initialMasterName;
+  final String salonId;
+
+  /// `null` — «Любой мастер»
+  final String? initialMasterId;
   final MasterServiceItem? initialService;
   final VoidCallback onBack;
 
@@ -29,8 +33,8 @@ class BookingScreen extends StatefulWidget {
 
   const BookingScreen({
     super.key,
-    required this.salonName,
-    this.initialMasterName,
+    required this.salonId,
+    this.initialMasterId,
     this.initialService,
     required this.onBack,
     required this.onConfirm,
@@ -56,7 +60,9 @@ class _BookingScreenState extends State<BookingScreen> {
   late final List<DateTime> _days;
 
   late MasterServiceItem? _service;
-  late String _masterName;
+
+  /// Выбранный мастер; `null` — «Любой мастер»
+  String? _masterId;
   int _selectedDayIndex = 0;
   int? _selectedHour;
   String _paymentMethod = PaymentMethods.credits;
@@ -67,19 +73,18 @@ class _BookingScreenState extends State<BookingScreen> {
   @override
   void initState() {
     super.initState();
-    _salon = _salonsRepo.getSalonByName(widget.salonName);
-    _services = _salonsRepo.getSalonServices(widget.salonName);
-    _salonMasters = _mastersRepo.getMastersForSalon(widget.salonName);
+    _salon = _salonsRepo.getSalonById(widget.salonId);
+    _services = _salonsRepo.getSalonServices(widget.salonId);
+    _salonMasters = _mastersRepo.getMastersForSalon(widget.salonId);
 
-    final today = DateTime.now();
+    final today = AppClock.now();
     _days = List.generate(7, (i) => DateTime(today.year, today.month, today.day + i));
 
     _service = widget.initialService ?? (_services.isNotEmpty ? _services.first : null);
 
-    final initialMaster = widget.initialMasterName == null ? null : _mastersRepo.findMaster(widget.initialMasterName!);
-    _masterName = initialMaster != null && _salonMasters.any((m) => m.id == initialMaster.id)
-        ? initialMaster.shortName
-        : _anyMaster;
+    // Мастер подходит, только если он работает в этом салоне (проверка по id)
+    final initialId = widget.initialMasterId;
+    _masterId = initialId != null && _salonMasters.any((m) => m.id == initialId) ? initialId : null;
     _ensureMasterOffersService();
 
     // Если сегодня свободных слотов уже нет — сразу открываем завтрашний день
@@ -104,26 +109,39 @@ class _BookingScreenState extends State<BookingScreen> {
   List<MasterProfileModel> get _mastersForService {
     final service = _service;
     if (service == null) return const [];
-    return _salonMasters.where((m) => m.offers(service.name)).toList();
+    return _salonMasters.where((m) => m.offers(service.id)).toList();
   }
 
   void _ensureMasterOffersService() {
-    if (_masterName == _anyMaster) return;
-    if (!_mastersForService.any((m) => m.shortName == _masterName)) _masterName = _anyMaster;
+    if (_masterId == null) return;
+    if (!_mastersForService.any((m) => m.id == _masterId)) _masterId = null;
+  }
+
+  /// Название салона для отображения (сам салон найден по id)
+  String get _salonName => _salon?.name ?? '';
+
+  /// Подпись выбранного мастера для отображения
+  String get _masterLabel {
+    final id = _masterId;
+    if (id == null) return _anyMaster;
+    for (final m in _salonMasters) {
+      if (m.id == id) return m.shortName;
+    }
+    return _anyMaster;
   }
 
   DateTime get _selectedDay => _days[_selectedDayIndex];
 
   /// Слот «занят» — детерминированный мок занятости (до появления API слотов)
   bool _isBusy(int dayIndex, int hour) {
-    final seed = '${widget.salonName}|$_masterName|${_days[dayIndex].day}|$hour'.hashCode;
+    final seed = '${widget.salonId}|${_masterId ?? 'any'}|${_days[dayIndex].day}|$hour'.hashCode;
     return seed % 5 == 0;
   }
 
   /// Слот в прошлом или начинается меньше чем через 30 минут
   bool _isPast(int dayIndex, int hour) {
     final slot = DateTime(_days[dayIndex].year, _days[dayIndex].month, _days[dayIndex].day, hour);
-    return slot.isBefore(DateTime.now().add(const Duration(minutes: 30)));
+    return slot.isBefore(AppClock.now().add(const Duration(minutes: 30)));
   }
 
   List<int> _availableHours(int dayIndex) =>
@@ -143,7 +161,7 @@ class _BookingScreenState extends State<BookingScreen> {
     if (!_creditsAvailableForSalon) return 'Салон не принимает кредиты';
     final dateTime = _selectedDateTime ?? _selectedDay;
     return _appState.creditsBlockReason(
-      salonName: widget.salonName,
+      salonId: widget.salonId,
       credits: _selectedHour == null ? (_service?.creditsPrice ?? 0) : _slotCredits(_selectedHour!),
       dateTime: dateTime,
     );
@@ -254,7 +272,7 @@ class _BookingScreenState extends State<BookingScreen> {
                   shrinkWrap: true,
                   padding: const EdgeInsets.only(bottom: 12),
                   children: _services.map((s) {
-                    final isSelected = s.name == _service?.name;
+                    final isSelected = s.id == _service?.id;
                     return ListTile(
                       contentPadding: const EdgeInsets.symmetric(horizontal: 20),
                       title: Text(
@@ -301,10 +319,13 @@ class _BookingScreenState extends State<BookingScreen> {
     _holdTimer?.cancel();
     widget.onConfirm(
       BookingDraft(
-        salonName: widget.salonName,
+        salonId: widget.salonId,
+        salonName: _salonName,
+        serviceId: service.id,
         serviceName: service.name,
         durationLabel: service.duration,
-        masterName: _masterName,
+        masterId: _masterId,
+        masterName: _masterLabel,
         dateTime: dateTime,
         credits: _slotCredits(dateTime.hour),
         sumPrice: service.sumPrice,
@@ -319,6 +340,13 @@ class _BookingScreenState extends State<BookingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_salon == null) {
+      return NotFoundScreen(
+        title: 'Запись на услугу',
+        message: 'Салон не найден. Возможно, он больше не принимает записи.',
+        onBack: widget.onBack,
+      );
+    }
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -453,7 +481,7 @@ class _BookingScreenState extends State<BookingScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(service.name, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
-                Text(widget.salonName, style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+                Text(_salonName, style: const TextStyle(fontSize: 12, color: AppColors.muted)),
                 const SizedBox(height: 4),
                 Row(
                   children: [
@@ -491,7 +519,8 @@ class _BookingScreenState extends State<BookingScreen> {
 
   Widget _buildMasterSelector() {
     final masters = _mastersForService;
-    final options = <String>[_anyMaster, ...masters.map((m) => m.shortName)];
+    // null — «Любой мастер»
+    final options = <MasterProfileModel?>[null, ...masters];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -505,13 +534,13 @@ class _BookingScreenState extends State<BookingScreen> {
             itemCount: options.length,
             separatorBuilder: (_, _) => const SizedBox(width: 10),
             itemBuilder: (context, index) {
-              final name = options[index];
-              final master = index == 0 ? null : masters[index - 1];
-              final isSelected = name == _masterName;
+              final master = options[index];
+              final name = master?.shortName ?? _anyMaster;
+              final isSelected = master?.id == _masterId;
               return _SelectableTile(
                 isSelected: isSelected,
                 onTap: () => setState(() {
-                  _masterName = name;
+                  _masterId = master?.id;
                   _clearSlot();
                 }),
                 child: Row(
@@ -854,7 +883,7 @@ class _BookingScreenState extends State<BookingScreen> {
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Text(
-                  '${Formatters.dayLabel(_selectedDateTime!)}, ${Formatters.time(_selectedDateTime!)} · $_masterName',
+                  '${Formatters.dayLabel(_selectedDateTime!)}, ${Formatters.time(_selectedDateTime!)} · $_masterLabel',
                   style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.ink),
                 ),
               ),

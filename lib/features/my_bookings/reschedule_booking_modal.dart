@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/services/app_state_service.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/clock.dart';
 import '../../core/utils/formatters.dart';
 
 /// Модальное окно переноса времени записи (ТЗ M-10)
@@ -36,7 +37,7 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
     _selectedDayIndex = 0;
 
     // Генерируем 7 ближайших дней
-    final now = DateTime.now();
+    final now = AppClock.now();
     _days = List.generate(7, (i) {
       final d = DateTime(now.year, now.month, now.day + i);
       final dayName = i == 0 ? 'Сегодня' : (i == 1 ? 'Завтра' : Formatters.weekDaysShort[d.weekday - 1]);
@@ -55,8 +56,8 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
   /// и не совпадает с текущим временем записи
   bool _isSlotAvailable(int dayIndex, String slot) {
     final dt = _slotDateTime(dayIndex, slot);
-    final minStart = DateTime.now().add(const Duration(minutes: AppStateService.freeCancelMinutes));
-    return dt.isAfter(minStart) && dt != widget.booking.resolvedDateTime;
+    final minStart = AppClock.now().add(const Duration(minutes: AppStateService.freeCancelMinutes));
+    return dt.isAfter(minStart) && dt != widget.booking.startsAt;
   }
 
   List<String> _freeSlots(int dayIndex) => _availableSlots.where((s) => _isSlotAvailable(dayIndex, s)).toList();

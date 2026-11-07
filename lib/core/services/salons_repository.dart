@@ -289,11 +289,11 @@ class SalonsRepository {
     'Учтепинский',
   ];
 
-  /// Салон по названию (null, если не найден)
+  /// Салон по id; `null`, если такого нет — подставлять другой салон нельзя.
   /// [BACKEND NOTE]: GET /api/v1/catalog/salons/:id
-  SalonModel? getSalonByName(String name) {
+  SalonModel? getSalonById(String id) {
     for (final s in _mockSalons) {
-      if (s.name == name) return s;
+      if (s.id == id) return s;
     }
     return null;
   }
@@ -320,8 +320,8 @@ class SalonsRepository {
 
   /// Услуги салона: услуги его мастеров, а если мастеров нет — из категорий салона.
   /// [BACKEND NOTE]: GET /api/v1/salons/:id/services
-  List<MasterServiceItem> getSalonServices(String salonName) {
-    final masters = MastersRepository().getMastersForSalon(salonName);
+  List<MasterServiceItem> getSalonServices(String salonId) {
+    final masters = MastersRepository().getMastersForSalon(salonId);
     if (masters.isNotEmpty) {
       final seen = <String>{};
       return [
@@ -331,24 +331,27 @@ class SalonsRepository {
       ];
     }
 
-    final salon = getSalonByName(salonName);
+    final salon = getSalonById(salonId);
     if (salon == null) return const [];
     final baseCredits = salon.minCredits > 0 ? salon.minCredits : 0;
-    return salon.services.split('·').map((raw) => raw.trim()).where((c) => c.isNotEmpty).map((category) {
+    final categories = salon.services.split('·').map((raw) => raw.trim()).where((c) => c.isNotEmpty).toList();
+    return List.generate(categories.length, (index) {
+      final category = categories[index];
       final template = _serviceTemplates[category] ?? (category, '60 мин', 1.0);
       return MasterServiceItem(
+        id: '${salon.id}-c${index + 1}',
         name: template.$1,
         duration: template.$2,
         creditsPrice: (baseCredits * template.$3).round(),
         sumPrice: ((salon.minPriceSum * template.$3) / 10000).round() * 10000,
       );
-    }).toList();
+    });
   }
 
   /// Отзывы о салоне: отзывы о его мастерах, иначе общие отзывы салона (моки)
   /// [BACKEND NOTE]: GET /api/v1/salons/:id/reviews
-  List<MasterReviewItem> getSalonReviews(String salonName) {
-    final masters = MastersRepository().getMastersForSalon(salonName);
+  List<MasterReviewItem> getSalonReviews(String salonId) {
+    final masters = MastersRepository().getMastersForSalon(salonId);
     final reviews = [for (final m in masters) ...m.reviews];
     if (reviews.isNotEmpty) return reviews;
     return const [
@@ -368,9 +371,9 @@ class SalonsRepository {
   }
 
   /// Фото салона: фасад/интерьер + работы мастеров
-  List<String> getSalonPhotos(String salonName) {
-    final salon = getSalonByName(salonName);
-    final masters = MastersRepository().getMastersForSalon(salonName);
+  List<String> getSalonPhotos(String salonId) {
+    final salon = getSalonById(salonId);
+    final masters = MastersRepository().getMastersForSalon(salonId);
     final photos = <String>{?salon?.imageAsset, for (final m in masters) ...m.portfolioImages};
     if (photos.length < 3) {
       photos.addAll(const [

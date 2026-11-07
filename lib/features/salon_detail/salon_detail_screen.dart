@@ -10,22 +10,27 @@ import '../../core/widgets/buttons/app_gradient_button.dart';
 import '../../core/widgets/buttons/app_pill_button.dart';
 import '../../core/widgets/cards/app_card.dart';
 import '../../core/widgets/sheets/app_sheet.dart';
+import '../../core/widgets/states/not_found_screen.dart';
 import 'photo_viewer.dart';
 
 /// Запись из карточки салона: можно сразу передать мастера и/или услугу
-typedef SalonBookCallback = void Function({String? masterName, MasterServiceItem? service});
+typedef SalonBookCallback = void Function({String? masterId, MasterServiceItem? service});
 
 /// Детальная страница салона (ТЗ M-06): галерея, удобства, вкладки Услуги / Мастера / Отзывы / О салоне
-class SalonDetailScreen extends StatefulWidget {
-  final String salonName;
+class SalonDetailScreen extends StatelessWidget {
+  final String salonId;
   final VoidCallback onBack;
   final SalonBookCallback onBook;
+
+  /// Тап по мастеру: передаётся id мастера
   final ValueChanged<String> onMasterTap;
+
+  /// «На карте»: передаётся id салона
   final ValueChanged<String> onShowOnMap;
 
   const SalonDetailScreen({
     super.key,
-    required this.salonName,
+    required this.salonId,
     required this.onBack,
     required this.onBook,
     required this.onMasterTap,
@@ -33,10 +38,47 @@ class SalonDetailScreen extends StatefulWidget {
   });
 
   @override
-  State<SalonDetailScreen> createState() => _SalonDetailScreenState();
+  Widget build(BuildContext context) {
+    final salon = SalonsRepository().getSalonById(salonId);
+    if (salon == null) {
+      return NotFoundScreen(
+        title: 'Салон',
+        message: 'Салон не найден. Возможно, он больше не работает с Go\'zallik.',
+        onBack: onBack,
+      );
+    }
+    return _SalonDetailView(
+      key: ValueKey(salon.id),
+      salon: salon,
+      onBack: onBack,
+      onBook: onBook,
+      onMasterTap: onMasterTap,
+      onShowOnMap: onShowOnMap,
+    );
+  }
 }
 
-class _SalonDetailScreenState extends State<SalonDetailScreen> with SingleTickerProviderStateMixin {
+class _SalonDetailView extends StatefulWidget {
+  final SalonModel salon;
+  final VoidCallback onBack;
+  final SalonBookCallback onBook;
+  final ValueChanged<String> onMasterTap;
+  final ValueChanged<String> onShowOnMap;
+
+  const _SalonDetailView({
+    super.key,
+    required this.salon,
+    required this.onBack,
+    required this.onBook,
+    required this.onMasterTap,
+    required this.onShowOnMap,
+  });
+
+  @override
+  State<_SalonDetailView> createState() => _SalonDetailViewState();
+}
+
+class _SalonDetailViewState extends State<_SalonDetailView> with SingleTickerProviderStateMixin {
   late final TabController _tabController;
   final _appState = AppStateService();
   final _salonsRepo = SalonsRepository();
@@ -53,11 +95,11 @@ class _SalonDetailScreenState extends State<SalonDetailScreen> with SingleTicker
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
-    _salon = _salonsRepo.getSalonByName(widget.salonName) ?? _salonsRepo.getSalons().first;
-    _services = _salonsRepo.getSalonServices(_salon.name);
-    _masters = _mastersRepo.getMastersForSalon(_salon.name);
-    _reviews = _salonsRepo.getSalonReviews(_salon.name);
-    _photos = _salonsRepo.getSalonPhotos(_salon.name);
+    _salon = widget.salon;
+    _services = _salonsRepo.getSalonServices(_salon.id);
+    _masters = _mastersRepo.getMastersForSalon(_salon.id);
+    _reviews = _salonsRepo.getSalonReviews(_salon.id);
+    _photos = _salonsRepo.getSalonPhotos(_salon.id);
     _appState.addListener(_onStateChanged);
   }
 
@@ -77,8 +119,8 @@ class _SalonDetailScreenState extends State<SalonDetailScreen> with SingleTicker
   // ---------------------------------------------------------------------------
 
   void _toggleFavorite() {
-    final wasFav = _appState.isSalonFavorite(_salon.name);
-    _appState.toggleSalonFavorite(_salon.name);
+    final wasFav = _appState.isSalonFavorite(_salon.id);
+    _appState.toggleSalonFavorite(_salon.id);
     showAppSnack(
       context,
       wasFav ? 'Салон «${_salon.name}» удалён из Избранного' : 'Салон «${_salon.name}» добавлен в Избранное',
@@ -118,7 +160,7 @@ class _SalonDetailScreenState extends State<SalonDetailScreen> with SingleTicker
             trailing: const Icon(Icons.chevron_right, color: AppColors.muted),
             onTap: () {
               Navigator.pop(ctx);
-              widget.onShowOnMap(_salon.name);
+              widget.onShowOnMap(_salon.id);
             },
           ),
         ],
@@ -195,7 +237,7 @@ class _SalonDetailScreenState extends State<SalonDetailScreen> with SingleTicker
   }
 
   Widget _buildSliverAppBar() {
-    final isFav = _appState.isSalonFavorite(_salon.name);
+    final isFav = _appState.isSalonFavorite(_salon.id);
     return SliverAppBar(
       expandedHeight: 260,
       pinned: true,
@@ -346,7 +388,7 @@ class _SalonDetailScreenState extends State<SalonDetailScreen> with SingleTicker
             ),
             const SizedBox(width: 8),
             GestureDetector(
-              onTap: () => widget.onShowOnMap(_salon.name),
+              onTap: () => widget.onShowOnMap(_salon.id),
               child: const Row(
                 children: [
                   Text(
@@ -489,12 +531,12 @@ class _SalonDetailScreenState extends State<SalonDetailScreen> with SingleTicker
     }
     return Column(
       children: _masters.map((m) {
-        final isFav = _appState.isMasterFavorite(m.shortName);
+        final isFav = _appState.isMasterFavorite(m.id);
         return Padding(
           padding: const EdgeInsets.only(bottom: 10),
           child: AppCard(
             padding: const EdgeInsets.all(12),
-            onTap: () => widget.onMasterTap(m.shortName),
+            onTap: () => widget.onMasterTap(m.id),
             child: Row(
               children: [
                 CircleAvatar(
@@ -526,7 +568,7 @@ class _SalonDetailScreenState extends State<SalonDetailScreen> with SingleTicker
                 ),
                 IconButton(
                   icon: Icon(isFav ? Icons.favorite : Icons.favorite_border, color: AppColors.primary, size: 20),
-                  onPressed: () => _appState.toggleMasterFavorite(m.shortName),
+                  onPressed: () => _appState.toggleMasterFavorite(m.id),
                 ),
               ],
             ),
@@ -631,7 +673,7 @@ class _SalonDetailScreenState extends State<SalonDetailScreen> with SingleTicker
                 Icons.location_on_outlined,
                 'Адрес',
                 '${_salon.address}, ${_salon.district} район',
-                onTap: () => widget.onShowOnMap(_salon.name),
+                onTap: () => widget.onShowOnMap(_salon.id),
               ),
               row(Icons.schedule, 'Часы работы', _salon.workingHours),
               row(Icons.phone_outlined, 'Телефон', _salon.phone, onTap: _showContacts),

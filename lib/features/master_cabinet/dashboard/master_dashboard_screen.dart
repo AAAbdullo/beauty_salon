@@ -37,7 +37,7 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
   int _activeCount({required bool tomorrow}) =>
       _repo.getAppointments(tomorrow: tomorrow).where((a) => !a.isCancelled).length;
 
-  MasterProfileModel? get _profile => MastersRepository().findMaster(AppStateService().masterName.split(' ').first);
+  MasterProfileModel? get _profile => MastersRepository().getMasterById(AppStateService().masterId);
 
   int get _nowMinutes {
     final now = DateTime.now();

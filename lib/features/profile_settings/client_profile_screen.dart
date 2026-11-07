@@ -393,7 +393,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
               child: Text('Записей пока нет', style: TextStyle(color: AppColors.muted)),
             ),
           ...recent.map((b) {
-            final isActive = b.status == 'active';
+            final isActive = b.status == BookingStatus.active;
             return Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: AppCard(

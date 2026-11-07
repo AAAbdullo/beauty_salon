@@ -59,22 +59,28 @@ void main() {
       onOpenCredits: noop,
       onOpenProfile: noop,
     ),
-    for (final salon in ['Nur Beauty', 'Zara Beauty Lab', 'Elite Barber & Style'])
-      'Salon $salon': () => SalonDetailScreen(
-        salonName: salon,
+    // s-001 Nur Beauty (есть мастера), s-005 Zara Beauty Lab (без мастеров и кредитов), s-008 Elite Barber
+    // и несуществующий id — должен показаться экран «не найдено», а не чужой салон
+    for (final salonId in ['s-001', 's-005', 's-008', 's-unknown'])
+      'Salon $salonId': () => SalonDetailScreen(
+        salonId: salonId,
         onBack: noop,
-        onBook: ({masterName, service}) {},
+        onBook: ({masterId, service}) {},
         onMasterTap: (_) {},
         onShowOnMap: (_) {},
       ),
-    'Master profile': () => MasterProfileScreen(masterName: 'Алена', onBack: noop, onBookMaster: (_) {}),
-    for (final salon in ['Nur Beauty', 'Zara Beauty Lab', 'Glow & Go'])
-      'Booking $salon': () => BookingScreen(salonName: salon, onBack: noop, onConfirm: (_, _) {}),
+    for (final masterId in ['m-001', 'm-unknown'])
+      'Master $masterId': () => MasterProfileScreen(masterId: masterId, onBack: noop, onBookMaster: (_) {}),
+    for (final salonId in ['s-001', 's-005', 's-004', 's-unknown'])
+      'Booking $salonId': () => BookingScreen(salonId: salonId, onBack: noop, onConfirm: (_, _) {}),
     'Payment': () => PaymentScreen(
       draft: BookingDraft(
+        salonId: 's-001',
         salonName: 'Nur Beauty',
+        serviceId: 'm-001-s1',
         serviceName: 'Комбинированный маникюр + гель-лак',
         durationLabel: '60 мин',
+        masterId: 'm-001',
         masterName: 'Алена',
         dateTime: DateTime.now().add(const Duration(days: 1)),
         credits: 34,
@@ -138,6 +144,8 @@ void main() {
     final old = DateTime.now().subtract(const Duration(minutes: 5)).millisecondsSinceEpoch;
     expect(state.validateVisitQr('GZL|${booking.id}|$old').error, contains('устарел'));
     expect(state.validateVisitQr(state.visitQrToken(booking), ignoreTimeWindow: true).isSuccess, isTrue);
-    expect(booking.status, 'completed');
+    // Запись неизменяемая: старый объект не меняется, актуальный статус — в сторе
+    expect(booking.status, BookingStatus.active);
+    expect(state.bookingById(booking.id)!.status, BookingStatus.completed);
   });
 }

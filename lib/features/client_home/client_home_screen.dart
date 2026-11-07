@@ -235,7 +235,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                       trailing: const Icon(Icons.chevron_right, color: AppColors.muted),
                       onTap: () {
                         Navigator.pop(ctx);
-                        widget.onSalonTap(s.name);
+                        widget.onSalonTap(s.id);
                       },
                     );
                   },
@@ -339,7 +339,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
               final m = masters[index];
               return AppCard(
                 padding: const EdgeInsets.fromLTRB(8, 8, 14, 8),
-                onTap: () => widget.onMasterTap(m.name),
+                onTap: () => widget.onMasterTap(m.id),
                 child: Row(
                   children: [
                     CircleAvatar(
@@ -853,7 +853,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                 return SizedBox(
                   width: 220,
                   child: AppCard(
-                    onTap: () => widget.onSalonTap(s.name),
+                    onTap: () => widget.onSalonTap(s.id),
                     padding: const EdgeInsets.all(10),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,

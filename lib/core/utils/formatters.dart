@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'clock.dart';
 
 class Formatters {
   static final _currencyFormat = NumberFormat('#,###', 'ru_RU');
@@ -36,7 +37,7 @@ class Formatters {
 
   /// Подпись дня визита: «Сегодня», «Завтра», «Вчера» или «12 ноя»
   static String dayLabel(DateTime date, {DateTime? now}) {
-    final today = _dayOnly(now ?? DateTime.now());
+    final today = _dayOnly(now ?? AppClock.now());
     final diff = _dayOnly(date).difference(today).inDays;
     if (diff == 0) return 'Сегодня';
     if (diff == 1) return 'Завтра';

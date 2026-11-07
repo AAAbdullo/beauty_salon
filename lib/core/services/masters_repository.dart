@@ -5,6 +5,7 @@
 class MasterProfileModel {
   final String id;
   final String name;
+  final String salonId;
   final String salonName;
   final String specialty;
   final double rating;
@@ -19,6 +20,7 @@ class MasterProfileModel {
   const MasterProfileModel({
     required this.id,
     required this.name,
+    required this.salonId,
     required this.salonName,
     required this.specialty,
     required this.rating,
@@ -31,20 +33,22 @@ class MasterProfileModel {
     required this.reviews,
   });
 
-  /// Короткое имя («Алена») — ключ мастера в записях, избранном и навигации
+  /// Короткое имя («Алена») — только для отображения. Ключом мастера служит [id].
   String get shortName => name.split(' ').first;
 
-  /// Мастер оказывает услугу с таким названием
-  bool offers(String serviceName) => services.any((s) => s.name == serviceName);
+  /// Мастер оказывает услугу с таким id
+  bool offers(String serviceId) => services.any((s) => s.id == serviceId);
 }
 
 class MasterServiceItem {
+  final String id;
   final String name;
   final String duration;
   final int creditsPrice;
   final int sumPrice;
 
   const MasterServiceItem({
+    required this.id,
     required this.name,
     required this.duration,
     required this.creditsPrice,
@@ -73,9 +77,10 @@ class MastersRepository {
 
   // МОК-ДАННЫЕ: Профили мастеров
   final Map<String, MasterProfileModel> _mockMasters = {
-    'Алена': const MasterProfileModel(
+    'm-001': const MasterProfileModel(
       id: 'm-001',
       name: 'Алена Смирнова',
+      salonId: 's-001',
       salonName: 'Nur Beauty',
       specialty: 'Топ-мастер маникюра и педикюра',
       rating: 4.9,
@@ -91,24 +96,28 @@ class MastersRepository {
       ],
       services: [
         MasterServiceItem(
+          id: 'm-001-s1',
           name: 'Комбинированный маникюр + гель-лак',
           duration: '60 мин',
           creditsPrice: 34,
           sumPrice: 150000,
         ),
         MasterServiceItem(
+          id: 'm-001-s2',
           name: 'Smart-педикюр с обработкой стопы',
           duration: '75 мин',
           creditsPrice: 42,
           sumPrice: 190000,
         ),
         MasterServiceItem(
+          id: 'm-001-s3',
           name: 'Снятие + Укрепление ногтей гелем',
           duration: '45 мин',
           creditsPrice: 20,
           sumPrice: 90000,
         ),
         MasterServiceItem(
+          id: 'm-001-s4',
           name: 'Френч / Кастомный дизайн ногтей',
           duration: '30 мин',
           creditsPrice: 15,
@@ -136,9 +145,10 @@ class MastersRepository {
         ),
       ],
     ),
-    'Сабина': const MasterProfileModel(
+    'm-002': const MasterProfileModel(
       id: 'm-002',
       name: 'Сабина Рахимова',
+      salonId: 's-001',
       salonName: 'Nur Beauty',
       specialty: 'Бровист & Ламимейкер',
       rating: 4.8,
@@ -153,12 +163,14 @@ class MastersRepository {
       ],
       services: [
         MasterServiceItem(
+          id: 'm-002-s1',
           name: 'Архитектура бровей + окрашивание',
           duration: '45 мин',
           creditsPrice: 24,
           sumPrice: 110000,
         ),
         MasterServiceItem(
+          id: 'm-002-s2',
           name: 'Ламинирование ресниц с ботоксом',
           duration: '60 мин',
           creditsPrice: 38,
@@ -174,9 +186,10 @@ class MastersRepository {
         ),
       ],
     ),
-    'Дилноза': const MasterProfileModel(
+    'm-003': const MasterProfileModel(
       id: 'm-003',
       name: 'Дилноза Каримова',
+      salonId: 's-003',
       salonName: 'Mira Hair',
       specialty: 'Топ-стилист по волосам',
       rating: 4.9,
@@ -189,8 +202,9 @@ class MastersRepository {
         'assets/images/portfolio/portfolio_brows_1.jpg',
       ],
       services: [
-        MasterServiceItem(name: 'Женская стрижка + брашинг', duration: '60 мин', creditsPrice: 32, sumPrice: 140000),
+        MasterServiceItem(id: 'm-003-s1', name: 'Женская стрижка + брашинг', duration: '60 мин', creditsPrice: 32, sumPrice: 140000),
         MasterServiceItem(
+          id: 'm-003-s2',
           name: 'Сложное окрашивание Balayage',
           duration: '180 мин',
           creditsPrice: 85,
@@ -206,9 +220,10 @@ class MastersRepository {
         ),
       ],
     ),
-    'Мадина': const MasterProfileModel(
+    'm-004': const MasterProfileModel(
       id: 'm-004',
       name: 'Мадина Умарова',
+      salonId: 's-001',
       salonName: 'Nur Beauty',
       specialty: 'Косметолог-эстетист',
       rating: 4.9,
@@ -219,7 +234,7 @@ class MastersRepository {
           'Медицинское образование. Уходовые процедуры, ультразвуковая чистка, безинъекционная мезотерапия и пилинги.',
       portfolioImages: ['assets/images/portfolio/portfolio_brows_1.jpg'],
       services: [
-        MasterServiceItem(name: 'Комбинированная чистка лица', duration: '90 мин', creditsPrice: 45, sumPrice: 200000),
+        MasterServiceItem(id: 'm-004-s1', name: 'Комбинированная чистка лица', duration: '90 мин', creditsPrice: 45, sumPrice: 200000),
       ],
       reviews: [
         MasterReviewItem(
@@ -230,9 +245,10 @@ class MastersRepository {
         ),
       ],
     ),
-    'Тимур': const MasterProfileModel(
+    'm-005': const MasterProfileModel(
       id: 'm-005',
       name: 'Тимур Алиев',
+      salonId: 's-008',
       salonName: 'Elite Barber & Style',
       specialty: 'Топ-барбер',
       rating: 4.8,
@@ -244,12 +260,13 @@ class MastersRepository {
       portfolioImages: ['assets/images/portfolio/portfolio_hair_1.jpg'],
       services: [
         MasterServiceItem(
+          id: 'm-005-s1',
           name: 'Мужская стрижка + мытье + стайлинг',
           duration: '45 мин',
           creditsPrice: 26,
           sumPrice: 110000,
         ),
-        MasterServiceItem(name: 'Моделирование бороды и усов', duration: '30 мин', creditsPrice: 18, sumPrice: 80000),
+        MasterServiceItem(id: 'm-005-s2', name: 'Моделирование бороды и усов', duration: '30 мин', creditsPrice: 18, sumPrice: 80000),
       ],
       reviews: [
         MasterReviewItem(
@@ -270,45 +287,11 @@ class MastersRepository {
 
   /// Мастера конкретного салона
   /// [BACKEND NOTE]: GET /api/v1/salons/:id/masters
-  List<MasterProfileModel> getMastersForSalon(String salonName) {
-    return _mockMasters.values.where((m) => m.salonName == salonName).toList();
+  List<MasterProfileModel> getMastersForSalon(String salonId) {
+    return _mockMasters.values.where((m) => m.salonId == salonId).toList();
   }
 
-  /// Поиск мастера по короткому имени («Алена») или полному («Алена Смирнова»)
-  MasterProfileModel? findMaster(String name) {
-    if (_mockMasters.containsKey(name)) return _mockMasters[name];
-    for (final m in _mockMasters.values) {
-      if (m.name == name || m.shortName == name) return m;
-    }
-    return null;
-  }
-
-  MasterProfileModel getMaster(String name) {
-    final found = findMaster(name);
-    if (found != null) return found;
-    // Фоллбэк если мастер другой
-    return MasterProfileModel(
-      id: 'm-default',
-      name: name,
-      salonName: 'Nur Beauty',
-      specialty: 'Стилист-эксперт',
-      rating: 4.8,
-      reviewsCount: 65,
-      experienceYears: 5,
-      about: 'Профессиональный мастер индустрии красоты с международным опытом.',
-      avatarAsset: 'assets/images/masters/master_sabina.jpg',
-      portfolioImages: ['assets/images/portfolio/portfolio_manicure_1.jpg'],
-      services: const [
-        MasterServiceItem(name: 'Комплексная услуга эксперта', duration: '60 мин', creditsPrice: 35, sumPrice: 160000),
-      ],
-      reviews: const [
-        MasterReviewItem(
-          authorName: 'Клиент Go\'zallik',
-          rating: 5.0,
-          date: 'Недавно',
-          comment: 'Очень довольна качеством обслуживания!',
-        ),
-      ],
-    );
-  }
+  /// Мастер по id; `null`, если такого нет — подставлять «похожего» нельзя.
+  /// [BACKEND NOTE]: GET /api/v1/masters/:id
+  MasterProfileModel? getMasterById(String id) => _mockMasters[id];
 }

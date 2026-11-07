@@ -29,7 +29,7 @@ class MasterAccountScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final appState = AppStateService();
     final cabinet = MasterCabinetRepository();
-    final profile = MastersRepository().findMaster(appState.masterName.split(' ').first);
+    final profile = MastersRepository().getMasterById(appState.masterId);
 
     return ListenableBuilder(
       listenable: appState,
