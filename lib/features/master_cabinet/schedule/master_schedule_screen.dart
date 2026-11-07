@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/utils/clock.dart';
 import '../../../core/services/master_cabinet_repository.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/buttons/app_gradient_button.dart';
@@ -47,7 +48,7 @@ class _MasterScheduleScreenState extends State<MasterScheduleScreen> {
   @override
   void initState() {
     super.initState();
-    final now = DateTime.now();
+    final now = AppClock.now();
     _today = DateTime(now.year, now.month, now.day);
     _weekStart = _today.subtract(Duration(days: _today.weekday - 1));
     _selectedWeekday = _today.weekday;

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/utils/clock.dart';
 import '../../../core/services/app_state_service.dart';
 import '../../../core/services/master_cabinet_repository.dart';
 import '../../../core/theme/app_theme.dart';
@@ -42,7 +43,7 @@ class _MasterEarningsScreenState extends State<MasterEarningsScreen> {
   int _monthOffset = 0;
 
   String _monthName(int offset) {
-    final now = DateTime.now();
+    final now = AppClock.now();
     final month = DateTime(now.year, now.month - offset);
     const names = [
       'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',

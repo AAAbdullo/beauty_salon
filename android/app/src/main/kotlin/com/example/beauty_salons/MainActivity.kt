@@ -62,16 +62,26 @@ class MainActivity : FlutterActivity(), TextToSpeech.OnInitListener {
     private fun wasLocationAsked(): Boolean =
         getSharedPreferences(locationPrefs, MODE_PRIVATE).getBoolean("asked", false)
 
+    /// Можно ли показать системное окно ещё раз: после первого отказа Android разрешает переспросить,
+    /// пока пользователь не отметил «Больше не спрашивать» (тогда rationale == false).
+    private fun canAskAgain(): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+            shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION)
+
+    /// granted | notDetermined (ещё не спрашивали) | denied (отказали, можно спросить снова) |
+    /// permanentlyDenied (отказали навсегда — только через настройки телефона)
     private fun locationStatus(): String = when {
         hasLocationPermission() -> "granted"
-        wasLocationAsked() -> "denied"
-        else -> "notDetermined"
+        !wasLocationAsked() -> "notDetermined"
+        canAskAgain() -> "denied"
+        else -> "permanentlyDenied"
     }
 
     private fun requestLocationPermission(result: MethodChannel.Result) {
-        // Уже разрешено, уже отказали или запрос уже идёт — отвечаем сразу, окно не показываем
-        if (hasLocationPermission() || wasLocationAsked() || pendingLocationResult != null) {
-            result.success(locationStatus())
+        val status = locationStatus()
+        // Уже разрешено, отказали навсегда или запрос уже идёт — отвечаем сразу, окно не показываем
+        if (status == "granted" || status == "permanentlyDenied" || pendingLocationResult != null) {
+            result.success(status)
             return
         }
         // До Android 6 разрешение выдаётся при установке — запрашивать нечего (сюда не попадём, но lint требует проверку)
@@ -79,6 +89,7 @@ class MainActivity : FlutterActivity(), TextToSpeech.OnInitListener {
             result.success("granted")
             return
         }
+        // notDetermined или denied: показываем системное окно (повторно — после прежнего отказа)
         pendingLocationResult = result
         requestPermissions(
             arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),

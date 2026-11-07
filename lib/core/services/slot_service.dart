@@ -83,6 +83,31 @@ class SlotService {
     ).contains(startsAt);
   }
 
+  /// Для «Любой мастер»: все свободные на это время мастера (по броням и графику), в порядке каталога.
+  /// Пустой список — свободного нет; `[null]` — у салона нет мастеров (запись на салон целиком).
+  /// Чужие удержания здесь не учитываются — их знает слой удержаний и выбирает из этого списка.
+  List<String?> freeMasterIds({
+    required String salonId,
+    String? serviceId,
+    required DateTime startsAt,
+    required int durationMinutes,
+    String? excludeBookingId,
+  }) {
+    final result = <String?>[];
+    for (final resource in _resources(salonId: salonId, serviceId: serviceId)) {
+      if (resource == null) return const [null];
+      final free = _slotsFor(
+        salonId: salonId,
+        masterId: resource,
+        date: startsAt,
+        durationMinutes: durationMinutes,
+        excludeBookingId: excludeBookingId,
+      );
+      if (free.contains(startsAt)) result.add(resource);
+    }
+    return result;
+  }
+
   /// Для «Любой мастер»: первый свободный мастер на это время. `null` — свободного нет
   /// или у салона нет мастеров (запись идёт на салон целиком).
   String? resolveMasterId({

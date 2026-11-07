@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import '../../models/booking_error.dart';
 import '../../models/booking_rules.dart';
 import '../../services/slot_service.dart';
@@ -56,6 +57,29 @@ class MockSlotsRepository implements SlotsRepository {
   int get activeHoldsCount {
     _purgeExpired();
     return _holds.length;
+  }
+
+  /// Есть ли действующее удержание этого мастера (или салона без мастеров), пересекающееся со слотом
+  bool _hasHoldConflict(String salonId, String? masterId, DateTime startsAt, DateTime endsAt) {
+    _purgeExpired();
+    return _holds.values
+        .where((h) => h.salonId == salonId && h.masterId == masterId)
+        .any(
+          (h) => h.startsAt.isBefore(endsAt) && startsAt.isBefore(h.startsAt.add(Duration(minutes: h.durationMinutes))),
+        );
+  }
+
+  /// Первый кандидат без чужого удержания. `found == false` — все кандидаты удерживаются.
+  /// Кандидат `null` означает салон без мастеров (общий календарь), поэтому «не найден» передаётся отдельным флагом.
+  @visibleForTesting
+  static ({bool found, String? masterId}) pickUnheldMaster(
+    List<String?> candidates, {
+    required bool Function(String? candidate) isHeld,
+  }) {
+    for (final candidate in candidates) {
+      if (!isHeld(candidate)) return (found: true, masterId: candidate);
+    }
+    return (found: false, masterId: null);
   }
 
   // --- интерфейс -------------------------------------------------------------------------
@@ -131,23 +155,23 @@ class MockSlotsRepository implements SlotsRepository {
       );
     }
 
-    // Мастер, за которым закрепляется слот («Любой мастер» → конкретный свободный)
-    final resolvedMaster =
-        masterId ??
-        _slots.resolveMasterId(
-          salonId: salonId,
-          serviceId: serviceId,
-          startsAt: startsAt,
-          durationMinutes: durationMinutes,
-        );
-
+    // Мастер, за которым закрепляется слот. «Любой мастер» → первый свободный, у кого этот слот
+    // не удерживает другой клиент; если выбран конкретный мастер — только он.
     final endsAt = startsAt.add(Duration(minutes: durationMinutes));
-    final conflict = _holds.values
-        .where((h) => h.salonId == salonId && h.masterId == resolvedMaster)
-        .any(
-          (h) => h.startsAt.isBefore(endsAt) && startsAt.isBefore(h.startsAt.add(Duration(minutes: h.durationMinutes))),
-        );
-    if (conflict) {
+    final candidates = masterId != null
+        ? <String?>[masterId]
+        : _slots.freeMasterIds(
+            salonId: salonId,
+            serviceId: serviceId,
+            startsAt: startsAt,
+            durationMinutes: durationMinutes,
+          );
+    final pick = pickUnheldMaster(
+      candidates,
+      isHeld: (candidate) => _hasHoldConflict(salonId, candidate, startsAt, endsAt),
+    );
+    final resolvedMaster = pick.masterId; // для салона без мастеров это null — запись на салон целиком
+    if (!pick.found) {
       return const Result.failure(
         BookingError(
           BookingErrorCode.slotUnavailable,

@@ -5,8 +5,11 @@ enum LocationPermissionStatus {
   /// Доступ разрешён
   granted,
 
-  /// Пользователь отказал (разрешить можно только в настройках телефона)
+  /// Пользователь отказал, но систему можно спросить ещё раз (Android; на iOS окно повторно не показывается)
   denied,
+
+  /// Отказал навсегда («Больше не спрашивать»): разрешить можно только в настройках телефона
+  permanentlyDenied,
 
   /// Ещё не спрашивали
   notDetermined,
@@ -30,6 +33,7 @@ class LocationPermissionService {
   static LocationPermissionStatus _parse(Object? value) => switch (value) {
     'granted' => LocationPermissionStatus.granted,
     'denied' => LocationPermissionStatus.denied,
+    'permanentlyDenied' => LocationPermissionStatus.permanentlyDenied,
     'notDetermined' => LocationPermissionStatus.notDetermined,
     'restricted' => LocationPermissionStatus.restricted,
     _ => LocationPermissionStatus.unsupported,

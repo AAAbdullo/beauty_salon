@@ -75,7 +75,7 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
   }
 
   int get _nowMinutes {
-    final now = DateTime.now();
+    final now = AppClock.now();
     return now.hour * 60 + now.minute;
   }
 

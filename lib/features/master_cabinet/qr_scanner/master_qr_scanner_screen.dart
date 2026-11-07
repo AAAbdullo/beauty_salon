@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import '../../../core/utils/clock.dart';
 import '../../../core/data/app_scope.dart';
 import '../../../core/data/repository_exception.dart';
 import '../../../core/services/app_state_service.dart';
@@ -55,7 +56,7 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
       if (value != null && value.isNotEmpty) {
         final consumedAt = _consumedAt;
         final stillInFrame =
-            value == _consumedRaw && consumedAt != null && DateTime.now().difference(consumedAt) < _consumedCooldown;
+            value == _consumedRaw && consumedAt != null && AppClock.now().difference(consumedAt) < _consumedCooldown;
         if (stillInFrame) continue; // тот же, уже принятый код всё ещё перед камерой
         _processScannedCode(value);
         break;
@@ -90,7 +91,7 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
       });
       if (booking != null) {
         _consumedRaw = rawCode;
-        _consumedAt = DateTime.now();
+        _consumedAt = AppClock.now();
       }
     } on RepositoryException catch (e) {
       if (!mounted) return;
