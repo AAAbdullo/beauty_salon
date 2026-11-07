@@ -11,6 +11,7 @@ import '../../core/models/salon_filter_params.dart';
 import '../../core/services/app_state_service.dart';
 import '../../core/services/location_permission_service.dart';
 import '../../core/services/salons_repository.dart';
+import '../../core/services/turn_announcement.dart';
 import '../../core/services/voice_guidance_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/formatters.dart';
@@ -226,6 +227,9 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
   String? _alternativeRouteDuration;
 
   final VoiceGuidanceService _voiceGuidance = VoiceGuidanceService();
+
+  /// Последняя озвученная подсказка поворота: не повторяем её на каждом тике GPS
+  TurnAnnouncement? _lastTurnAnnouncement;
 
   // Режим активной 3D навигации (как в Яндекс Навигаторе)
   static const double _sheetInitialExtent = 0.30;
@@ -785,6 +789,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
         animation: const MapAnimation(type: MapAnimationType.smooth, duration: 1.2),
       ),
     );
+    _lastTurnAnnouncement = null;
     _voiceGuidance.speak(
       _isWalkingRoute ? 'Маршрут пешком построен. Двигайтесь по маршруту.' : 'Маршрут построен. Поехали!',
     );
@@ -886,6 +891,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
     await _buildRouteToSalon(salon, isWalking: _isWalkingRoute);
     if (!mounted || !_isNavigating) return;
     setState(() => _navStepIndex = 0);
+    _lastTurnAnnouncement = null;
     _updateNextManeuver(0);
     _recenterNavigationCamera();
   }
@@ -926,10 +932,11 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
       _nextManeuverText = isRight ? 'Поворот направо' : 'Поворот налево';
 
       // Озвучка при приближении к повороту
-      if (distToTurn <= 160 && distToTurn > 100) {
-        _voiceGuidance.speak('Через 150 метров ${isRight ? "поверните направо" : "поверните налево"}');
-      } else if (distToTurn <= 40 && distToTurn > 10) {
-        _voiceGuidance.speak(isRight ? 'Поверните направо' : 'Поверните налево');
+      final toSpeak = announcementToSpeak(turnIndex: turnIndex, distanceMeters: distToTurn, last: _lastTurnAnnouncement);
+      if (toSpeak != null) {
+        _lastTurnAnnouncement = toSpeak;
+        final turn = isRight ? 'направо' : 'налево';
+        _voiceGuidance.speak(toSpeak.stage == TurnStage.far ? 'Через 150 метров поверните $turn' : 'Поверните $turn');
       }
     } else {
       _nextManeuverIcon = Icons.straight;
@@ -952,6 +959,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
   void _stopNavigationMode({bool isCompleted = false}) {
     _navTrackingTimer?.cancel();
     _navTrackingTimer = null;
+    _lastTurnAnnouncement = null;
     _voiceGuidance.stop();
 
     final lastPoint = _userLocation;
