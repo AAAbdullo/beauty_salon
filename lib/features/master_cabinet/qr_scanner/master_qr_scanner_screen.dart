@@ -84,9 +84,17 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_stateView == 1) return _buildSuccessView();
-    if (_stateView == 2) return _buildErrorView();
-    return _buildScannerView();
+    // Камера (MobileScanner) всегда остаётся в дереве: результат показывается поверх неё.
+    // Если удалять виджет камеры и запускать её заново вручную, на iOS stop/start
+    // идут одновременно и блокируют главный поток — приложение зависает.
+    // Пока открыт результат, новые коды игнорируются в _onDetect.
+    return Stack(
+      children: [
+        _buildScannerView(),
+        if (_stateView == 1) Positioned.fill(child: _buildSuccessView()),
+        if (_stateView == 2) Positioned.fill(child: _buildErrorView()),
+      ],
+    );
   }
 
   Widget _buildScannerView() {
@@ -108,14 +116,24 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
             ),
             tooltip: 'Фонарик',
             onPressed: () async {
-              await _scannerController.toggleTorch();
-              setState(() => _isTorchOn = !_isTorchOn);
+              try {
+                await _scannerController.toggleTorch();
+                if (mounted) setState(() => _isTorchOn = !_isTorchOn);
+              } catch (_) {
+                // Фонарика нет (симулятор / фронтальная камера) — просто игнорируем
+              }
             },
           ),
           IconButton(
             icon: const Icon(Icons.flip_camera_ios, color: AppColors.primary),
             tooltip: 'Сменить камеру',
-            onPressed: () => _scannerController.switchCamera(),
+            onPressed: () async {
+              try {
+                await _scannerController.switchCamera();
+              } catch (_) {
+                // Камера недоступна (симулятор) — переключать нечего
+              }
+            },
           ),
         ],
         centerTitle: true,
@@ -349,7 +367,6 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
                   text: 'Готово',
                   onPressed: () {
                     setState(() => _stateView = 0);
-                    _scannerController.start();
                   },
                 ),
               ],
@@ -407,7 +424,6 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
                   text: 'Попробовать снова',
                   onPressed: () {
                     setState(() => _stateView = 0);
-                    _scannerController.start();
                   },
                 ),
               ],
