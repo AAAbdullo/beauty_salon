@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../core/services/app_state_service.dart';
+import '../../core/data/app_scope.dart';
+import '../../core/data/repository_exception.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/result.dart';
+import '../../core/utils/uuid.dart';
 import '../../core/widgets/badges/app_status_badge.dart';
 import '../../core/widgets/buttons/app_pill_button.dart';
 import '../../core/widgets/cards/app_card.dart';
@@ -115,7 +118,10 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
       return;
     }
 
-    // Если осталось >= 2 часов (120 минут)
+    // Если осталось >= 2 часов (120 минут). Ключ идемпотентности привязан к этому диалогу:
+    // двойной тап по «Отменить» не вернёт кредиты дважды.
+    final cancelKey = Uuid.v4();
+    var submitting = false;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -140,19 +146,29 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
               elevation: 0,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
-            onPressed: () {
-              final result = _appState.cancelBooking(booking.id);
+            onPressed: () async {
+              if (submitting) return; // повторный тап
+              submitting = true;
               Navigator.pop(ctx);
-              switch (result) {
-                case Success(:final value):
-                  showAppSnack(
-                    context,
-                    value.isPaidWithCredits
-                        ? 'Запись отменена. ${value.credits} кр. вернулись на баланс.'
-                        : 'Запись отменена.',
-                  );
-                case Failure(:final error):
-                  showAppSnack(context, error.message);
+              try {
+                final result = await AppScope.read(context).bookings.cancel(
+                  bookingId: booking.id,
+                  idempotencyKey: cancelKey,
+                );
+                if (!mounted) return;
+                switch (result) {
+                  case Success(:final value):
+                    showAppSnack(
+                      context,
+                      value.isPaidWithCredits
+                          ? 'Запись отменена. ${value.credits} кр. вернулись на баланс.'
+                          : 'Запись отменена.',
+                    );
+                  case Failure(:final error):
+                    showAppSnack(context, error.message);
+                }
+              } on RepositoryException catch (e) {
+                if (mounted) showAppSnack(context, e.message);
               }
             },
             child: const Text(

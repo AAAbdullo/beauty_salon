@@ -1,11 +1,16 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../core/data/app_dependencies.dart';
+import '../../core/data/app_scope.dart';
+import '../../core/data/repository_exception.dart';
 import '../../core/services/app_state_service.dart';
-import '../../core/services/slot_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/clock.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/utils/result.dart';
 import '../../core/utils/slot_pricing.dart';
+import '../../core/utils/uuid.dart';
+import '../../core/widgets/states/async_screen.dart';
 
 /// Модальное окно переноса времени записи (ТЗ M-10)
 class RescheduleBookingModal extends StatefulWidget {
@@ -31,14 +36,23 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
   late int _selectedDayIndex;
   DateTime? _selectedStart;
   String? _error;
-  final _appState = AppStateService();
-  final _slotService = SlotService();
+  late final AppDependencies _deps;
 
   late final List<Map<String, dynamic>> _days;
+
+  // Свободные слоты по дням (ключ — дата без времени) и состояние загрузки
+  Map<DateTime, List<DateTime>> _slotsByDay = {};
+  bool _loadingSlots = true;
+  Object? _slotsError;
+
+  // Ключ идемпотентности попытки переноса: двойной тап не перенесёт запись (и не пересчитает кредиты) дважды
+  String _requestKey = Uuid.v4();
+  bool _submitting = false;
 
   @override
   void initState() {
     super.initState();
+    _deps = AppScope.read(context);
     _selectedDayIndex = 0;
 
     // Генерируем 7 ближайших дней
@@ -48,28 +62,45 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
       final dayName = i == 0 ? 'Сегодня' : (i == 1 ? 'Завтра' : Formatters.weekDaysShort[d.weekday - 1]);
       return {'day': dayName, 'date': '${d.day}', 'dateObj': d};
     });
-    for (var i = 0; i < _days.length; i++) {
-      if (_slotsForDay(i).isNotEmpty) {
-        _selectedDayIndex = i;
-        break;
-      }
+    unawaited(_loadSlots());
+  }
+
+  Future<void> _loadSlots() async {
+    final b = widget.booking;
+    setState(() {
+      _loadingSlots = true;
+      _slotsError = null;
+    });
+    try {
+      // Слоты у того же мастера; сама переносимая запись время не занимает
+      final result = await _deps.slots.availableSlotsForDays(
+        salonId: b.salonId,
+        masterId: b.masterId,
+        serviceId: b.serviceId,
+        days: [for (final d in _days) d['dateObj'] as DateTime],
+        durationMinutes: b.durationMinutes,
+        excludeBookingId: b.id,
+      );
+      if (!mounted) return;
+      setState(() {
+        _slotsByDay = result;
+        _loadingSlots = false;
+        final free = List.generate(_days.length, (i) => i).where((i) => _slotsForDay(i).isNotEmpty);
+        if (_slotsForDay(_selectedDayIndex).isEmpty && free.isNotEmpty) _selectedDayIndex = free.first;
+      });
+    } on RepositoryException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadingSlots = false;
+        _slotsError = e;
+      });
     }
   }
 
-  /// Свободные слоты у того же мастера (график, перерывы, чужие записи); сама запись время не занимает
   List<DateTime> _slotsForDay(int dayIndex) {
-    final b = widget.booking;
-    return _slotService
-        .availableSlots(
-          salonId: b.salonId,
-          masterId: b.masterId,
-          serviceId: b.serviceId,
-          date: _days[dayIndex]['dateObj'] as DateTime,
-          durationMinutes: b.durationMinutes,
-          excludeBookingId: b.id,
-        )
-        .where((slot) => slot != b.startsAt)
-        .toList();
+    final d = _days[dayIndex]['dateObj'] as DateTime;
+    final slots = _slotsByDay[DateTime(d.year, d.month, d.day)] ?? const <DateTime>[];
+    return slots.where((slot) => slot != widget.booking.startsAt).toList();
   }
 
   /// Как изменится цена при оплате кредитами: ×1.2 для вечерних слотов (k_slot)
@@ -84,21 +115,42 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
         : 'Стоимость слота: $newCredits кр. — ${diff.abs()} кр. вернутся на баланс.';
   }
 
-  void _confirmReschedule() {
+  Future<void> _confirmReschedule() async {
     final start = _selectedStart;
-    if (start == null) return;
+    if (start == null || _submitting) return;
 
-    // [BACKEND NOTE]: PATCH /api/v1/bookings/${widget.booking.id}/reschedule  body: { "starts_at": ISO-8601 }
-    final result = _appState.rescheduleBooking(bookingId: widget.booking.id, newDateTime: start);
-    switch (result) {
-      case Success(:final value):
-        Navigator.pop(context, value);
-      case Failure(:final error):
-        // Окно остаётся открытым: показываем причину, список слотов обновляется
-        setState(() {
-          _error = error.message;
-          _selectedStart = null;
-        });
+    setState(() {
+      _submitting = true;
+      _error = null;
+    });
+    try {
+      // [BACKEND NOTE]: PATCH /api/v1/bookings/${widget.booking.id}/reschedule  body: { "starts_at": ISO-8601 }
+      final result = await _deps.bookings.reschedule(
+        bookingId: widget.booking.id,
+        newStartsAt: start,
+        idempotencyKey: _requestKey,
+      );
+      if (!mounted) return;
+      switch (result) {
+        case Success(:final value):
+          Navigator.pop(context, value);
+        case Failure(:final error):
+          // Окно остаётся открытым: показываем причину и обновляем слоты; следующая попытка — новый запрос
+          setState(() {
+            _submitting = false;
+            _error = error.message;
+            _selectedStart = null;
+            _requestKey = Uuid.v4();
+          });
+          unawaited(_loadSlots());
+      }
+    } on RepositoryException catch (e) {
+      // Связь оборвалась: ключ сохраняется, повторный тап не перенесёт запись дважды
+      if (!mounted) return;
+      setState(() {
+        _submitting = false;
+        _error = e.message;
+      });
     }
   }
 
@@ -276,7 +328,15 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
             style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: AppColors.ink),
           ),
           const SizedBox(height: 10),
-          if (_slotsForDay(_selectedDayIndex).isEmpty)
+          if (_loadingSlots || _slotsError != null)
+            AsyncSection(
+              isLoading: _loadingSlots,
+              error: _slotsError,
+              onRetry: () => unawaited(_loadSlots()),
+              minHeight: 72,
+              child: const SizedBox.shrink(),
+            )
+          else if (_slotsForDay(_selectedDayIndex).isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
               child: Text(
@@ -291,10 +351,13 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
               children: _slotsForDay(_selectedDayIndex).map((slot) {
                 final isSelected = _selectedStart == slot;
                 return GestureDetector(
-                  onTap: () => setState(() {
-                    _selectedStart = slot;
-                    _error = null;
-                  }),
+                  onTap: _submitting
+                      ? null
+                      : () => setState(() {
+                          _selectedStart = slot;
+                          _error = null;
+                          _requestKey = Uuid.v4();
+                        }),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 180),
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -360,7 +423,7 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
             width: double.infinity,
             height: 48,
             child: ElevatedButton(
-              onPressed: _selectedStart == null ? null : _confirmReschedule,
+              onPressed: _selectedStart == null || _submitting || _loadingSlots ? null : _confirmReschedule,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 elevation: 0,

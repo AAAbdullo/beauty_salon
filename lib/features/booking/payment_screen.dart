@@ -1,7 +1,14 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../core/data/app_scope.dart';
+import '../../core/data/repositories/payments_repository.dart';
+import '../../core/data/repository_exception.dart';
 import '../../core/models/booking_draft.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/clock.dart';
 import '../../core/utils/formatters.dart';
+import '../../core/utils/result.dart';
+import '../../core/utils/uuid.dart';
 import '../../core/widgets/buttons/app_gradient_button.dart';
 import '../../core/widgets/cards/app_card.dart';
 
@@ -10,10 +17,10 @@ class PaymentScreen extends StatefulWidget {
   final BookingDraft draft;
   final VoidCallback onBack;
 
-  /// Платёж прошёл (провайдер эмулируется до подключения бэкенда)
-  final VoidCallback onPaymentSuccess;
+  /// Платёж прошёл: создать запись. Возвращает `true`, если запись создана.
+  final Future<bool> Function(PaymentReceipt receipt) onPaid;
 
-  const PaymentScreen({super.key, required this.draft, required this.onBack, required this.onPaymentSuccess});
+  const PaymentScreen({super.key, required this.draft, required this.onBack, required this.onPaid});
 
   @override
   State<PaymentScreen> createState() => _PaymentScreenState();
@@ -23,6 +30,63 @@ class _PaymentScreenState extends State<PaymentScreen> {
   bool _isDeposit = true;
   int _selectedProvider = 0; // 0: Click, 1: Payme, 2: Uzum, 3: Карта
   bool _isProcessing = false;
+  String? _error;
+
+  // Ключ идемпотентности попытки оплаты: двойной тап платит один раз
+  String _payKey = Uuid.v4();
+
+  // Слот закреплён за клиентом до срока удержания; оплачивать нужно успеть
+  Timer? _holdTimer;
+  int _secondsLeft = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _secondsLeft = _remaining();
+    _holdTimer = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
+  }
+
+  @override
+  void dispose() {
+    _holdTimer?.cancel();
+    super.dispose();
+  }
+
+  int _remaining() => widget.draft.holdExpiresAt.difference(AppClock.now()).inSeconds.clamp(0, 1 << 30);
+
+  void _tick() {
+    if (!mounted || _isProcessing) return; // пока идёт оплата, сервер сам продлевает удержание
+    final left = _remaining();
+    if (left > 0) {
+      setState(() => _secondsLeft = left);
+      return;
+    }
+    _holdTimer?.cancel();
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Время брони истекло', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+        content: const Text(
+          'Слот больше не закреплён за вами. Выберите время заново — деньги не списаны.',
+          style: TextStyle(fontSize: 13, color: AppColors.muted),
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            child: const Text('Выбрать время', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    ).then((_) {
+      if (mounted) widget.onBack();
+    });
+  }
+
+  String get _timerLabel =>
+      '${(_secondsLeft ~/ 60).toString().padLeft(2, '0')}:${(_secondsLeft % 60).toString().padLeft(2, '0')}';
 
   static const _providers = [
     ('Click', Icons.radio_button_checked, Color(0xFF007AFF)),
@@ -34,12 +98,41 @@ class _PaymentScreenState extends State<PaymentScreen> {
   int get _amount => _isDeposit ? widget.draft.depositSum : widget.draft.sumPrice;
 
   Future<void> _pay() async {
-    setState(() => _isProcessing = true);
-    // [BACKEND NOTE]: POST /api/v1/payments → redirect на провайдера → webhook подтверждения
-    await Future<void>.delayed(const Duration(milliseconds: 1200));
-    if (!mounted) return;
-    setState(() => _isProcessing = false);
-    widget.onPaymentSuccess();
+    if (_isProcessing) return; // второй тап в том же кадре
+    setState(() {
+      _isProcessing = true;
+      _error = null;
+    });
+    final provider = _providers[_selectedProvider].$1;
+    try {
+      final result = await AppScope.read(context).payments.pay(
+        amount: _amount,
+        provider: provider,
+        holdId: widget.draft.holdId,
+        idempotencyKey: _payKey,
+      );
+      if (!mounted) return;
+      switch (result) {
+        case Success(:final value):
+          // Платёж прошёл — создаём запись; при отказе платёж вернёт вызывающий код
+          await widget.onPaid(value);
+          if (mounted) setState(() => _isProcessing = false);
+        case Failure(:final error):
+          setState(() {
+            _isProcessing = false;
+            _error = error.message;
+            _payKey = Uuid.v4(); // следующая попытка — новый платёж
+          });
+      }
+    } on RepositoryException catch (e) {
+      // Связь оборвалась: ключ сохраняется, повтор не спишет деньги дважды
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+          _error = e.message;
+        });
+      }
+    }
   }
 
   @override
@@ -70,6 +163,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      _buildHoldBanner(),
+                      const SizedBox(height: 12),
                       _buildServiceCostCard(),
                       const SizedBox(height: 16),
                       _buildDepositToggle(),
@@ -86,6 +181,13 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       const Text('Способ оплаты', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
                       const SizedBox(height: 12),
                       _buildPaymentMethods(),
+                      if (_error != null) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          _error!,
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primary),
+                        ),
+                      ],
                       const SizedBox(height: 16),
                       const Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -109,6 +211,30 @@ class _PaymentScreenState extends State<PaymentScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildHoldBanner() {
+    final low = _secondsLeft < 120;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: low ? const Color(0xFFFFECEF) : AppColors.primaryTint,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: low ? AppColors.primary : AppColors.primary.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.access_time_filled, size: 20, color: low ? Colors.red : AppColors.primary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Слот закреплён за вами: $_timerLabel',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.ink),
+            ),
+          ),
+        ],
       ),
     );
   }

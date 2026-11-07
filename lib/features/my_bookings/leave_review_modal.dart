@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import '../../core/data/app_scope.dart';
+import '../../core/data/repository_exception.dart';
 import '../../core/services/app_state_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/result.dart';
+import '../../core/utils/uuid.dart';
 
 /// Модальное окно оценки и отзыва о прошедшем визите (ТЗ M-13)
 class LeaveReviewModal extends StatefulWidget {
@@ -25,9 +28,12 @@ class LeaveReviewModal extends StatefulWidget {
 class _LeaveReviewModalState extends State<LeaveReviewModal> {
   int _rating = 5;
   String? _error;
+  bool _submitting = false;
+
+  // Ключ идемпотентности: один отзыв на одну попытку
+  String _requestKey = Uuid.v4();
   final Set<String> _selectedTags = {'Профессионализм мастера', 'Чистота и гигиена'};
   final TextEditingController _commentController = TextEditingController();
-  final _appState = AppStateService();
 
   static const List<String> _positiveTags = [
     'Чистота и гигиена',
@@ -63,26 +69,40 @@ class _LeaveReviewModalState extends State<LeaveReviewModal> {
     }
   }
 
-  void _submitReview() {
-    // [BACKEND NOTE]: При подключении NestJS этот вызов отправляет
-    // POST /api/v1/bookings/:id/review
-    // body: {
-    //   "bookingId": widget.booking.id,
-    //   "rating": _rating,
-    //   "tags": _selectedTags.toList(),
-    //   "comment": _commentController.text.trim(),
-    // }
-    final result = _appState.addReview(
-      bookingId: widget.booking.id,
-      rating: _rating,
-      tags: _selectedTags.toList(),
-      comment: _commentController.text.trim(),
-    );
-    switch (result) {
-      case Success():
-        Navigator.pop(context, true);
-      case Failure(:final error):
-        setState(() => _error = error.message);
+  Future<void> _submitReview() async {
+    if (_submitting) return; // повторный тап
+    setState(() {
+      _submitting = true;
+      _error = null;
+    });
+    try {
+      // [BACKEND NOTE]: POST /api/v1/bookings/:id/review
+      // body: { "rating": _rating, "tags": _selectedTags.toList(), "comment": _commentController.text.trim() }
+      final result = await AppScope.read(context).bookings.addReview(
+        bookingId: widget.booking.id,
+        rating: _rating,
+        tags: _selectedTags.toList(),
+        comment: _commentController.text.trim(),
+        idempotencyKey: _requestKey,
+      );
+      if (!mounted) return;
+      switch (result) {
+        case Success():
+          Navigator.pop(context, true);
+        case Failure(:final error):
+          setState(() {
+            _submitting = false;
+            _error = error.message;
+            _requestKey = Uuid.v4(); // следующая попытка — новый запрос
+          });
+      }
+    } on RepositoryException catch (e) {
+      // Связь оборвалась: ключ сохраняется, повтор не отправит отзыв дважды
+      if (!mounted) return;
+      setState(() {
+        _submitting = false;
+        _error = e.message;
+      });
     }
   }
 
@@ -324,7 +344,7 @@ class _LeaveReviewModalState extends State<LeaveReviewModal> {
               width: double.infinity,
               height: 48,
               child: ElevatedButton(
-                onPressed: _submitReview,
+                onPressed: _submitting ? null : _submitReview,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   elevation: 0,

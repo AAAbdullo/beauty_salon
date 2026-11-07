@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import '../../core/data/app_scope.dart';
+import '../../core/data/repository_exception.dart';
 import '../../core/services/app_state_service.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/result.dart';
+import '../../core/utils/uuid.dart';
 import '../../core/widgets/buttons/app_gradient_button.dart';
 import '../../core/widgets/buttons/app_pill_button.dart';
 import '../../core/utils/formatters.dart';
@@ -34,7 +38,29 @@ class _CreditsScreenState extends State<CreditsScreen> {
   }
 
   /// K-08: заморозка 7–30 дней, 1 раз в 3 месяца; срок действия сдвигается
+  /// Выполнить операцию с абонементом и показать результат; сбой сети и отказ объясняются пользователю
+  Future<void> _runSubscriptionAction(
+    Future<Result<void, BookingError>> Function() action, {
+    required String Function() successMessage,
+  }) async {
+    try {
+      final result = await action();
+      if (!mounted) return;
+      switch (result) {
+        case Success():
+          showAppSnack(context, successMessage(), success: true);
+        case Failure(:final error):
+          showAppSnack(context, error.message);
+      }
+    } on RepositoryException catch (e) {
+      if (mounted) showAppSnack(context, e.message);
+    }
+  }
+
   void _showFreezeDialog() {
+    // Ключ идемпотентности привязан к открытому окну: двойной тап выполнит операцию один раз
+    final requestKey = Uuid.v4();
+    var submitting = false;
     if (_appState.isFrozen) {
       showDialog(
         context: context,
@@ -57,9 +83,13 @@ class _CreditsScreenState extends State<CreditsScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
               onPressed: () {
-                _appState.unfreezeSubscription();
+                if (submitting) return;
+                submitting = true;
                 Navigator.pop(ctx);
-                showAppSnack(context, 'Абонемент снова активен');
+                _runSubscriptionAction(
+                  () => AppScope.read(context).subscription.unfreeze(idempotencyKey: requestKey),
+                  successMessage: () => 'Абонемент снова активен',
+                );
               },
               child: const Text('Разморозить', style: TextStyle(color: Colors.white)),
             ),
@@ -110,9 +140,13 @@ class _CreditsScreenState extends State<CreditsScreen> {
               AppGradientButton(
                 text: 'Заморозить на $days дн.',
                 onPressed: () {
-                  final ok = _appState.freezeSubscription(days);
+                  if (submitting) return;
+                  submitting = true;
                   Navigator.pop(ctx);
-                  showAppSnack(context, ok ? 'Абонемент заморожен на $days дн.' : 'Не удалось заморозить абонемент');
+                  _runSubscriptionAction(
+                    () => AppScope.read(context).subscription.freeze(days: days, idempotencyKey: requestKey),
+                    successMessage: () => 'Абонемент заморожен на $days дн.',
+                  );
                 },
               ),
             ],
@@ -123,6 +157,9 @@ class _CreditsScreenState extends State<CreditsScreen> {
   }
 
   void _buyPackage(String name, int credits, int price) {
+    // Ключ идемпотентности привязан к открытому окну покупки: двойной тап не начислит кредиты дважды
+    final requestKey = Uuid.v4();
+    var submitting = false;
     final isCurrent = name == _appState.subscriptionPlan;
     final preview = _appState.previewPurchase(credits);
     final carryNote = _appState.clientCredits == 0
@@ -140,13 +177,17 @@ class _CreditsScreenState extends State<CreditsScreen> {
         child: AppGradientButton(
           text: 'Оплатить ${Formatters.formatSum(price)}',
           onPressed: () {
-            // [BACKEND NOTE]: POST /api/v1/subscriptions → Click / Payme / Uzum
-            _appState.purchasePackage(name, credits);
+            if (submitting) return;
+            submitting = true;
             Navigator.pop(ctx);
-            showAppSnack(
-              context,
-              'Пакет «$name» активирован! На балансе ${_appState.clientCredits} кр.',
-              success: true,
+            // [BACKEND NOTE]: POST /api/v1/subscriptions → Click / Payme / Uzum
+            _runSubscriptionAction(
+              () => AppScope.read(context).subscription.purchasePackage(
+                planName: name,
+                credits: credits,
+                idempotencyKey: requestKey,
+              ),
+              successMessage: () => 'Пакет «$name» активирован! На балансе ${_appState.clientCredits} кр.',
             );
           },
         ),

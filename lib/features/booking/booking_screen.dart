@@ -1,25 +1,32 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../core/data/app_dependencies.dart';
+import '../../core/data/app_scope.dart';
+import '../../core/data/repositories/catalog_repository.dart';
+import '../../core/data/repositories/slots_repository.dart';
+import '../../core/data/repository_exception.dart';
 import '../../core/models/booking_draft.dart';
 import '../../core/services/app_state_service.dart';
 import '../../core/services/masters_repository.dart';
 import '../../core/services/salons_repository.dart';
-import '../../core/services/slot_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/clock.dart';
 import '../../core/utils/formatters.dart';
+import '../../core/utils/result.dart';
 import '../../core/utils/slot_pricing.dart';
+import '../../core/utils/uuid.dart';
 import '../../core/widgets/buttons/app_gradient_button.dart';
 import '../../core/widgets/cards/app_card.dart';
 import '../../core/widgets/sheets/app_sheet.dart';
+import '../../core/widgets/states/async_screen.dart';
 import '../../core/widgets/states/not_found_screen.dart';
 
 /// Экран бронирования слота (ТЗ M-08)
 /// - Выбор услуги и мастера салона
 /// - Выбор даты (7 ближайших дней) и свободного слота
-/// - Таймер удержания выбранного слота на 10 минут
+/// - Слот закрепляется за клиентом на 10 минут (удержание на сервере); таймер идёт до срока удержания
 /// - Способ оплаты: кредиты (с проверкой баланса, заморозки и лимита K-03), онлайн, в салоне
-class BookingScreen extends StatefulWidget {
+class BookingScreen extends StatelessWidget {
   final String salonId;
 
   /// `null` — «Любой мастер»
@@ -27,8 +34,9 @@ class BookingScreen extends StatefulWidget {
   final MasterServiceItem? initialService;
   final VoidCallback onBack;
 
-  /// Клиент подтвердил запись выбранным способом оплаты ([PaymentMethods])
-  final void Function(BookingDraft draft, String paymentMethod) onConfirm;
+  /// Клиент подтвердил запись выбранным способом оплаты ([PaymentMethods]).
+  /// `true` — запись передана дальше (оплата или создана); `false` — отказ, экран остаётся открытым.
+  final Future<bool> Function(BookingDraft draft, String paymentMethod) onConfirm;
 
   /// Переход к покупке кредитов, если их не хватает
   final VoidCallback? onTopUpCredits;
@@ -44,22 +52,66 @@ class BookingScreen extends StatefulWidget {
   });
 
   @override
-  State<BookingScreen> createState() => _BookingScreenState();
+  Widget build(BuildContext context) {
+    return AsyncScreen<SalonDetails?>(
+      title: 'Запись на услугу',
+      onBack: onBack,
+      reloadKey: salonId,
+      load: () => AppScope.read(context).catalog.getSalonDetails(salonId),
+      builder: (context, details) {
+        if (details == null) {
+          return NotFoundScreen(
+            title: 'Запись на услугу',
+            message: 'Салон не найден. Возможно, он больше не принимает записи.',
+            onBack: onBack,
+          );
+        }
+        return _BookingView(
+          details: details,
+          initialMasterId: initialMasterId,
+          initialService: initialService,
+          onBack: onBack,
+          onConfirm: onConfirm,
+          onTopUpCredits: onTopUpCredits,
+        );
+      },
+    );
+  }
 }
 
-class _BookingScreenState extends State<BookingScreen> {
+class _BookingView extends StatefulWidget {
+  final SalonDetails details;
+  final String? initialMasterId;
+  final MasterServiceItem? initialService;
+  final VoidCallback onBack;
+  final Future<bool> Function(BookingDraft draft, String paymentMethod) onConfirm;
+  final VoidCallback? onTopUpCredits;
+
+  const _BookingView({
+    required this.details,
+    required this.initialMasterId,
+    required this.initialService,
+    required this.onBack,
+    required this.onConfirm,
+    required this.onTopUpCredits,
+  });
+
+  @override
+  State<_BookingView> createState() => _BookingViewState();
+}
+
+class _BookingViewState extends State<_BookingView> {
   static const _anyMaster = 'Любой мастер';
-  static const _holdDuration = 600; // ТЗ M-08: слот удерживается 10 минут
 
   final _appState = AppStateService();
-  final _salonsRepo = SalonsRepository();
-  final _mastersRepo = MastersRepository();
-  final _slotService = SlotService();
+  late final AppDependencies _deps;
 
-  late final SalonModel? _salon;
+  late final SalonModel _salon;
   late final List<MasterServiceItem> _services;
   late final List<MasterProfileModel> _salonMasters;
   late final List<DateTime> _days;
+
+  String get _salonId => _salon.id;
 
   late MasterServiceItem? _service;
 
@@ -69,15 +121,33 @@ class _BookingScreenState extends State<BookingScreen> {
   DateTime? _selectedStart;
   String _paymentMethod = PaymentMethods.credits;
 
+  // Свободные слоты по дням (ключ — дата без времени) и состояние их загрузки
+  Map<DateTime, List<DateTime>> _slotsByDay = {};
+  bool _slotsLoading = true;
+  Object? _slotsError;
+  int _slotsRequestId = 0;
+  bool _firstSlotsLoad = true;
+
+  // Удержание слота: выдаёт сервер, таймер лишь отсчитывает до его срока
+  SlotHold? _hold;
+  bool _holding = false;
   Timer? _holdTimer;
-  int _holdSecondsLeft = _holdDuration;
+  int _holdSecondsLeft = 0;
+
+  // Ключ идемпотентности попытки: повтор (двойной тап) не создаст вторую запись
+  String _idempotencyKey = Uuid.v4();
+  bool _submitting = false;
+
+  // Удержание передано дальше (оплата / создание записи) — экран не должен его освобождать
+  bool _handedOff = false;
 
   @override
   void initState() {
     super.initState();
-    _salon = _salonsRepo.getSalonById(widget.salonId);
-    _services = _salonsRepo.getSalonServices(widget.salonId);
-    _salonMasters = _mastersRepo.getMastersForSalon(widget.salonId);
+    _deps = AppScope.read(context);
+    _salon = widget.details.salon;
+    _services = widget.details.services;
+    _salonMasters = widget.details.masters;
 
     final today = AppClock.now();
     _days = List.generate(7, (i) => DateTime(today.year, today.month, today.day + i));
@@ -89,20 +159,16 @@ class _BookingScreenState extends State<BookingScreen> {
     _masterId = initialId != null && _salonMasters.any((m) => m.id == initialId) ? initialId : null;
     _ensureMasterOffersService();
 
-    // Открываем ближайший день, на который есть свободные слоты
-    for (var i = 0; i < _days.length; i++) {
-      if (_slotsForDay(i).isNotEmpty) {
-        _selectedDayIndex = i;
-        break;
-      }
-    }
-
     if (!_creditsAvailableForSalon) _paymentMethod = PaymentMethods.online;
+    unawaited(_reloadSlots());
   }
 
   @override
   void dispose() {
     _holdTimer?.cancel();
+    final hold = _hold;
+    // Ушли с экрана, не дойдя до записи — слот возвращается в продажу
+    if (hold != null && !_handedOff) unawaited(_deps.slots.releaseHold(hold.id));
     super.dispose();
   }
 
@@ -110,7 +176,7 @@ class _BookingScreenState extends State<BookingScreen> {
   // Данные
   // ---------------------------------------------------------------------------
 
-  bool get _creditsAvailableForSalon => (_salon?.creditsAccepted ?? true) && (_service?.creditsPrice ?? 0) > 0;
+  bool get _creditsAvailableForSalon => _salon.creditsAccepted && (_service?.creditsPrice ?? 0) > 0;
 
   /// Мастера салона, оказывающие выбранную услугу
   List<MasterProfileModel> get _mastersForService {
@@ -124,8 +190,8 @@ class _BookingScreenState extends State<BookingScreen> {
     if (!_mastersForService.any((m) => m.id == _masterId)) _masterId = null;
   }
 
-  /// Название салона для отображения (сам салон найден по id)
-  String get _salonName => _salon?.name ?? '';
+  /// Название салона для отображения
+  String get _salonName => _salon.name;
 
   /// Подпись выбранного мастера для отображения
   String get _masterLabel {
@@ -139,17 +205,49 @@ class _BookingScreenState extends State<BookingScreen> {
 
   DateTime get _selectedDay => _days[_selectedDayIndex];
 
-  /// Свободные слоты дня — из SlotService: график мастера, перерывы, чужие записи, прошедшее время
-  List<DateTime> _slotsForDay(int dayIndex) {
+  static DateTime _dayKey(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  /// Свободные слоты дня (загружаются с сервера: график мастера, перерывы, чужие записи, прошедшее время)
+  List<DateTime> _slotsForDay(int dayIndex) => _slotsByDay[_dayKey(_days[dayIndex])] ?? const [];
+
+  /// Загрузить слоты на все 7 дней. Устаревшие ответы (после смены мастера/услуги) отбрасываются.
+  Future<void> _reloadSlots() async {
     final service = _service;
-    if (service == null) return const [];
-    return _slotService.availableSlots(
-      salonId: widget.salonId,
-      masterId: _masterId,
-      serviceId: service.id,
-      date: _days[dayIndex],
-      durationMinutes: service.durationMinutes,
-    );
+    if (service == null) {
+      setState(() => _slotsLoading = false);
+      return;
+    }
+    final requestId = ++_slotsRequestId;
+    setState(() {
+      _slotsLoading = true;
+      _slotsError = null;
+    });
+    try {
+      final result = await _deps.slots.availableSlotsForDays(
+        salonId: _salonId,
+        masterId: _masterId,
+        serviceId: service.id,
+        days: _days,
+        durationMinutes: service.durationMinutes,
+      );
+      if (!mounted || requestId != _slotsRequestId) return;
+      setState(() {
+        _slotsByDay = result;
+        _slotsLoading = false;
+        // Открываем ближайший день, на который есть свободные слоты
+        if (_firstSlotsLoad || _slotsForDay(_selectedDayIndex).isEmpty) {
+          final firstFree = List.generate(_days.length, (i) => i).where((i) => _slotsForDay(i).isNotEmpty);
+          if (firstFree.isNotEmpty) _selectedDayIndex = firstFree.first;
+        }
+        _firstSlotsLoad = false;
+      });
+    } on RepositoryException catch (e) {
+      if (!mounted || requestId != _slotsRequestId) return;
+      setState(() {
+        _slotsLoading = false;
+        _slotsError = e;
+      });
+    }
   }
 
   /// ТЗ: цена слота = базовая цена × k_slot (вечер после 18:00 — 1.2)
@@ -159,7 +257,7 @@ class _BookingScreenState extends State<BookingScreen> {
     if (!_creditsAvailableForSalon) return 'Салон не принимает кредиты';
     final start = _selectedStart;
     return _appState.creditsBlockReason(
-      salonId: widget.salonId,
+      salonId: _salonId,
       credits: start == null ? (_service?.creditsPrice ?? 0) : _slotCredits(start),
       dateTime: start ?? _selectedDay,
     );
@@ -171,33 +269,90 @@ class _BookingScreenState extends State<BookingScreen> {
 
   void _startHoldTimer() {
     _holdTimer?.cancel();
-    setState(() => _holdSecondsLeft = _holdDuration);
-    _holdTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-      if (_holdSecondsLeft > 1) {
-        setState(() => _holdSecondsLeft--);
-      } else {
-        timer.cancel();
-        setState(() {
-          _holdSecondsLeft = 0;
-          _selectedStart = null;
-        });
-        _showTimeoutDialog();
-      }
-    });
+    _tickHold();
+    _holdTimer = Timer.periodic(const Duration(seconds: 1), (_) => _tickHold());
   }
 
+  /// Оставшееся время — разница между сроком сервера и текущими часами
+  void _tickHold() {
+    final hold = _hold;
+    if (!mounted || hold == null) return;
+    final left = hold.expiresAt.difference(AppClock.now()).inSeconds;
+    if (left > 0) {
+      setState(() => _holdSecondsLeft = left);
+      return;
+    }
+    _holdTimer?.cancel();
+    setState(() {
+      _hold = null;
+      _selectedStart = null;
+      _holdSecondsLeft = 0;
+    });
+    _showTimeoutDialog();
+    unawaited(_reloadSlots());
+  }
+
+  /// Сбросить выбор и освободить удержание (смена даты, мастера, услуги)
   void _clearSlot() {
     _holdTimer?.cancel();
+    final hold = _hold;
+    _hold = null;
     _selectedStart = null;
+    _holdSecondsLeft = 0;
+    _idempotencyKey = Uuid.v4();
+    if (hold != null) unawaited(_deps.slots.releaseHold(hold.id));
   }
 
-  void _onSlotSelected(DateTime start) {
-    setState(() => _selectedStart = start);
-    _startHoldTimer();
+  /// Выбор слота: просим сервер закрепить его за клиентом (прежнее удержание заменяется)
+  Future<void> _onSlotSelected(DateTime start) async {
+    if (_holding || _submitting) return;
+    final previous = _hold;
+    setState(() {
+      _holding = true;
+      _selectedStart = start;
+    });
+    final service = _service!;
+    try {
+      final result = await _deps.slots.holdSlot(
+        salonId: _salonId,
+        masterId: _masterId,
+        serviceId: service.id,
+        startsAt: start,
+        durationMinutes: service.durationMinutes,
+        replaceHoldId: previous?.id,
+      );
+      if (!mounted) {
+        if (result case Success(:final value)) unawaited(_deps.slots.releaseHold(value.id));
+        return;
+      }
+      switch (result) {
+        case Success(:final value):
+          setState(() {
+            _hold = value;
+            _idempotencyKey = Uuid.v4();
+          });
+          _startHoldTimer();
+        case Failure(:final error):
+          _holdTimer?.cancel();
+          setState(() {
+            _hold = null;
+            _selectedStart = null;
+            _holdSecondsLeft = 0;
+          });
+          showAppSnack(context, error.message);
+          unawaited(_reloadSlots()); // слот мог занять другой клиент — обновляем список
+      }
+    } on RepositoryException catch (e) {
+      if (!mounted) return;
+      _holdTimer?.cancel();
+      setState(() {
+        _hold = null;
+        _selectedStart = null;
+      });
+      showAppSnack(context, e.message);
+    } finally {
+      if (mounted) setState(() => _holding = false);
+    }
   }
 
   void _showTimeoutDialog() {
@@ -300,6 +455,7 @@ class _BookingScreenState extends State<BookingScreen> {
                             _paymentMethod = PaymentMethods.online;
                           }
                         });
+                        unawaited(_reloadSlots());
                       },
                     );
                   }).toList(),
@@ -312,26 +468,44 @@ class _BookingScreenState extends State<BookingScreen> {
     );
   }
 
-  void _confirm() {
+  Future<void> _confirm() async {
     final service = _service;
-    final dateTime = _selectedStart;
-    if (service == null || dateTime == null) return;
-    _holdTimer?.cancel();
-    widget.onConfirm(
-      BookingDraft(
-        salonId: widget.salonId,
-        salonName: _salonName,
-        serviceId: service.id,
-        serviceName: service.name,
-        durationMinutes: service.durationMinutes,
-        masterId: _masterId,
-        masterName: _masterLabel,
-        dateTime: dateTime,
-        baseCredits: service.creditsPrice,
-        sumPrice: service.sumPrice,
-      ),
-      _paymentMethod,
+    final hold = _hold;
+    final start = _selectedStart;
+    if (_submitting || _holding || service == null || hold == null || start == null) return;
+
+    setState(() => _submitting = true);
+    final draft = BookingDraft(
+      salonId: _salonId,
+      salonName: _salonName,
+      serviceId: service.id,
+      serviceName: service.name,
+      durationMinutes: service.durationMinutes,
+      masterId: _masterId,
+      masterName: _masterLabel,
+      dateTime: start,
+      baseCredits: service.creditsPrice,
+      sumPrice: service.sumPrice,
+      holdId: hold.id,
+      holdExpiresAt: hold.expiresAt,
+      idempotencyKey: _idempotencyKey,
     );
+
+    // Пока идёт оформление, экран может закрыться (успех) — удержание тогда принадлежит дальнейшему потоку
+    _handedOff = true;
+    var accepted = false;
+    try {
+      accepted = await widget.onConfirm(draft, _paymentMethod);
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+    if (accepted) {
+      _holdTimer?.cancel();
+    } else {
+      // Отказ: удержание остаётся нашим, а следующая попытка — это новый запрос с новым ключом
+      _handedOff = false;
+      _idempotencyKey = Uuid.v4();
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -340,13 +514,6 @@ class _BookingScreenState extends State<BookingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_salon == null) {
-      return NotFoundScreen(
-        title: 'Запись на услугу',
-        message: 'Салон не найден. Возможно, он больше не принимает записи.',
-        onBack: widget.onBack,
-      );
-    }
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -398,7 +565,7 @@ class _BookingScreenState extends State<BookingScreen> {
 
   /// ТЗ M-08: Индикатор удержания слота на 10 минут
   Widget _buildHoldTimerBanner() {
-    final hasSlot = _selectedStart != null;
+    final hasSlot = _hold != null;
     final isLowTime = hasSlot && _holdSecondsLeft < 120;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
@@ -463,7 +630,7 @@ class _BookingScreenState extends State<BookingScreen> {
           ClipRRect(
             borderRadius: BorderRadius.circular(14),
             child: Image.asset(
-              _salon?.imageAsset ?? '',
+              _salon.imageAsset,
               width: 60,
               height: 60,
               fit: BoxFit.cover,
@@ -488,15 +655,13 @@ class _BookingScreenState extends State<BookingScreen> {
                     const Icon(Icons.access_time, size: 13, color: AppColors.muted),
                     const SizedBox(width: 4),
                     Text(service.duration, style: const TextStyle(fontSize: 11, color: AppColors.muted)),
-                    if (_salon != null) ...[
-                      const SizedBox(width: 8),
-                      const Icon(Icons.star, size: 13, color: AppColors.primary),
-                      const SizedBox(width: 2),
-                      Text(
-                        '${_salon.rating} (${_salon.reviewsCount})',
-                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-                      ),
-                    ],
+                    const SizedBox(width: 8),
+                    const Icon(Icons.star, size: 13, color: AppColors.primary),
+                    const SizedBox(width: 2),
+                    Text(
+                      '${_salon.rating} (${_salon.reviewsCount})',
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                    ),
                   ],
                 ),
               ],
@@ -539,10 +704,13 @@ class _BookingScreenState extends State<BookingScreen> {
               final isSelected = master?.id == _masterId;
               return _SelectableTile(
                 isSelected: isSelected,
-                onTap: () => setState(() {
-                  _masterId = master?.id;
-                  _clearSlot();
-                }),
+                onTap: () {
+                  setState(() {
+                    _masterId = master?.id;
+                    _clearSlot();
+                  });
+                  unawaited(_reloadSlots());
+                },
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -604,12 +772,12 @@ class _BookingScreenState extends State<BookingScreen> {
             itemBuilder: (context, index) {
               final d = _days[index];
               final isSelected = index == _selectedDayIndex;
-              final isFull = _slotsForDay(index).isEmpty;
+              final isFull = !_slotsLoading && _slotsForDay(index).isEmpty;
               final caption = index == 0 ? 'Сег.' : (index == 1 ? 'Завт.' : Formatters.weekDaysShort[d.weekday - 1]);
               return Opacity(
                 opacity: isFull ? 0.45 : 1,
                 child: InkWell(
-                  onTap: isFull
+                  onTap: isFull || _holding || _submitting
                       ? null
                       : () => setState(() {
                           _selectedDayIndex = index;
@@ -672,7 +840,15 @@ class _BookingScreenState extends State<BookingScreen> {
           ],
         ),
         const SizedBox(height: 12),
-        if (slots.isEmpty)
+        if (_slotsLoading || _slotsError != null)
+          AsyncSection(
+            isLoading: _slotsLoading,
+            error: _slotsError,
+            onRetry: () => unawaited(_reloadSlots()),
+            minHeight: 96,
+            child: const SizedBox.shrink(),
+          )
+        else if (slots.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 12),
             child: Text(
@@ -691,7 +867,7 @@ class _BookingScreenState extends State<BookingScreen> {
                   final isSelected = _selectedStart == start;
                   final costLabel = _creditsAvailableForSalon ? '${_slotCredits(start)} кр.' : 'свободно';
                   return InkWell(
-                    onTap: () => _onSlotSelected(start),
+                    onTap: _holding || _submitting ? null : () => _onSlotSelected(start),
                     borderRadius: BorderRadius.circular(14),
                     child: Container(
                       width: width,
@@ -857,6 +1033,8 @@ class _BookingScreenState extends State<BookingScreen> {
     final String buttonText;
     if (start == null) {
       buttonText = 'Выберите время';
+    } else if (_hold == null) {
+      buttonText = 'Закрепляем слот…';
     } else if (effectiveMethod == PaymentMethods.credits) {
       buttonText = 'Записаться · ${_slotCredits(start)} кр.';
     } else if (effectiveMethod == PaymentMethods.online) {
@@ -886,7 +1064,11 @@ class _BookingScreenState extends State<BookingScreen> {
                   style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.ink),
                 ),
               ),
-            AppGradientButton(text: buttonText, onPressed: start == null ? null : _confirm),
+            AppGradientButton(
+              text: buttonText,
+              isLoading: _submitting,
+              onPressed: _hold == null || _holding ? null : _confirm,
+            ),
             const SizedBox(height: 6),
             const Text(
               'Бесплатная отмена и перенос — не позднее чем за 2 часа до визита',

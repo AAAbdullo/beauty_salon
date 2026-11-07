@@ -22,6 +22,13 @@ class BookingDraft {
   final int baseCredits;
   final int sumPrice;
 
+  /// Удержание слота, полученное на экране записи, и момент, до которого оно действует
+  final String holdId;
+  final DateTime holdExpiresAt;
+
+  /// Ключ идемпотентности попытки: повтор с ним (двойной тап) не создаст вторую запись
+  final String idempotencyKey;
+
   const BookingDraft({
     required this.salonId,
     required this.salonName,
@@ -33,6 +40,9 @@ class BookingDraft {
     required this.dateTime,
     required this.baseCredits,
     required this.sumPrice,
+    required this.holdId,
+    required this.holdExpiresAt,
+    required this.idempotencyKey,
   });
 
   /// Длительность для отображения: «60 мин»

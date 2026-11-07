@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import '../../../core/data/app_scope.dart';
+import '../../../core/data/repository_exception.dart';
 import '../../../core/services/app_state_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/buttons/app_gradient_button.dart';
@@ -21,6 +23,9 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
   );
 
   bool _isTorchOn = false;
+
+  // Идёт проверка кода на сервере: новые коды в это время игнорируются
+  bool _isProcessing = false;
   int _stateView = 0; // 0: Видоискатель, 1: Успех, 2: Ошибка
 
   String _scannedClientName = '';
@@ -37,7 +42,7 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
   }
 
   void _onDetect(BarcodeCapture capture) {
-    if (_stateView != 0) return;
+    if (_stateView != 0 || _isProcessing) return;
     final List<Barcode> barcodes = capture.barcodes;
     for (final barcode in barcodes) {
       final value = barcode.rawValue;
@@ -48,31 +53,45 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
     }
   }
 
-  /// Проверка QR по правилам ТЗ: формат, 60-секундный срок, салон, окно −30/+60 мин
-  void _processScannedCode(String rawCode, {bool ignoreTimeWindow = false}) {
-    final appState = AppStateService();
-    final result = appState.validateVisitQr(rawCode, ignoreTimeWindow: ignoreTimeWindow);
-    final booking = result.booking;
-    setState(() {
-      if (booking != null) {
-        // Имя и фото — из самой записи: на телефоне мастера «клиент приложения» — это он сам
-        _scannedClientName = booking.clientName.isNotEmpty ? booking.clientName : 'Клиент';
-        _scannedClientAvatar = booking.clientAvatar;
-        _scannedServiceName = booking.serviceName;
-        _scannedTime = '${booking.date}, ${booking.time}';
-        _scannedPaymentMethod = booking.isPaidWithCredits
-            ? '${booking.paymentMethod} · ${booking.credits} кр.'
-            : booking.paymentMethod;
-        _stateView = 1;
-      } else {
-        _errorMessage = result.error ?? 'Код не распознан.';
+  /// Проверка QR по правилам ТЗ: формат, 60-секундный срок, одноразовость, салон, окно −30/+60 мин.
+  /// Проверку и подтверждение визита делает «сервер» (VisitQrRepository), приложение показывает результат.
+  Future<void> _processScannedCode(String rawCode, {bool ignoreTimeWindow = false}) async {
+    if (_isProcessing) return;
+    _isProcessing = true;
+    try {
+      final result = await AppScope.read(context).visitQr.verifyAndConfirm(rawCode, ignoreTimeWindow: ignoreTimeWindow);
+      if (!mounted) return;
+      final booking = result.booking;
+      setState(() {
+        if (booking != null) {
+          // Имя и фото — из самой записи: на телефоне мастера «клиент приложения» — это он сам
+          _scannedClientName = booking.clientName.isNotEmpty ? booking.clientName : 'Клиент';
+          _scannedClientAvatar = booking.clientAvatar;
+          _scannedServiceName = booking.serviceName;
+          _scannedTime = '${booking.date}, ${booking.time}';
+          _scannedPaymentMethod = booking.isPaidWithCredits
+              ? '${booking.paymentMethod} · ${booking.credits} кр.'
+              : booking.paymentMethod;
+          _stateView = 1;
+        } else {
+          _errorMessage = result.error ?? 'Код не распознан.';
+          _stateView = 2;
+        }
+      });
+    } on RepositoryException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = e.message;
         _stateView = 2;
-      }
-    });
+      });
+    } finally {
+      _isProcessing = false;
+    }
   }
 
   /// Демо для симулятора (камеры нет): «клиент» показывает QR ближайшей записи в этот салон
-  void _simulateClientQr() {
+  Future<void> _simulateClientQr() async {
+    if (_isProcessing) return;
     final appState = AppStateService();
     final candidates = appState.activeBookings.where((b) => b.salonId == appState.masterSalonId);
     if (candidates.isEmpty) {
@@ -82,7 +101,17 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
       });
       return;
     }
-    _processScannedCode(appState.visitQrToken(candidates.first), ignoreTimeWindow: true);
+    try {
+      final token = await AppScope.read(context).visitQr.issueToken(candidates.first.id);
+      if (!mounted) return;
+      await _processScannedCode(token.value, ignoreTimeWindow: true);
+    } on RepositoryException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = e.message;
+        _stateView = 2;
+      });
+    }
   }
 
   @override
@@ -242,7 +271,7 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: () => _processScannedCode('GZL|unknown|${DateTime.now().millisecondsSinceEpoch}'),
+                      onPressed: () => _processScannedCode('GZL|unknown|${DateTime.now().millisecondsSinceEpoch}|demo'),
                       child: const Text('Демо: чужой код'),
                     ),
                   ),

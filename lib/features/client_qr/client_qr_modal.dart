@@ -1,8 +1,14 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import '../../core/data/app_dependencies.dart';
+import '../../core/data/app_scope.dart';
+import '../../core/data/repositories/visit_qr_repository.dart';
+import '../../core/data/repository_exception.dart';
 import '../../core/services/app_state_service.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/clock.dart';
+import '../../core/widgets/states/async_screen.dart';
 import '../../core/widgets/buttons/app_gradient_button.dart';
 import '../../core/widgets/sheets/app_sheet.dart';
 
@@ -50,32 +56,63 @@ class ClientQrModal extends StatefulWidget {
 }
 
 class _ClientQrModalState extends State<ClientQrModal> {
-  final _appState = AppStateService();
-  int _secondsLeft = AppStateService.qrLifetimeSeconds;
+  late final AppDependencies _deps;
   Timer? _timer;
-  late String _qrToken;
+
+  // Токен выдаёт и подписывает сервер; код живёт 60 секунд и обновляется до истечения
+  VisitQrToken? _token;
+  int _secondsLeft = 0;
+  bool _refreshing = false;
+  Object? _error;
 
   @override
   void initState() {
     super.initState();
-    _qrToken = _appState.visitQrToken(widget.booking);
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!mounted) return;
-      setState(() {
-        if (_secondsLeft > 1) {
-          _secondsLeft--;
-        } else {
-          _qrToken = _appState.visitQrToken(widget.booking);
-          _secondsLeft = AppStateService.qrLifetimeSeconds;
-        }
-      });
-    });
+    _deps = AppScope.read(context);
+    unawaited(_refresh());
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
   }
 
   @override
   void dispose() {
     _timer?.cancel();
     super.dispose();
+  }
+
+  /// Оставшееся время — до срока, который назвал сервер; по истечении запрашиваем новый код
+  void _tick() {
+    final token = _token;
+    if (!mounted || token == null) return;
+    final left = token.expiresAt.difference(AppClock.now()).inSeconds;
+    if (left > 0) {
+      setState(() => _secondsLeft = left);
+    } else {
+      unawaited(_refresh());
+    }
+  }
+
+  Future<void> _refresh() async {
+    if (_refreshing) return;
+    setState(() {
+      _refreshing = true;
+      _error = null;
+    });
+    try {
+      final token = await _deps.visitQr.issueToken(widget.booking.id);
+      if (!mounted) return;
+      setState(() {
+        _token = token;
+        _secondsLeft = token.expiresAt.difference(AppClock.now()).inSeconds.clamp(0, 1 << 30);
+      });
+    } on RepositoryException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _token = null; // устаревший код показывать нельзя
+        _error = e;
+      });
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
+    }
   }
 
   @override
@@ -124,28 +161,42 @@ class _ClientQrModalState extends State<ClientQrModal> {
                 ),
                 child: Column(
                   children: [
-                    QrImageView(
-                      data: _qrToken,
-                      version: QrVersions.auto,
-                      size: 200.0,
-                      eyeStyle: const QrEyeStyle(eyeShape: QrEyeShape.square, color: AppColors.ink),
-                      dataModuleStyle: const QrDataModuleStyle(
-                        dataModuleShape: QrDataModuleShape.square,
-                        color: AppColors.ink,
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.timer_outlined, size: 16, color: AppColors.primary),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Обновится через 00:${_secondsLeft.toString().padLeft(2, "0")}',
-                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.primary),
+                    if (_token != null)
+                      QrImageView(
+                        data: _token!.value,
+                        version: QrVersions.auto,
+                        size: 200.0,
+                        eyeStyle: const QrEyeStyle(eyeShape: QrEyeShape.square, color: AppColors.ink),
+                        dataModuleStyle: const QrDataModuleStyle(
+                          dataModuleShape: QrDataModuleShape.square,
+                          color: AppColors.ink,
                         ),
-                      ],
-                    ),
+                      )
+                    else
+                      SizedBox(
+                        width: 200,
+                        height: 200,
+                        child: AsyncSection(
+                          isLoading: _error == null,
+                          error: _error,
+                          onRetry: () => unawaited(_refresh()),
+                          minHeight: 200,
+                          child: const SizedBox.shrink(),
+                        ),
+                      ),
+                    const SizedBox(height: 14),
+                    if (_token != null)
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.timer_outlined, size: 16, color: AppColors.primary),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Обновится через 00:${_secondsLeft.toString().padLeft(2, "0")}',
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.primary),
+                          ),
+                        ],
+                      ),
                   ],
                 ),
               ),

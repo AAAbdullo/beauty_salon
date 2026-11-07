@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:beauty_salons/core/data/app_dependencies.dart';
+import 'package:beauty_salons/core/data/app_scope.dart';
+import 'package:beauty_salons/core/data/mock/mock_network.dart';
 import 'package:beauty_salons/core/models/booking_draft.dart';
 import 'package:beauty_salons/core/services/app_state_service.dart';
 import 'package:beauty_salons/features/auth/auth_screen.dart';
@@ -72,7 +75,7 @@ void main() {
     for (final masterId in ['m-001', 'm-unknown'])
       'Master $masterId': () => MasterProfileScreen(masterId: masterId, onBack: noop, onBookMaster: (_) {}),
     for (final salonId in ['s-001', 's-005', 's-004', 's-unknown'])
-      'Booking $salonId': () => BookingScreen(salonId: salonId, onBack: noop, onConfirm: (_, _) {}),
+      'Booking $salonId': () => BookingScreen(salonId: salonId, onBack: noop, onConfirm: (_, _) async => true),
     'Payment': () => PaymentScreen(
       draft: BookingDraft(
         salonId: 's-001',
@@ -85,9 +88,12 @@ void main() {
         dateTime: DateTime.now().add(const Duration(days: 1)),
         baseCredits: 34,
         sumPrice: 150000,
+        holdId: 'hold-1',
+        holdExpiresAt: DateTime.now().add(const Duration(minutes: 10)),
+        idempotencyKey: 'key-1',
       ),
       onBack: noop,
-      onPaymentSuccess: noop,
+      onPaid: (_) async => true,
     ),
     for (final tab in [0, 1, 2]) 'Bookings tab $tab': () => MyBookingsScreen(onBookNew: noop, initialTab: tab),
     'Credits': () => const CreditsScreen(),
@@ -124,14 +130,24 @@ void main() {
         tester.view.devicePixelRatio = 3;
         addTearDown(tester.view.reset);
 
+        // Мок-репозитории без задержки: данные приходят в ближайшие кадры
         await tester.pumpWidget(
-          MaterialApp(
-            theme: ThemeData(fontFamily: 'Roboto'),
-            home: entry.value(),
+          AppScope(
+            dependencies: AppDependencies.mock(network: MockNetwork()),
+            child: MaterialApp(
+              theme: ThemeData(fontFamily: 'Roboto'),
+              home: entry.value(),
+            ),
           ),
         );
-        await tester.pump(const Duration(milliseconds: 300));
+        // Цепочка загрузок (экран → каталог → слоты) укладывается в несколько кадров
+        for (var i = 0; i < 6; i++) {
+          await tester.pump(const Duration(milliseconds: 50));
+        }
         // Ошибки вёрстки (overflow) фреймворк сам превращает в падение теста с подробностями
+
+        // Снимаем дерево, чтобы таймеры экранов (удержание слота и т.п.) остановились
+        await tester.pumpWidget(const SizedBox());
       });
     }
   }

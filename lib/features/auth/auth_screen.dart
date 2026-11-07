@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
+import '../../core/data/app_scope.dart';
+import '../../core/data/repositories/auth_repository.dart';
+import '../../core/data/repository_exception.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/result.dart';
 import '../../core/widgets/buttons/app_gradient_button.dart';
 import '../../core/widgets/inputs/app_text_field.dart';
 
 class AuthScreen extends StatefulWidget {
-  final Function(bool isMaster) onLoginSuccess;
+  /// Вход выполнен; роль уже прочитана из токена сессии
+  final ValueChanged<AuthSession> onLoginSuccess;
   final VoidCallback? onRegisterTap;
 
   const AuthScreen({
@@ -21,6 +26,7 @@ class _AuthScreenState extends State<AuthScreen> {
   final _loginController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
+  bool _isLoading = false;
   String? _errorMessage;
 
   @override
@@ -30,20 +36,36 @@ class _AuthScreenState extends State<AuthScreen> {
     super.dispose();
   }
 
-  void _submitLogin() {
+  Future<void> _submitLogin() async {
+    if (_isLoading) return;
     final login = _loginController.text.trim();
     final pass = _passwordController.text;
 
     FocusScope.of(context).unfocus();
-    setState(() => _errorMessage = null);
+    setState(() {
+      _errorMessage = null;
+      _isLoading = true;
+    });
 
-    if (login == 'client' && pass == '12345678') {
-      widget.onLoginSuccess(false); // Вход под клиентом
-    } else if (login == 'master' && pass == '12345678') {
-      widget.onLoginSuccess(true); // Вход под мастером
-    } else {
+    final auth = AppScope.read(context).auth;
+    try {
+      final result = await auth.login(login: login, password: pass);
+      if (!mounted) return;
+      switch (result) {
+        case Success(:final value):
+          setState(() => _isLoading = false);
+          widget.onLoginSuccess(value);
+        case Failure(:final error):
+          setState(() {
+            _isLoading = false;
+            _errorMessage = '${error.message}\nДля клиента: client / 12345678\nДля мастера: master / 12345678';
+          });
+      }
+    } on RepositoryException catch (e) {
+      if (!mounted) return;
       setState(() {
-        _errorMessage = 'Неверный логин или пароль.\nДля клиента: client / 12345678\nДля мастера: master / 12345678';
+        _isLoading = false;
+        _errorMessage = e.message;
       });
     }
   }
@@ -176,6 +198,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   const SizedBox(height: 24),
                   AppGradientButton(
                     text: 'Войти',
+                    isLoading: _isLoading,
                     onPressed: _submitLogin,
                   ),
                   const SizedBox(height: 14),

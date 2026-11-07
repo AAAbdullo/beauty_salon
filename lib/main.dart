@@ -22,6 +22,13 @@ import 'features/master_cabinet/schedule/master_schedule_screen.dart';
 import 'features/master_cabinet/qr_scanner/master_qr_scanner_screen.dart';
 import 'features/master_cabinet/earnings/master_earnings_screen.dart';
 import 'features/master_cabinet/profile/master_account_screen.dart';
+import 'dart:async';
+import 'core/data/app_dependencies.dart';
+import 'core/data/app_scope.dart';
+import 'core/data/repositories/auth_repository.dart';
+import 'core/data/repositories/bookings_repository.dart';
+import 'core/data/repositories/payments_repository.dart';
+import 'core/data/repository_exception.dart';
 import 'core/models/booking_draft.dart';
 import 'core/utils/result.dart';
 import 'core/services/masters_repository.dart';
@@ -31,18 +38,32 @@ void main() {
   runApp(const GozallikApp());
 }
 
-class GozallikApp extends StatelessWidget {
-  const GozallikApp({super.key});
+class GozallikApp extends StatefulWidget {
+  /// Зависимости приложения; по умолчанию — мок-реализации. В тестах подставляются свои.
+  final AppDependencies? dependencies;
+
+  const GozallikApp({super.key, this.dependencies});
+
+  @override
+  State<GozallikApp> createState() => _GozallikAppState();
+}
+
+class _GozallikAppState extends State<GozallikApp> {
+  // Создаются один раз: пересборка виджета не должна сбрасывать удержания слотов и сессию
+  late final AppDependencies _dependencies = widget.dependencies ?? AppDependencies.mock();
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: "Go'zallik",
-      debugShowCheckedModeBanner: false,
-      theme: lightTheme,
-      darkTheme: darkTheme,
-      themeMode: ThemeMode.light,
-      home: const RootNavigationContainer(),
+    return AppScope(
+      dependencies: _dependencies,
+      child: MaterialApp(
+        title: "Go'zallik",
+        debugShowCheckedModeBanner: false,
+        theme: lightTheme,
+        darkTheme: darkTheme,
+        themeMode: ThemeMode.light,
+        home: const RootNavigationContainer(),
+      ),
     );
   }
 }
@@ -61,6 +82,35 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
   // Авторизован ли пользователь (по умолчанию false, чтобы сразу открылся экран логина)
   bool _isAuthenticated = false;
 
+  // Идёт восстановление сессии из сохранённого токена
+  bool _isRestoringSession = true;
+
+  AppDependencies get _deps => AppScope.read(context);
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_restoreSession());
+  }
+
+  /// При запуске: если токен сохранён и не истёк, сразу входим (роль — из токена)
+  Future<void> _restoreSession() async {
+    AuthSession? session;
+    try {
+      session = await _deps.auth.restoreSession();
+    } on RepositoryException {
+      session = null; // без сети просто покажем экран входа
+    }
+    if (!mounted) return;
+    setState(() {
+      _isRestoringSession = false;
+      if (session != null) {
+        _isMasterMode = session.isMaster;
+        _isAuthenticated = true;
+      }
+    });
+  }
+
   // Режим первичной регистрации/онбординга (M-01, M-02)
   bool _isRegistering = false;
 
@@ -73,9 +123,13 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
   String get _activeSubScreen => _subStack.isEmpty ? '' : _subStack.last;
 
   void _push(String screen) => setState(() => _subStack.add(screen));
-  void _pop() => setState(() {
-    if (_subStack.isNotEmpty) _subStack.removeLast();
-  });
+  void _pop() {
+    // Уходим с экрана оплаты назад — слот больше не нужен
+    if (_activeSubScreen == 'payment') _releasePendingHold();
+    setState(() {
+      if (_subStack.isNotEmpty) _subStack.removeLast();
+    });
+  }
 
   void _openSalon(String salonId) {
     _selectedSalonId = salonId;
@@ -97,6 +151,9 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
   // Салоны и мастера в навигации — только по id
   String _selectedSalonId = '';
   String _selectedMasterId = '';
+
+  // Идёт создание записи (защита от повторного запуска)
+  bool _finalizing = false;
 
   // Параметры записи (M-08): откуда пришли — салон, мастер, услуга
   String? _bookingMasterId;
@@ -124,64 +181,110 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
     });
   }
 
-  void _onBookingConfirmed(BookingDraft draft, String paymentMethod) {
+  /// Клиент подтвердил запись на экране записи. `true` — запись передана дальше (оплата или создана),
+  /// `false` — отказ (причина показана); экран записи при этом остаётся открытым.
+  Future<bool> _onBookingConfirmed(BookingDraft draft, String paymentMethod) async {
     if (paymentMethod == PaymentMethods.online) {
       // До оплаты убеждаемся, что запись вообще возможна — чтобы не взять деньги за невозможную запись
-      final check = AppStateService().validateNewBooking(
-        salonId: draft.salonId,
-        masterId: draft.masterId,
-        serviceId: draft.serviceId,
-        startsAt: draft.dateTime,
-        durationMinutes: draft.durationMinutes,
-        baseCredits: draft.baseCredits,
-        paymentMethod: paymentMethod,
-      );
-      if (check case Failure(:final error)) {
-        showAppSnack(context, error.message);
-        return;
+      try {
+        final check = await _deps.bookings.validate(
+          salonId: draft.salonId,
+          masterId: draft.masterId,
+          serviceId: draft.serviceId,
+          startsAt: draft.dateTime,
+          durationMinutes: draft.durationMinutes,
+          baseCredits: draft.baseCredits,
+          paymentMethod: paymentMethod,
+        );
+        if (!mounted) return false;
+        if (check case Failure(:final error)) {
+          showAppSnack(context, error.message);
+          return false;
+        }
+      } on RepositoryException catch (e) {
+        if (mounted) showAppSnack(context, e.message);
+        return false;
       }
       _pendingDraft = draft;
       _push('payment');
-      return;
+      return true;
     }
-    _finalizeBooking(draft, paymentMethod);
+    return _finalizeBooking(draft, paymentMethod);
   }
 
-  void _finalizeBooking(BookingDraft draft, String paymentMethod) {
-    final result = AppStateService().createBooking(
-      salonId: draft.salonId,
-      salonName: draft.salonName,
-      serviceId: draft.serviceId,
-      serviceName: draft.serviceName,
-      masterId: draft.masterId,
-      masterName: draft.masterName,
-      dateTime: draft.dateTime,
-      durationMinutes: draft.durationMinutes,
-      baseCredits: draft.baseCredits,
-      sumPrice: draft.sumPrice,
-      paymentMethod: paymentMethod,
-    );
+  /// Создание записи по удержанию слота. [receipt] — квитанция онлайн-оплаты, если платили заранее.
+  /// Если запись создать не удалось после оплаты, платёж возвращается.
+  Future<bool> _finalizeBooking(BookingDraft draft, String paymentMethod, {PaymentReceipt? receipt}) async {
+    if (_finalizing) return false;
+    _finalizing = true;
+    try {
+      final result = await _deps.bookings.create(
+        CreateBookingRequest(
+          idempotencyKey: draft.idempotencyKey,
+          holdId: draft.holdId,
+          salonId: draft.salonId,
+          salonName: draft.salonName,
+          serviceId: draft.serviceId,
+          serviceName: draft.serviceName,
+          masterId: draft.masterId,
+          masterName: draft.masterName,
+          startsAt: draft.dateTime,
+          durationMinutes: draft.durationMinutes,
+          baseCredits: draft.baseCredits,
+          sumPrice: draft.sumPrice,
+          paymentMethod: paymentMethod,
+          paymentReceiptId: receipt?.id,
+        ),
+      );
+      if (!mounted) return false;
 
-    switch (result) {
-      case Failure(:final error):
-        // Остаёмся на экране записи (с оплаты — возвращаемся на него) и объясняем причину
-        if (_activeSubScreen == 'payment') _pop();
-        showAppSnack(context, error.message);
-      case Success():
-        _pendingDraft = null;
-        _goToClientTab(2); // Переходим сразу во вкладку «Мои записи»
-        final message = switch (paymentMethod) {
-          PaymentMethods.credits => 'Запись оформлена! Зарезервировано ${draft.credits} кр.',
-          PaymentMethods.online => 'Оплата прошла, запись оформлена!',
-          _ => 'Запись оформлена! Оплата при визите в салон.',
-        };
-        showAppSnack(context, message, success: true);
+      switch (result) {
+        case Failure(:final error):
+          var message = error.message;
+          if (receipt != null) {
+            // Деньги уже списаны, а записи нет — возвращаем платёж
+            unawaited(_deps.payments.refund(receiptId: receipt.id, idempotencyKey: 'refund-${draft.idempotencyKey}'));
+            message = '$message Платёж будет возвращён.';
+          }
+          // С экрана оплаты возвращаемся на экран записи
+          if (_activeSubScreen == 'payment') {
+            _pendingDraft = null;
+            setState(() => _subStack.removeLast());
+          }
+          showAppSnack(context, message);
+          return false;
+        case Success():
+          _pendingDraft = null;
+          _goToClientTab(2); // Переходим сразу во вкладку «Мои записи»
+          final message = switch (paymentMethod) {
+            PaymentMethods.credits => 'Запись оформлена! Зарезервировано ${draft.credits} кр.',
+            PaymentMethods.online => 'Оплата прошла, запись оформлена!',
+            _ => 'Запись оформлена! Оплата при визите в салон.',
+          };
+          showAppSnack(context, message, success: true);
+          return true;
+      }
+    } on RepositoryException catch (e) {
+      // Связь оборвалась: ключ идемпотентности сохранён, повторная попытка не создаст дубль
+      if (mounted) showAppSnack(context, e.message);
+      return false;
+    } finally {
+      _finalizing = false;
     }
+  }
+
+  /// Освободить удержание слота, которое держит экран оплаты
+  void _releasePendingHold() {
+    final draft = _pendingDraft;
+    _pendingDraft = null;
+    if (draft != null) unawaited(_deps.slots.releaseHold(draft.holdId));
   }
 
   /// Выход: состояние данных и навигации возвращается к начальному,
   /// чтобы следующий вход (в том числе другой ролью) не видел данные прошлого пользователя
   void _logout() {
+    _releasePendingHold();
+    unawaited(_deps.auth.logout());
     AppStateService().resetSession();
     setState(() {
       _isAuthenticated = false;
@@ -202,16 +305,25 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isRestoringSession) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator(color: AppColors.primary)));
+    }
     if (!_isAuthenticated) {
       if (_isRegistering) {
         return OnboardingRegistrationScreen(
-          onCompleted: () {
-            setState(() {
-              _isRegistering = false;
-              _isMasterMode = false;
-              _isAuthenticated = true;
-              _clientTabIndex = 0;
-            });
+          onCompleted: () async {
+            try {
+              final session = await _deps.auth.completeRegistration(phone: AppStateService().clientPhone);
+              if (!mounted) return;
+              setState(() {
+                _isRegistering = false;
+                _isMasterMode = session.isMaster;
+                _isAuthenticated = true;
+                _clientTabIndex = 0;
+              });
+            } on RepositoryException catch (e) {
+              if (mounted) showAppSnack(this.context, e.message);
+            }
           },
           onBackToLogin: () {
             setState(() => _isRegistering = false);
@@ -220,9 +332,10 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
       }
 
       return AuthScreen(
-        onLoginSuccess: (isMaster) {
+        onLoginSuccess: (session) {
           setState(() {
-            _isMasterMode = isMaster;
+            // Роль берётся из токена сессии, а не из формы входа
+            _isMasterMode = session.isMaster;
             _isAuthenticated = true;
             _clientTabIndex = 0;
             _masterTabIndex = 0;
@@ -290,10 +403,11 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
       );
     }
     if (_activeSubScreen == 'payment' && _pendingDraft != null) {
+      final draft = _pendingDraft!;
       return PaymentScreen(
-        draft: _pendingDraft!,
+        draft: draft,
         onBack: _pop,
-        onPaymentSuccess: () => _finalizeBooking(_pendingDraft!, PaymentMethods.online),
+        onPaid: (receipt) => _finalizeBooking(draft, PaymentMethods.online, receipt: receipt),
       );
     }
     if (_activeSubScreen == 'favorites') {
