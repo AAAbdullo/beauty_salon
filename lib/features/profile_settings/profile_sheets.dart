@@ -11,138 +11,18 @@ import '../../core/widgets/sheets/app_sheet.dart';
 class ProfileSheets {
   ProfileSheets._();
 
-  /// Редактирование личных данных (M-02: имя, телефон, дата рождения, пол)
+  /// Редактирование личных данных (M-02: имя, телефон, дата рождения, пол).
+  /// Форма — отдельный StatefulWidget: её контроллеры освобождаются при закрытии шторки.
   static void editProfile(BuildContext context) {
-    final appState = AppStateService();
-    final nameController = TextEditingController(text: appState.clientName);
-    final phoneDigits = appState.clientPhone.replaceAll(RegExp(r'\D'), '');
-    final phoneController = TextEditingController(
-      text: UzPhoneInputFormatter.format(phoneDigits.startsWith('998') ? phoneDigits.substring(3) : phoneDigits),
-    );
-    String birthDate = appState.clientBirthDate;
-    final birthController = TextEditingController(text: birthDate);
-    String gender = appState.clientGender;
-    String? error;
-
     showAppSheet<void>(
       context: context,
       title: 'Личные данные',
       maxHeightFactor: 0.9,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheet) => SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const _FieldLabel('Имя и фамилия'),
-              AppTextField(
-                controller: nameController,
-                hintText: 'Ваше имя',
-                textCapitalization: TextCapitalization.words,
-                textInputAction: TextInputAction.next,
-                prefixIcon: const Icon(Icons.badge_outlined, color: AppColors.primary),
-              ),
-              const SizedBox(height: 14),
-              const _FieldLabel('Телефон'),
-              AppTextField(
-                controller: phoneController,
-                hintText: '90 123 45 67',
-                keyboardType: TextInputType.phone,
-                inputFormatters: const [UzPhoneInputFormatter()],
-                prefixIcon: const Padding(
-                  padding: EdgeInsets.only(left: 16, right: 8),
-                  child: Text(
-                    '+998',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.primaryText),
-                  ),
-                ),
-                textInputAction: TextInputAction.done,
-              ),
-              const SizedBox(height: 14),
-              const _FieldLabel('Дата рождения'),
-              AppTextField(
-                controller: birthController,
-                readOnly: true,
-                prefixIcon: const Icon(Icons.calendar_today_outlined, color: AppColors.primary),
-                onTap: () async {
-                  final parts = birthDate.split('.');
-                  final initial = parts.length == 3
-                      ? DateTime(
-                          int.tryParse(parts[2]) ?? 1998,
-                          int.tryParse(parts[1]) ?? 1,
-                          int.tryParse(parts[0]) ?? 1,
-                        )
-                      : DateTime(1998);
-                  final picked = await showDatePicker(
-                    context: ctx,
-                    initialDate: initial.isAfter(DateTime.now()) ? DateTime(1998) : initial,
-                    firstDate: DateTime(1940),
-                    lastDate: DateTime.now(),
-                  );
-                  if (picked != null) {
-                    setSheet(() {
-                      birthDate =
-                          '${picked.day.toString().padLeft(2, '0')}.${picked.month.toString().padLeft(2, '0')}.${picked.year}';
-                      birthController.text = birthDate;
-                    });
-                  }
-                },
-              ),
-              const SizedBox(height: 14),
-              const _FieldLabel('Пол'),
-              Row(
-                children: ['Женский', 'Мужской'].map((g) {
-                  final selected = gender == g;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: ChoiceChip(
-                      label: Text(g),
-                      selected: selected,
-                      selectedColor: AppColors.primary,
-                      labelStyle: TextStyle(
-                        color: selected ? Colors.white : AppColors.ink,
-                        fontWeight: FontWeight.w700,
-                      ),
-                      onSelected: (_) => setSheet(() => gender = g),
-                    ),
-                  );
-                }).toList(),
-              ),
-              if (error != null) ...[
-                const SizedBox(height: 10),
-                Text(
-                  error!,
-                  style: const TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600),
-                ),
-              ],
-              const SizedBox(height: 20),
-              AppGradientButton(
-                text: 'Сохранить',
-                onPressed: () {
-                  final name = nameController.text.trim();
-                  final digits = phoneController.text.replaceAll(RegExp(r'\D'), '');
-                  if (name.isEmpty) {
-                    setSheet(() => error = 'Введите имя');
-                    return;
-                  }
-                  if (digits.length != UzPhoneInputFormatter.digitsCount) {
-                    setSheet(() => error = 'Введите 9 цифр номера после +998');
-                    return;
-                  }
-                  // [BACKEND NOTE]: PATCH /api/v1/me (смена телефона — с подтверждением по SMS)
-                  appState.updateClientProfile(
-                    name: name,
-                    phone: '+998 ${UzPhoneInputFormatter.format(digits)}',
-                    birthDate: birthDate,
-                    gender: gender,
-                  );
-                  Navigator.pop(ctx);
-                  showAppSnack(context, 'Данные сохранены');
-                },
-              ),
-            ],
-          ),
-        ),
+      builder: (ctx) => _EditProfileForm(
+        onSaved: () {
+          Navigator.pop(ctx);
+          showAppSnack(context, 'Данные сохранены');
+        },
       ),
     );
   }
@@ -300,6 +180,153 @@ class _FieldLabel extends StatelessWidget {
       child: Text(
         text,
         style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink),
+      ),
+    );
+  }
+}
+
+/// Форма редактирования профиля; владеет своими контроллерами и освобождает их в dispose
+class _EditProfileForm extends StatefulWidget {
+  final VoidCallback onSaved;
+
+  const _EditProfileForm({required this.onSaved});
+
+  @override
+  State<_EditProfileForm> createState() => _EditProfileFormState();
+}
+
+class _EditProfileFormState extends State<_EditProfileForm> {
+  final _appState = AppStateService();
+  late final TextEditingController _nameController;
+  late final TextEditingController _phoneController;
+  late final TextEditingController _birthController;
+  late String _gender;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: _appState.clientName);
+    final phoneDigits = _appState.clientPhone.replaceAll(RegExp(r'\D'), '');
+    _phoneController = TextEditingController(
+      text: UzPhoneInputFormatter.format(phoneDigits.startsWith('998') ? phoneDigits.substring(3) : phoneDigits),
+    );
+    _birthController = TextEditingController(text: _appState.clientBirthDate);
+    _gender = _appState.clientGender;
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _phoneController.dispose();
+    _birthController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickBirthDate() async {
+    final parts = _birthController.text.split('.');
+    final initial = parts.length == 3
+        ? DateTime(int.tryParse(parts[2]) ?? 1998, int.tryParse(parts[1]) ?? 1, int.tryParse(parts[0]) ?? 1)
+        : DateTime(1998);
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial.isAfter(DateTime.now()) ? DateTime(1998) : initial,
+      firstDate: DateTime(1940),
+      lastDate: DateTime.now(),
+    );
+    if (picked != null && mounted) {
+      _birthController.text =
+          '${picked.day.toString().padLeft(2, '0')}.${picked.month.toString().padLeft(2, '0')}.${picked.year}';
+    }
+  }
+
+  void _save() {
+    final name = _nameController.text.trim();
+    final digits = _phoneController.text.replaceAll(RegExp(r'\D'), '');
+    if (name.isEmpty) {
+      setState(() => _error = 'Введите имя');
+      return;
+    }
+    if (digits.length != UzPhoneInputFormatter.digitsCount) {
+      setState(() => _error = 'Введите 9 цифр номера после +998');
+      return;
+    }
+    // [BACKEND NOTE]: PATCH /api/v1/me (смена телефона — с подтверждением по SMS)
+    _appState.updateClientProfile(
+      name: name,
+      phone: '+998 ${UzPhoneInputFormatter.format(digits)}',
+      birthDate: _birthController.text,
+      gender: _gender,
+    );
+    widget.onSaved();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _FieldLabel('Имя и фамилия'),
+          AppTextField(
+            controller: _nameController,
+            hintText: 'Ваше имя',
+            textCapitalization: TextCapitalization.words,
+            textInputAction: TextInputAction.next,
+            prefixIcon: const Icon(Icons.badge_outlined, color: AppColors.primary),
+          ),
+          const SizedBox(height: 14),
+          const _FieldLabel('Телефон'),
+          AppTextField(
+            controller: _phoneController,
+            hintText: '90 123 45 67',
+            keyboardType: TextInputType.phone,
+            inputFormatters: const [UzPhoneInputFormatter()],
+            prefixIcon: const Padding(
+              padding: EdgeInsets.only(left: 16, right: 8),
+              child: Text(
+                '+998',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.primaryText),
+              ),
+            ),
+            textInputAction: TextInputAction.done,
+          ),
+          const SizedBox(height: 14),
+          const _FieldLabel('Дата рождения'),
+          AppTextField(
+            controller: _birthController,
+            readOnly: true,
+            prefixIcon: const Icon(Icons.calendar_today_outlined, color: AppColors.primary),
+            onTap: _pickBirthDate,
+          ),
+          const SizedBox(height: 14),
+          const _FieldLabel('Пол'),
+          Row(
+            children: ['Женский', 'Мужской'].map((g) {
+              final selected = _gender == g;
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ChoiceChip(
+                  label: Text(g),
+                  selected: selected,
+                  selectedColor: AppColors.primary,
+                  labelStyle: TextStyle(color: selected ? Colors.white : AppColors.ink, fontWeight: FontWeight.w700),
+                  onSelected: (_) => setState(() => _gender = g),
+                ),
+              );
+            }).toList(),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              _error!,
+              style: const TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+          ],
+          const SizedBox(height: 20),
+          AppGradientButton(text: 'Сохранить', onPressed: _save),
+        ],
       ),
     );
   }

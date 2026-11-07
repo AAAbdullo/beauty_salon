@@ -17,6 +17,7 @@ import 'package:beauty_salons/core/widgets/buttons/app_gradient_button.dart';
 import 'package:beauty_salons/features/auth/auth_screen.dart';
 import 'package:beauty_salons/features/booking/booking_screen.dart';
 import 'package:beauty_salons/features/booking/payment_screen.dart';
+import 'package:beauty_salons/features/profile_settings/profile_sheets.dart';
 import 'package:beauty_salons/features/client_home/client_home_screen.dart';
 import 'package:beauty_salons/features/salon_detail/salon_detail_screen.dart';
 import 'package:beauty_salons/main.dart';
@@ -269,6 +270,47 @@ void main() {
       expect(slots.activeHoldsCount, 0);
     });
 
+    testWidgets('слот, выбранный давно, перепроверяется при подтверждении: слишком близкий отклоняется', (
+      tester,
+    ) async {
+      var calls = 0;
+      await pumpBooking(
+        tester,
+        onConfirm: (_, _) async {
+          calls++;
+          return true;
+        },
+      );
+      await tester.ensureVisible(find.text('11:00'));
+      await tester.tap(find.text('11:00'));
+      await settle(tester);
+
+      // К моменту подтверждения до слота осталось меньше 30 минут (таймер удержания ещё не сработал)
+      clock.advance(const Duration(minutes: 35));
+      final onPressed = tester.widget<AppGradientButton>(find.byType(AppGradientButton).last).onPressed!;
+      await onPressed();
+      await settle(tester);
+
+      expect(calls, 0);
+      expect(find.textContaining('слишком близко'), findsOneWidget);
+      expect(find.text('Выберите время'), findsOneWidget); // выбор сброшен
+      await disposeTree(tester);
+    });
+
+    testWidgets('нехватка кредитов: способ оплаты переключается на онлайн без изменения состояния в build', (
+      tester,
+    ) async {
+      state.clientCredits = 5;
+      await pumpBooking(tester);
+      await tester.ensureVisible(find.text('14:00'));
+      await tester.tap(find.text('14:00'));
+      await settle(tester);
+
+      expect(find.textContaining('К оплате'), findsOneWidget);
+      expect(find.textContaining('Записаться ·'), findsNothing);
+      await disposeTree(tester);
+    });
+
     testWidgets('отказ при оформлении: экран остаётся, ключ обновляется для новой попытки', (tester) async {
       final keys = <String>[];
       await pumpBooking(
@@ -314,6 +356,40 @@ void main() {
       await settle(tester);
       expect(find.text('Повторить'), findsNothing);
       expect(find.text('12:00'), findsOneWidget);
+      await disposeTree(tester);
+    });
+  });
+
+  group('Профиль', () {
+    testWidgets('форма личных данных сохраняет изменения и закрывается', (tester) async {
+      useBigPhone(tester);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(fontFamily: 'Roboto'),
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: ElevatedButton(onPressed: () => ProfileSheets.editProfile(context), child: const Text('Изменить')),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('Изменить'));
+      await settle(tester);
+      expect(find.text('Личные данные'), findsOneWidget);
+
+      await tester.enterText(find.byType(TextField).first, 'Новое Имя');
+      await tester.ensureVisible(find.text('Сохранить'));
+      await tester.tap(find.text('Сохранить'));
+      await settle(tester);
+
+      expect(state.clientName, 'Новое Имя');
+      expect(find.text('Личные данные'), findsNothing);
+
+      // Повторное открытие и закрытие не оставляет ошибок (контроллеры освобождаются вместе с формой)
+      await tester.tap(find.text('Изменить'));
+      await settle(tester);
+      await tester.tapAt(const Offset(10, 10));
+      await settle(tester);
       await disposeTree(tester);
     });
   });

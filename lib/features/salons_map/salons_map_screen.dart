@@ -265,7 +265,19 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
   IconData _nextManeuverIcon = Icons.straight;
   List<Point> _currentRoutePoints = [];
 
-  final List<MapObject> _mapObjects = [];
+  List<MapObject> _mapObjects = const [];
+  int _refreshGeneration = 0;
+
+  // Позиция «водителя» во время демонстрационной навигации. Реальная геопозиция [_userLocation]
+  // при симуляции не меняется, поэтому после поездки (и для следующих маршрутов) она остаётся настоящей.
+  Point? _simulatedPosition;
+
+  /// Где пользователь отображается на карте: симулированная точка во время навигации, иначе реальная
+  Point get _displayedLocation => _simulatedPosition ?? _userLocation;
+
+  // Номер текущего запроса маршрута: ответ устаревшего запроса (переключили «пешком»/«авто», выбрали
+  // другой салон, сбросили маршрут) игнорируется и не перезаписывает новый маршрут
+  int _routeRequestId = 0;
 
   @override
   void initState() {
@@ -317,15 +329,21 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
   }
 
   /// Обновление списка пинов и объектов на карте
+  ///
+  /// Метод вызывают параллельно (таймер навигации, тап по пину, GPS, маршрут), а внутри есть `await`.
+  /// Поэтому новый список собирается локально и подставляется целиком, а результат устаревшего вызова
+  /// отбрасывается (счётчик поколений): карта никогда не получает полусобранный список или дубли id.
   Future<void> _refreshMapObjects() async {
-    _mapObjects.clear();
+    final generation = ++_refreshGeneration;
+    final next = <MapObject>[];
 
     // 1. Пин текущей геолокации пользователя (гарантированное отображение векторного Retina-пина)
     final userPin = await SalonPinHelper.getUserLocationPin();
-    _mapObjects.add(
+    if (!mounted || generation != _refreshGeneration) return;
+    next.add(
       PlacemarkMapObject(
         mapId: const MapObjectId('user_location_marker'),
-        point: _userLocation,
+        point: _displayedLocation,
         opacity: 1.0,
         zIndex: 10.0,
         icon: PlacemarkIcon.single(
@@ -346,8 +364,9 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
         color: isSelected ? AppColors.primaryDeep : AppColors.primary,
         isSelected: isSelected,
       );
+      if (!mounted || generation != _refreshGeneration) return;
 
-      _mapObjects.add(
+      next.add(
         PlacemarkMapObject(
           mapId: MapObjectId('salon_${salon.id}'),
           point: salon.point,
@@ -368,19 +387,21 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
 
     // 3. Линии маршрутов (основной и альтернативный)
     if (_alternativeRoutePolyline != null) {
-      _mapObjects.add(_alternativeRoutePolyline!);
+      next.add(_alternativeRoutePolyline!);
     }
     if (_primaryRoutePolyline != null) {
-      _mapObjects.add(_primaryRoutePolyline!);
+      next.add(_primaryRoutePolyline!);
     }
 
     // 4. Финишная отметка маршрута
     if (_routeFinishPlacemark != null) {
-      _mapObjects.add(_routeFinishPlacemark!);
+      next.add(_routeFinishPlacemark!);
     }
 
-    if (mounted) setState(() {});
+    if (!mounted || generation != _refreshGeneration) return;
+    setState(() => _mapObjects = next);
   }
+
 
   /// Тап по пину салона на карте
   void _onSalonPinTapped(SalonModel salon) {
@@ -441,7 +462,8 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
 
     for (int attempt = 0; attempt < 6; attempt++) {
       try {
-        final userPos = await _mapController!.getUserCameraPosition();
+        final userPos = await _mapController?.getUserCameraPosition();
+        if (!mounted) return;
         if (userPos != null) {
           setState(() {
             _userLocation = userPos.target;
@@ -453,6 +475,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
         }
       } catch (_) {}
       await Future.delayed(const Duration(milliseconds: 500));
+      if (!mounted) return;
     }
 
     // Если всё еще null (в симуляторе или пока GPS ищет сигнал)
@@ -511,6 +534,9 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
 
   /// Построение маршрутов по официальной документации Yandex MapKit (map_routing & map_routes)
   Future<void> _buildRouteToSalon(SalonModel salon, {required bool isWalking}) async {
+    final requestId = ++_routeRequestId;
+    bool isStale() => !mounted || requestId != _routeRequestId;
+
     // 1. Отменяем и закрываем предыдущую сессию по документации Yandex MapKit
     await _drivingSession?.cancel();
     await _drivingSession?.close();
@@ -519,6 +545,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
     await _pedestrianSession?.cancel();
     await _pedestrianSession?.close();
     _pedestrianSession = null;
+    if (isStale()) return;
 
     setState(() {
       _isBuildingRoute = true;
@@ -543,8 +570,14 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
           fitnessOptions: const FitnessOptions(avoidSteep: false, avoidStairs: false),
           timeOptions: TimeOptions(departureTime: DateTime.now()),
         );
+        if (isStale()) {
+          // Запрос уже не нужен: сессию, пришедшую с опозданием, закрываем и ничего не рисуем
+          unawaited(sessionWithResult.$1.close());
+          return;
+        }
         _pedestrianSession = sessionWithResult.$1;
         final result = await sessionWithResult.$2;
+        if (isStale()) return;
 
         if (result.error != null) {
           debugPrint('YandexPedestrian error: ${result.error}');
@@ -578,8 +611,13 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
             avoidanceFlags: DrivingAvoidanceFlags(),
           ),
         );
+        if (isStale()) {
+          unawaited(sessionWithResult.$1.close());
+          return;
+        }
         _drivingSession = sessionWithResult.$1;
         final result = await sessionWithResult.$2;
+        if (isStale()) return;
 
         if (result.error != null) {
           debugPrint('YandexDriving error: ${result.error}');
@@ -610,6 +648,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
       }
     }
 
+    if (isStale()) return;
     if (primaryPoints.isEmpty) {
       setState(() {
         _isBuildingRoute = false;
@@ -651,6 +690,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
       color: AppColors.primaryDeep,
       isSelected: true,
     );
+    if (isStale()) return;
 
     final finishPlacemark = PlacemarkMapObject(
       mapId: const MapObjectId('route_finish_placemark'),
@@ -677,6 +717,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
     });
 
     await _refreshMapObjects();
+    if (isStale()) return;
     await _fitRouteBounds(_userLocation, salon.point);
   }
 
@@ -704,6 +745,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
 
   /// Сброс текущего маршрута
   void _clearRoute() {
+    _routeRequestId++; // запрос маршрута, который ещё идёт, больше не нужен
     _stopNavigationMode(isCompleted: false);
     _drivingSession?.close();
     _drivingSession = null;
@@ -711,6 +753,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
     _pedestrianSession = null;
 
     setState(() {
+      _isBuildingRoute = false;
       _primaryRoutePolyline = null;
       _alternativeRoutePolyline = null;
       _routeFinishPlacemark = null;
@@ -804,14 +847,14 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
       if (_navStepIndex < _currentRoutePoints.length - 1) {
         _navStepIndex++;
         final nextPoint = _currentRoutePoints[_navStepIndex];
-        final nextHeading = _calculateBearing(_userLocation, nextPoint);
+        final nextHeading = _calculateBearing(_displayedLocation, nextPoint);
 
         final rand = (math.Random().nextDouble() - 0.5) * 4.0;
         final baseSpeed = _isWalkingRoute ? 4.8 : 38.0;
         final newSpeed = math.max(0.0, baseSpeed + rand);
 
         setState(() {
-          _userLocation = nextPoint;
+          _simulatedPosition = nextPoint;
           _currentHeading = nextHeading;
           _currentSpeedKmh = newSpeed;
         });
@@ -820,7 +863,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
         _mapController?.moveCamera(
           CameraUpdate.newCameraPosition(
             CameraPosition(
-              target: _userLocation,
+              target: nextPoint,
               zoom: 17.8,
               tilt: 55.0,
               azimuth: nextHeading,
@@ -892,7 +935,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
     _mapController?.moveCamera(
       CameraUpdate.newCameraPosition(
         CameraPosition(
-          target: _userLocation,
+          target: _displayedLocation,
           zoom: 17.8,
           tilt: 55.0,
           azimuth: _currentHeading,
@@ -908,15 +951,18 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
     _navSimulationTimer = null;
     _voiceGuidance.stop();
 
+    // Камеру возвращаем туда, где пользователь был в конце поездки, а позицию — на реальную
+    final lastPoint = _displayedLocation;
     setState(() {
       _isNavigating = false;
       _currentSpeedKmh = 0.0;
+      _simulatedPosition = null;
     });
 
     _mapController?.moveCamera(
       CameraUpdate.newCameraPosition(
         CameraPosition(
-          target: _userLocation,
+          target: lastPoint,
           zoom: 15.5,
           tilt: 0.0,
           azimuth: 0.0,

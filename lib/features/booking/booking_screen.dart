@@ -6,6 +6,7 @@ import '../../core/data/repositories/catalog_repository.dart';
 import '../../core/data/repositories/slots_repository.dart';
 import '../../core/data/repository_exception.dart';
 import '../../core/models/booking_draft.dart';
+import '../../core/models/booking_rules.dart';
 import '../../core/services/app_state_service.dart';
 import '../../core/services/masters_repository.dart';
 import '../../core/services/salons_repository.dart';
@@ -101,7 +102,7 @@ class _BookingView extends StatefulWidget {
   State<_BookingView> createState() => _BookingViewState();
 }
 
-class _BookingViewState extends State<_BookingView> {
+class _BookingViewState extends State<_BookingView> with WidgetsBindingObserver {
   static const _anyMaster = 'Любой мастер';
 
   final _appState = AppStateService();
@@ -110,7 +111,7 @@ class _BookingViewState extends State<_BookingView> {
   late final SalonModel _salon;
   late final List<MasterServiceItem> _services;
   late final List<MasterProfileModel> _salonMasters;
-  late final List<DateTime> _days;
+  late List<DateTime> _days;
 
   String get _salonId => _salon.id;
 
@@ -142,13 +143,13 @@ class _BookingViewState extends State<_BookingView> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _deps = AppScope.read(context);
     _salon = widget.details.salon;
     _services = widget.details.services;
     _salonMasters = widget.details.masters;
 
-    final today = AppClock.now();
-    _days = List.generate(7, (i) => DateTime(today.year, today.month, today.day + i));
+    _days = _buildDays();
 
     _service = widget.initialService ?? (_services.isNotEmpty ? _services.first : null);
 
@@ -161,8 +162,29 @@ class _BookingViewState extends State<_BookingView> {
     unawaited(_reloadSlots());
   }
 
+  /// 7 ближайших дней от сегодняшней даты (по часам приложения)
+  static List<DateTime> _buildDays() {
+    final today = AppClock.now();
+    return List.generate(7, (i) => DateTime(today.year, today.month, today.day + i));
+  }
+
+  /// Приложение долго пролежало в фоне: наступил следующий день — список дат и слоты устарели
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed || !mounted) return;
+    final fresh = _buildDays();
+    if (fresh.first == _days.first) return;
+    setState(() {
+      _days = fresh;
+      _selectedDayIndex = 0;
+      _clearSlot();
+    });
+    unawaited(_reloadSlots());
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _holdTimer?.cancel();
     final hold = _hold;
     // Экран владеет удержанием, пока жив (экран оплаты лежит поверх него). Ушли без записи — слот
@@ -251,6 +273,11 @@ class _BookingViewState extends State<_BookingView> {
 
   /// ТЗ: цена слота = базовая цена × k_slot (вечер после 18:00 — 1.2)
   int _slotCredits(DateTime start) => SlotPricing.credits(_service?.creditsPrice ?? 0, start);
+
+  /// Способ оплаты с учётом доступности кредитов: если кредиты недоступны (например, вечерний слот дороже
+  /// баланса), используется онлайн-оплата. Это вычисляемое значение — состояние в build не меняется.
+  String get _effectiveMethod =>
+      _paymentMethod == PaymentMethods.credits && _creditsBlockReason != null ? PaymentMethods.online : _paymentMethod;
 
   String? get _creditsBlockReason {
     if (!_creditsAvailableForSalon) return 'Салон не принимает кредиты';
@@ -474,6 +501,14 @@ class _BookingViewState extends State<_BookingView> {
     final start = _selectedStart;
     if (_submitting || _holding || service == null || hold == null || start == null) return;
 
+    // Слот выбрали давно (идёт удержание): к моменту подтверждения он мог оказаться слишком близко или в прошлом
+    if (start.isBefore(AppClock.now().add(const Duration(minutes: BookingRules.minLeadMinutes)))) {
+      setState(_clearSlot);
+      showAppSnack(context, 'Это время уже слишком близко. Выберите другое.');
+      unawaited(_reloadSlots());
+      return;
+    }
+
     setState(() => _submitting = true);
     final draft = BookingDraft(
       salonId: _salonId,
@@ -493,7 +528,7 @@ class _BookingViewState extends State<_BookingView> {
 
     var accepted = false;
     try {
-      accepted = await widget.onConfirm(draft, _paymentMethod);
+      accepted = await widget.onConfirm(draft, _effectiveMethod);
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -982,7 +1017,7 @@ class _BookingViewState extends State<_BookingView> {
     required IconData icon,
     bool enabled = true,
   }) {
-    final isSelected = enabled && _paymentMethod == method;
+    final isSelected = enabled && _effectiveMethod == method;
     return Opacity(
       opacity: enabled ? 1 : 0.55,
       child: _SelectableTile(
@@ -1016,15 +1051,7 @@ class _BookingViewState extends State<_BookingView> {
   }
 
   Widget _buildBottomConfirmation() {
-    // Если кредиты стали недоступны (например, выбран вечерний слот дороже баланса) — переключаем на онлайн
-    final effectiveMethod = _paymentMethod == PaymentMethods.credits && _creditsBlockReason != null
-        ? PaymentMethods.online
-        : _paymentMethod;
-    if (effectiveMethod != _paymentMethod) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) setState(() => _paymentMethod = effectiveMethod);
-      });
-    }
+    final effectiveMethod = _effectiveMethod;
 
     final start = _selectedStart;
     final service = _service!;
