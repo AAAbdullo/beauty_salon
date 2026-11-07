@@ -5,9 +5,11 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:yandex_mapkit/yandex_mapkit.dart';
 import '../../core/models/salon_filter_params.dart';
+import '../../core/services/app_state_service.dart';
 import '../../core/services/salons_repository.dart';
 import '../../core/services/voice_guidance_service.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/formatters.dart';
 import '../../core/widgets/badges/app_status_badge.dart';
 import '../../core/widgets/buttons/app_gradient_button.dart';
 import '../../core/widgets/buttons/app_pill_button.dart';
@@ -370,7 +372,8 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
   }
 
   /// Определение реальной геопозиции пользователя через Yandex MapKit UserLocation
-  Future<void> _detectAndCenterRealLocation() async {
+  /// [showFeedback] — сообщать, если геопозицию определить не удалось (только по кнопке)
+  Future<void> _detectAndCenterRealLocation({bool showFeedback = true}) async {
     if (_mapController == null) return;
 
     try {
@@ -400,13 +403,11 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
     // Если всё еще null (в симуляторе или пока GPS ищет сигнал)
     await _zoomToPoint(_userLocation, zoom: 15.0);
     await _refreshMapObjects();
-    if (!mounted) return;
+    if (!mounted || !showFeedback) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text(
-          'Геолокация: центрировано на Ташкенте. В симуляторе iOS: Features -> Location -> Custom Location (41.311, 69.279).',
-        ),
-        duration: Duration(seconds: 4),
+        content: Text('Не удалось определить местоположение — показываем центр Ташкента.'),
+        duration: Duration(seconds: 3),
       ),
     );
   }
@@ -934,22 +935,30 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                 await controller.toggleTrafficLayer(visible: true);
               } catch (_) {}
 
-              // Включаем нативный слой пользователя
-              try {
-                await controller.toggleUserLayer(
-                  visible: true,
-                  headingEnabled: true,
-                  autoZoomEnabled: false,
-                );
-              } catch (_) {}
+              final useLocation = AppStateService().useLocationEnabled;
 
+              // Включаем нативный слой пользователя (если клиент разрешил в настройках)
+              if (useLocation) {
+                try {
+                  await controller.toggleUserLayer(
+                    visible: true,
+                    headingEnabled: true,
+                    autoZoomEnabled: false,
+                  );
+                } catch (_) {}
+              }
+
+              // Пришли с «На карте» из карточки салона — сразу показываем этот салон
+              final focus = _selectedSalon;
               await controller.moveCamera(
                 CameraUpdate.newCameraPosition(
-                  CameraPosition(target: _userLocation, zoom: 13.5),
+                  CameraPosition(target: focus?.point ?? _userLocation, zoom: focus != null ? 15.5 : 13.5),
                 ),
               );
 
-              _detectAndCenterRealLocation();
+              if (useLocation && focus == null) {
+                _detectAndCenterRealLocation(showFeedback: false);
+              }
             },
             onUserLocationAdded: (UserLocationView view) async {
               if (mounted) {
@@ -1144,7 +1153,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
       heroTag: 'my_location_btn',
       backgroundColor: AppColors.surface,
       elevation: 4,
-      onPressed: _detectAndCenterRealLocation,
+      onPressed: () => _detectAndCenterRealLocation(),
       child: const Icon(Icons.my_location, color: AppColors.primary, size: 22),
     );
   }
@@ -1221,7 +1230,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            '(${salon.reviewsCount} отзывов)',
+                            '(${Formatters.reviews(salon.reviewsCount)})',
                             style: const TextStyle(fontSize: 12, color: AppColors.muted),
                           ),
                         ],
@@ -1268,7 +1277,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
               runSpacing: 6,
               children: [
                 AppStatusBadge(text: salon.workingHours),
-                if (salon.creditsAccepted)
+                if (salon.creditsAccepted && salon.minCredits > 0)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(

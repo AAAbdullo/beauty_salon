@@ -489,7 +489,14 @@ class _MasterScheduleScreenState extends State<MasterScheduleScreen> {
         children: [
           Row(
             children: [
-              const Text('Доступные слоты', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+              const Flexible(
+                child: Text(
+                  'Доступные слоты',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                ),
+              ),
               IconButton(
                 visualDensity: VisualDensity.compact,
                 icon: const Icon(Icons.help_outline, size: 18, color: AppColors.muted),

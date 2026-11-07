@@ -244,4 +244,54 @@ class MasterCabinetRepository {
       timeAgo: '2 ч назад',
     ),
   ];
+
+  // ---- Доход мастера (мок до появления GET /api/v1/masters/me/earnings) ----
+
+  /// Визиты по месяцам: 0 — текущий месяц, 1 — предыдущий
+  final Map<int, List<MasterVisitIncome>> _visitsByMonth = {
+    0: [
+      MasterVisitIncome('Маникюр классический', 'Алина Р.', DateTime.now().subtract(const Duration(hours: 3)), 60000, 'Кредиты'),
+      MasterVisitIncome('Маникюр с покрытием', 'Дилноза К.', DateTime.now().subtract(const Duration(days: 1)), 72000, 'Онлайн'),
+      MasterVisitIncome('Маникюр классический', 'Сабина М.', DateTime.now().subtract(const Duration(days: 1, hours: 3)), 60000, 'Кредиты'),
+      MasterVisitIncome('Педикюр', 'Марьям Т.', DateTime.now().subtract(const Duration(days: 2)), 90000, 'В салоне'),
+      MasterVisitIncome('Окрашивание бровей', 'Нигина С.', DateTime.now().subtract(const Duration(days: 3)), 50000, 'Кредиты'),
+      MasterVisitIncome('Маникюр с покрытием', 'Зарина А.', DateTime.now().subtract(const Duration(days: 4)), 72000, 'Кредиты'),
+      MasterVisitIncome('Педикюр', 'Лола Х.', DateTime.now().subtract(const Duration(days: 5)), 90000, 'Онлайн'),
+    ],
+    1: [
+      MasterVisitIncome('Маникюр классический', 'Гузаль Б.', DateTime.now().subtract(const Duration(days: 33)), 60000, 'Кредиты'),
+      MasterVisitIncome('Педикюр', 'Феруза Н.', DateTime.now().subtract(const Duration(days: 36)), 90000, 'Кредиты'),
+      MasterVisitIncome('Маникюр с покрытием', 'Ойша Р.', DateTime.now().subtract(const Duration(days: 40)), 72000, 'В салоне'),
+      MasterVisitIncome('Окрашивание бровей', 'Сарвиноз Т.', DateTime.now().subtract(const Duration(days: 45)), 50000, 'Онлайн'),
+    ],
+  };
+
+  List<MasterVisitIncome> visitsForMonth(int monthOffset) => _visitsByMonth[monthOffset] ?? const [];
+
+  int revenueForMonth(int monthOffset) => visitsForMonth(monthOffset).fold(0, (sum, v) => sum + v.sum);
+
+  /// История выплат мастеру
+  final List<MasterPayout> payouts = [
+    MasterPayout(DateTime(DateTime.now().year, DateTime.now().month, 1), 1116000, 'Перевод на карту ···· 8812'),
+    MasterPayout(DateTime(DateTime.now().year, DateTime.now().month - 1, 1), 982000, 'Перевод на карту ···· 8812'),
+    MasterPayout(DateTime(DateTime.now().year, DateTime.now().month - 2, 1), 1043000, 'Перевод на карту ···· 8812'),
+  ];
+}
+
+class MasterVisitIncome {
+  final String serviceName;
+  final String clientName;
+  final DateTime date;
+  final int sum;
+  final String paymentMethod;
+
+  const MasterVisitIncome(this.serviceName, this.clientName, this.date, this.sum, this.paymentMethod);
+}
+
+class MasterPayout {
+  final DateTime date;
+  final int amount;
+  final String method;
+
+  const MasterPayout(this.date, this.amount, this.method);
 }

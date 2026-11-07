@@ -3,6 +3,7 @@ import '../../core/services/app_state_service.dart';
 import '../../core/services/masters_repository.dart';
 import '../../core/services/salons_repository.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/formatters.dart';
 import '../../core/widgets/badges/app_status_badge.dart';
 import '../../core/widgets/buttons/app_pill_button.dart';
 import '../../core/widgets/cards/app_card.dart';
@@ -143,7 +144,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
       itemCount: salons.length,
       itemBuilder: (context, index) {
         final s = salons[index];
@@ -222,7 +223,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                                 ),
                                 const Spacer(),
                                 Text(
-                                  'от ${s.minCredits} кр.',
+                                  s.minPriceLabel,
                                   style: const TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w800,
@@ -330,7 +331,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
       itemCount: masters.length,
       itemBuilder: (context, index) {
         final m = masters[index];
@@ -339,7 +340,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
           child: AppCard(
             padding: const EdgeInsets.all(14),
             child: InkWell(
-              onTap: () => widget.onMasterTap(m.name),
+              onTap: () => widget.onMasterTap(m.shortName),
               borderRadius: BorderRadius.circular(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -367,9 +368,14 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                                 )
                               ],
                             ),
-                            child: const Center(
-                              child: Icon(Icons.person,
-                                  size: 30, color: Colors.white),
+                            child: ClipOval(
+                              child: Image.asset(
+                                m.avatarAsset,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, _, _) => const Center(
+                                  child: Icon(Icons.person, size: 30, color: Colors.white),
+                                ),
+                              ),
                             ),
                           ),
                           Positioned(
@@ -423,7 +429,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
-                                  '(${m.reviewsCount} отзывов)',
+                                  '(${Formatters.reviews(m.reviewsCount)})',
                                   style: const TextStyle(
                                     fontSize: 11,
                                     color: AppColors.muted,
@@ -431,7 +437,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                                 ),
                                 const Spacer(),
                                 Text(
-                                  'Стаж ${m.experienceYears} лет',
+                                  'Стаж ${Formatters.years(m.experienceYears)}',
                                   style: const TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w600,
@@ -445,7 +451,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                       ),
                       IconButton(
                         onPressed: () {
-                          _appState.toggleMasterFavorite(m.name);
+                          _appState.toggleMasterFavorite(m.shortName);
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               backgroundColor: AppColors.ink,
@@ -453,12 +459,12 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12)),
                               content:
-                                  Text('Мастер ${m.name} удалена из избранного'),
+                                  Text('Удалено из избранного: ${m.name}'),
                               action: SnackBarAction(
                                 label: 'Отменить',
                                 textColor: AppColors.primaryBright,
                                 onPressed: () =>
-                                    _appState.toggleMasterFavorite(m.name),
+                                    _appState.toggleMasterFavorite(m.shortName),
                               ),
                             ),
                           );
@@ -476,7 +482,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                     width: double.infinity,
                     height: 38,
                     child: OutlinedButton(
-                      onPressed: () => widget.onMasterTap(m.name),
+                      onPressed: () => widget.onMasterTap(m.shortName),
                       style: OutlinedButton.styleFrom(
                         side: const BorderSide(color: AppColors.primary),
                         shape: RoundedRectangleBorder(

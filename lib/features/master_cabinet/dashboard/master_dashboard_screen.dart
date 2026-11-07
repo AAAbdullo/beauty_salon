@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../../core/services/app_state_service.dart';
 import '../../../core/services/master_cabinet_repository.dart';
+import '../../../core/services/masters_repository.dart';
+import '../../../core/utils/formatters.dart';
+import '../../../core/widgets/sheets/app_sheet.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/buttons/app_pill_button.dart';
 import '../../../core/widgets/cards/app_card.dart';
@@ -33,6 +36,73 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
 
   int _activeCount({required bool tomorrow}) =>
       _repo.getAppointments(tomorrow: tomorrow).where((a) => !a.isCancelled).length;
+
+  MasterProfileModel? get _profile => MastersRepository().findMaster(AppStateService().masterName.split(' ').first);
+
+  int get _nowMinutes {
+    final now = DateTime.now();
+    return now.hour * 60 + now.minute;
+  }
+
+  /// Ближайшая неотменённая бронь: ещё не закончившаяся сегодня, иначе первая завтрашняя
+  ({MasterAppointment appointment, bool tomorrow})? get _nextAppointment {
+    final today = _repo.getAppointments(tomorrow: false).where((a) => !a.isCancelled && a.time.end > _nowMinutes).toList()
+      ..sort((a, b) => a.time.start.compareTo(b.time.start));
+    if (today.isNotEmpty) return (appointment: today.first, tomorrow: false);
+    final tomorrow = _repo.getAppointments(tomorrow: true).where((a) => !a.isCancelled).toList()
+      ..sort((a, b) => a.time.start.compareTo(b.time.start));
+    if (tomorrow.isNotEmpty) return (appointment: tomorrow.first, tomorrow: true);
+    return null;
+  }
+
+  String _startsInLabel(MasterAppointment a, bool tomorrow) {
+    if (tomorrow) return 'Завтра в ${formatMinutes(a.time.start)}';
+    final diff = a.time.start - _nowMinutes;
+    if (diff <= 0) return 'Идёт сейчас';
+    if (diff < 60) return 'Через $diff мин';
+    return 'Через ${diff ~/ 60} ч ${diff % 60} мин';
+  }
+
+  /// Услуги и цены мастера (редактирует администратор салона)
+  void _openServices() {
+    final services = _profile?.services ?? const <MasterServiceItem>[];
+    showAppSheet<void>(
+      context: context,
+      title: 'Мои услуги',
+      subtitle: 'Цены и состав услуг настраивает администратор салона',
+      builder: (ctx) => services.isEmpty
+          ? const Padding(
+              padding: EdgeInsets.all(20),
+              child: Text('Услуги пока не добавлены', style: TextStyle(color: AppColors.muted)),
+            )
+          : ListView(
+              shrinkWrap: true,
+              padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
+              children: services
+                  .map(
+                    (svc) => ListTile(
+                      title: Text(svc.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                      subtitle: Text(svc.duration),
+                      trailing: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            Formatters.formatCredits(svc.creditsPrice),
+                            style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.primaryText),
+                          ),
+                          Text(
+                            Formatters.formatSum(svc.sumPrice),
+                            style: const TextStyle(fontSize: 11, color: AppColors.muted),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -139,30 +209,38 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
             ],
           ),
           const SizedBox(width: 14),
-          Column(
+          Expanded(
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
-                  Text(appState.masterName, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+                  Flexible(
+                    child: Text(
+                      appState.masterName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+                    ),
+                  ),
                   SizedBox(width: 4),
                   Icon(Icons.auto_awesome, color: AppColors.primary, size: 18),
                 ],
               ),
               SizedBox(height: 2),
-              const Text('Мастер маникюра', style: TextStyle(fontSize: 13, color: AppColors.muted)),
+              Text(_profile?.specialty ?? 'Мастер салона', style: const TextStyle(fontSize: 13, color: AppColors.muted)),
               const SizedBox(height: 2),
-              Text('${appState.masterSalon} >', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primaryText)),
+              Text(appState.masterSalon, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primaryText)),
             ],
           ),
-          const Spacer(),
+          ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
               color: AppColors.primaryTint,
               borderRadius: BorderRadius.circular(16),
             ),
-            child: Text('Сегодня ${_activeCount(tomorrow: false)} записей', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.primaryText)),
+            child: Text('Сегодня: ${Formatters.plural(_activeCount(tomorrow: false), 'запись', 'записи', 'записей')}', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.primaryText)),
           ),
         ],
       ),
@@ -173,8 +251,13 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
     final metrics = [
       {'val': '${_activeCount(tomorrow: false)}', 'label': 'Записи\nсегодня', 'icon': Icons.calendar_today_outlined},
       {'val': '${_activeCount(tomorrow: true)}', 'label': 'Записи\nзавтра', 'icon': Icons.event_outlined},
-      {'val': '24', 'label': 'Клиенты\nв этом месяце', 'icon': Icons.people_outline},
-      {'val': '2 450 000', 'label': 'Выручка\nсегодня (сум)', 'icon': Icons.bar_chart_outlined, 'action': onOpenEarnings},
+      {'val': '${_repo.visitsForMonth(0).length}', 'label': 'Клиенты\nв этом месяце', 'icon': Icons.people_outline},
+      {
+        'val': Formatters.formatSum(AppStateService().masterDailyRevenue).replaceAll(' сум', ''),
+        'label': 'Выручка\nсегодня (сум)',
+        'icon': Icons.bar_chart_outlined,
+        'action': onOpenEarnings,
+      },
     ];
 
     return Padding(
@@ -184,10 +267,8 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
           return Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 3),
-              child: InkWell(
-                onTap: m['action'] as VoidCallback?,
-                borderRadius: BorderRadius.circular(AppSizes.cardRadius),
-                child: AppCard(
+              child: AppCard(
+                  onTap: m['action'] as VoidCallback?,
                   padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
                   child: Column(
                     children: [
@@ -195,11 +276,10 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
                       const SizedBox(height: 4),
                       Text(m['val'] as String, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
                       const SizedBox(height: 2),
-                      Text(m['label'] as String, textAlign: TextAlign.center, maxLines: 2, style: const TextStyle(fontSize: 8, color: AppColors.muted)),
+                      Text(m['label'] as String, textAlign: TextAlign.center, maxLines: 2, style: const TextStyle(fontSize: 9, color: AppColors.muted)),
                     ],
                   ),
                 ),
-              ),
             ),
           );
         }).toList(),
@@ -208,6 +288,7 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
   }
 
   Widget _buildNextClientCard() {
+    final next = _nextAppointment;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSizes.screenPadding),
       child: Column(
@@ -217,82 +298,109 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text('Ближайший клиент', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(color: const Color(0xFFFFECEF), borderRadius: BorderRadius.circular(12)),
-                child: const Row(
-                  children: [
-                    Icon(Icons.access_time, size: 12, color: AppColors.primary),
-                    SizedBox(width: 4),
-                    Text('Через 20 мин', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.primary)),
-                  ],
+              if (next != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(color: const Color(0xFFFFECEF), borderRadius: BorderRadius.circular(12)),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.access_time, size: 12, color: AppColors.primary),
+                      const SizedBox(width: 4),
+                      Text(
+                        _startsInLabel(next.appointment, next.tomorrow),
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.primary),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
             ],
           ),
           const SizedBox(height: 10),
-          AppCard(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    const CircleAvatar(
-                      radius: 24,
-                      backgroundColor: AppColors.primaryTint,
-                      child: Icon(Icons.person, color: AppColors.primary),
+          if (next == null)
+            const AppCard(
+              padding: EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Icon(Icons.event_available_outlined, color: AppColors.primary),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'На сегодня и завтра записей нет',
+                      style: TextStyle(fontSize: 13, color: AppColors.muted),
                     ),
-                    const SizedBox(width: 12),
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Алина Каримова', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
-                          Text('Маникюр классический', style: TextStyle(fontSize: 12, color: AppColors.muted)),
-                          SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Icon(Icons.access_time, size: 12, color: AppColors.muted),
-                              SizedBox(width: 4),
-                              Text('10:00 – 11:30', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
-                              SizedBox(width: 8),
-                              Icon(Icons.location_on_outlined, size: 12, color: AppColors.muted),
-                              SizedBox(width: 2),
-                              Text('Nur Beauty', style: TextStyle(fontSize: 11, color: AppColors.muted)),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: AppPillButton(
-                        text: 'Принять',
-                        backgroundColor: AppColors.primary,
-                        textColor: Colors.white,
-                        height: 38,
-                        onPressed: onScanQr,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: AppPillButton(
-                        text: 'Перенести',
+                  ),
+                ],
+              ),
+            )
+          else
+            AppCard(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 24,
                         backgroundColor: AppColors.primaryTint,
-                        textColor: AppColors.primaryText,
-                        height: 38,
-                        onPressed: () {},
+                        backgroundImage:
+                            next.appointment.clientAvatar != null ? AssetImage(next.appointment.clientAvatar!) : null,
+                        child: next.appointment.clientAvatar == null
+                            ? const Icon(Icons.person, color: AppColors.primary)
+                            : null,
                       ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              next.appointment.clientName,
+                              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+                            ),
+                            Text(
+                              next.appointment.serviceName,
+                              style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                const Icon(Icons.access_time, size: 12, color: AppColors.muted),
+                                const SizedBox(width: 4),
+                                Text(
+                                  next.appointment.time.label,
+                                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                                ),
+                                const SizedBox(width: 8),
+                                const Icon(Icons.location_on_outlined, size: 12, color: AppColors.muted),
+                                const SizedBox(width: 2),
+                                Flexible(
+                                  child: Text(
+                                    AppStateService().masterSalon,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontSize: 11, color: AppColors.muted),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (!next.tomorrow) ...[
+                    const SizedBox(height: 12),
+                    AppPillButton(
+                      text: 'Принять по QR',
+                      width: double.infinity,
+                      backgroundColor: AppColors.primary,
+                      textColor: Colors.white,
+                      height: 38,
+                      onPressed: onScanQr,
                     ),
                   ],
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -300,10 +408,10 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
 
   Widget _buildQuickActions() {
     final actions = [
-      {'title': 'Расписание', 'sub': 'Управлять записями', 'icon': Icons.calendar_month, 'tap': onOpenSchedule},
-      {'title': 'Открыть время', 'sub': 'Добавить свободное время', 'icon': Icons.access_time, 'tap': onOpenSchedule},
+      {'title': 'График', 'sub': 'Рабочие дни и часы', 'icon': Icons.calendar_month, 'tap': onOpenSchedule},
+      {'title': 'Сканер', 'sub': 'Подтвердить визит', 'icon': Icons.qr_code_scanner, 'tap': onScanQr},
       {'title': 'Доход', 'sub': 'История выплат и баланс', 'icon': Icons.payments_outlined, 'tap': onOpenEarnings},
-      {'title': 'Услуги', 'sub': 'Управлять услугами', 'icon': Icons.grid_view, 'tap': () {}},
+      {'title': 'Услуги', 'sub': 'Мои услуги и цены', 'icon': Icons.grid_view, 'tap': _openServices},
     ];
 
     return Padding(
@@ -318,10 +426,8 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
               return Expanded(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: InkWell(
-                    onTap: a['tap'] as VoidCallback?,
-                    borderRadius: BorderRadius.circular(16),
-                    child: AppCard(
+                  child: AppCard(
+                      onTap: a['tap'] as VoidCallback?,
                       padding: const EdgeInsets.all(8),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -329,11 +435,10 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
                           Icon(a['icon'] as IconData, size: 20, color: AppColors.primary),
                           const SizedBox(height: 6),
                           Text(a['title'] as String, maxLines: 1, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700)),
-                          Text(a['sub'] as String, maxLines: 2, style: const TextStyle(fontSize: 8, color: AppColors.muted)),
+                          Text(a['sub'] as String, maxLines: 2, style: const TextStyle(fontSize: 9, color: AppColors.muted)),
                         ],
                       ),
                     ),
-                  ),
                 ),
               );
             }).toList(),

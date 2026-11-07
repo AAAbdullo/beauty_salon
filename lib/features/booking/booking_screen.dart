@@ -786,7 +786,7 @@ class _BookingScreenState extends State<BookingScreen> {
       child: _SelectableTile(
         isSelected: isSelected,
         onTap: enabled ? () => setState(() => _paymentMethod = method) : null,
-        height: 78,
+        height: 88,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.center,

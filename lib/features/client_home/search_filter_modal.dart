@@ -126,7 +126,7 @@ class _SearchFilterModalState extends State<SearchFilterModal> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // 1. Быстрые опции по ТЗ (Особые условия)
-                  const Text('Особенности (ТЗ)', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+                  const Text('Особенности', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
                   const SizedBox(height: 12),
                   _buildToggleTile(
                     title: 'Только для женщин',

@@ -323,7 +323,7 @@ class _SalonDetailScreenState extends State<SalonDetailScreen> with SingleTicker
             GestureDetector(
               onTap: () => _tabController.animateTo(2),
               child: Text(
-                '${_salon.rating} (${_salon.reviewsCount} отзывов)',
+                '${_salon.rating} (${Formatters.reviews(_salon.reviewsCount)})',
                 style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
               ),
             ),
@@ -516,7 +516,7 @@ class _SalonDetailScreenState extends State<SalonDetailScreen> with SingleTicker
                           const Icon(Icons.star, size: 13, color: AppColors.primary),
                           const SizedBox(width: 3),
                           Text(
-                            '${m.rating} · ${m.reviewsCount} отзывов · ${m.experienceYears} лет опыта',
+                            '${m.rating} · ${Formatters.reviews(m.reviewsCount)} · опыт ${Formatters.years(m.experienceYears)}',
                             style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
                           ),
                         ],
@@ -561,7 +561,7 @@ class _SalonDetailScreenState extends State<SalonDetailScreen> with SingleTicker
                       ),
                     ),
                     Text(
-                      'На основе ${_salon.reviewsCount} отзывов после подтверждённых визитов',
+                      'На основе ${Formatters.reviews(_salon.reviewsCount)} после подтверждённых визитов',
                       style: const TextStyle(fontSize: 11, color: AppColors.muted),
                     ),
                   ],

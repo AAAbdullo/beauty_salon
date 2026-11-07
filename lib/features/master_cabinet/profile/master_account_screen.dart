@@ -108,7 +108,7 @@ class MasterAccountScreen extends StatelessWidget {
                     children: [
                       _stat('${profile?.rating ?? '—'}', 'Рейтинг', Icons.star_border_rounded),
                       const SizedBox(width: 8),
-                      _stat('${appState.masterMonthlyVisits}', 'Визитов за месяц', Icons.check_circle_outline),
+                      _stat('${cabinet.visitsForMonth(0).length}', 'Визитов за месяц', Icons.check_circle_outline),
                       const SizedBox(width: 8),
                       _stat('$workingDays', 'Рабочих дней', Icons.event_available_outlined),
                     ],
@@ -127,7 +127,7 @@ class MasterAccountScreen extends StatelessWidget {
                             children: [
                               const Text('Доход за месяц', style: TextStyle(fontSize: 12, color: AppColors.muted)),
                               Text(
-                                Formatters.formatSum(appState.masterMonthlyRevenue),
+                                Formatters.formatSum(cabinet.revenueForMonth(0)),
                                 style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
                               ),
                             ],

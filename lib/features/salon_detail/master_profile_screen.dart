@@ -250,7 +250,7 @@ class _MasterProfileScreenState extends State<MasterProfileScreen> with SingleTi
   Widget _buildExperienceBadges() {
     return Row(
       children: [
-        _buildBadgeItem('Опыт работы', '${_master.experienceYears} лет', Icons.workspace_premium),
+        _buildBadgeItem('Опыт работы', Formatters.years(_master.experienceYears), Icons.workspace_premium),
         const SizedBox(width: 10),
         _buildBadgeItem('Отзывы', '${_master.reviewsCount}', Icons.forum_outlined),
         const SizedBox(width: 10),

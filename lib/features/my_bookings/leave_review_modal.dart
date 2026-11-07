@@ -102,7 +102,7 @@ class _LeaveReviewModalState extends State<LeaveReviewModal> {
         top: 16,
         left: 20,
         right: 20,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 28,
+        bottom: MediaQuery.viewInsetsOf(context).bottom + MediaQuery.paddingOf(context).bottom + 20,
       ),
       child: SingleChildScrollView(
         child: Column(

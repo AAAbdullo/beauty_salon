@@ -4,6 +4,7 @@ import '../../core/services/app_state_service.dart';
 import '../../core/services/masters_repository.dart';
 import '../../core/services/salons_repository.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/formatters.dart';
 import '../../core/widgets/badges/app_status_badge.dart';
 import '../../core/widgets/cards/app_card.dart';
 import 'search_filter_modal.dart';
@@ -195,7 +196,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
                 child: Text(
-                  'от ${service.price} · ${service.time} · ${salons.length} салон(ов)',
+                  'от ${service.price} · ${service.time} · ${Formatters.plural(salons.length, 'салон', 'салона', 'салонов')}',
                   style: const TextStyle(fontSize: 12, color: AppColors.muted),
                 ),
               ),
@@ -932,7 +933,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              'от ${s.minCredits} кр.',
+                              s.minPriceLabel,
                               style: const TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w800,

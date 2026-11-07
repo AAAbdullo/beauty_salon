@@ -52,6 +52,21 @@ class Formatters {
   /// Полная дата «12 ноября 2026»
   static String fullDate(DateTime date) => '${date.day} ${monthsGenitive[date.month - 1]} ${date.year}';
 
+  /// Русское склонение по числу: plural(1, 'отзыв', 'отзыва', 'отзывов') → «1 отзыв»
+  static String plural(int n, String one, String few, String many) {
+    final mod10 = n % 10;
+    final mod100 = n % 100;
+    final word = (mod10 == 1 && mod100 != 11)
+        ? one
+        : (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14))
+        ? few
+        : many;
+    return '$n $word';
+  }
+
+  static String reviews(int n) => plural(n, 'отзыв', 'отзыва', 'отзывов');
+  static String years(int n) => plural(n, 'год', 'года', 'лет');
+
   /// Форматирует номер телефона Узбекистана в читаемый вид +998 (90) 123-45-67
   static String formatPhone(String rawPhone) {
     final clean = rawPhone.replaceAll(RegExp(r'\D'), '');
