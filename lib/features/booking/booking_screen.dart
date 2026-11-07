@@ -35,7 +35,8 @@ class BookingScreen extends StatelessWidget {
   final VoidCallback onBack;
 
   /// Клиент подтвердил запись выбранным способом оплаты ([PaymentMethods]).
-  /// `true` — запись передана дальше (оплата или создана); `false` — отказ, экран остаётся открытым.
+  /// `true` — запись оформлена; `false` — отказ или оплата отменена, экран остаётся открытым
+  /// (при онлайн-оплате ответ приходит, когда оплата закончилась — экран оплаты лежит поверх этого экрана).
   final Future<bool> Function(BookingDraft draft, String paymentMethod) onConfirm;
 
   /// Переход к покупке кредитов, если их не хватает
@@ -138,9 +139,6 @@ class _BookingViewState extends State<_BookingView> {
   String _idempotencyKey = Uuid.v4();
   bool _submitting = false;
 
-  // Удержание передано дальше (оплата / создание записи) — экран не должен его освобождать
-  bool _handedOff = false;
-
   @override
   void initState() {
     super.initState();
@@ -167,8 +165,9 @@ class _BookingViewState extends State<_BookingView> {
   void dispose() {
     _holdTimer?.cancel();
     final hold = _hold;
-    // Ушли с экрана, не дойдя до записи — слот возвращается в продажу
-    if (hold != null && !_handedOff) unawaited(_deps.slots.releaseHold(hold.id));
+    // Экран владеет удержанием, пока жив (экран оплаты лежит поверх него). Ушли без записи — слот
+    // возвращается в продажу; если запись создана, удержание уже израсходовано и освобождение ничего не делает.
+    if (hold != null) unawaited(_deps.slots.releaseHold(hold.id));
     super.dispose();
   }
 
@@ -276,7 +275,8 @@ class _BookingViewState extends State<_BookingView> {
   /// Оставшееся время — разница между сроком сервера и текущими часами
   void _tickHold() {
     final hold = _hold;
-    if (!mounted || hold == null) return;
+    // Пока идёт оформление или оплата, срок удержания контролирует их экран
+    if (!mounted || hold == null || _submitting) return;
     final left = hold.expiresAt.difference(AppClock.now()).inSeconds;
     if (left > 0) {
       setState(() => _holdSecondsLeft = left);
@@ -491,8 +491,6 @@ class _BookingViewState extends State<_BookingView> {
       idempotencyKey: _idempotencyKey,
     );
 
-    // Пока идёт оформление, экран может закрыться (успех) — удержание тогда принадлежит дальнейшему потоку
-    _handedOff = true;
     var accepted = false;
     try {
       accepted = await widget.onConfirm(draft, _paymentMethod);
@@ -502,9 +500,9 @@ class _BookingViewState extends State<_BookingView> {
     if (accepted) {
       _holdTimer?.cancel();
     } else {
-      // Отказ: удержание остаётся нашим, а следующая попытка — это новый запрос с новым ключом
-      _handedOff = false;
+      // Отказ или оплата отменена: удержание остаётся нашим, а следующая попытка — новый запрос с новым ключом
       _idempotencyKey = Uuid.v4();
+      if (mounted) _tickHold(); // за время оплаты удержание могло истечь
     }
   }
 

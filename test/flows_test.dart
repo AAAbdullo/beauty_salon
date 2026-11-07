@@ -252,20 +252,21 @@ void main() {
       await disposeTree(tester);
     });
 
-    testWidgets('удержание передано дальше: уход с экрана после успеха его не освобождает', (tester) async {
+    testWidgets('экран владеет удержанием, пока жив: после закрытия слот возвращается в продажу', (tester) async {
       final slots = deps.slots as MockSlotsRepository;
       await pumpBooking(tester, onConfirm: (_, _) async => true);
       await tester.ensureVisible(find.text('12:00'));
       await tester.tap(find.text('12:00'));
       await settle(tester);
 
-      final button = find.textContaining('Записаться ·');
-      await tester.ensureVisible(button);
-      await tester.tap(button);
+      final onPressed = tester.widget<AppGradientButton>(find.byType(AppGradientButton).last).onPressed!;
+      await onPressed();
       await settle(tester);
+      expect(slots.activeHoldsCount, 1); // оформление приняли, но экран ещё жив — удержание на нём
 
+      // Запись создаёт и расходует удержание на сервере; если её не создали, закрытие экрана его освобождает
       await disposeTree(tester);
-      expect(slots.activeHoldsCount, 1); // удержание принадлежит потоку оплаты/создания записи
+      expect(slots.activeHoldsCount, 0);
     });
 
     testWidgets('отказ при оформлении: экран остаётся, ключ обновляется для новой попытки', (tester) async {

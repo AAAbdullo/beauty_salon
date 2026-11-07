@@ -20,7 +20,16 @@ class PaymentScreen extends StatefulWidget {
   /// Платёж прошёл: создать запись. Возвращает `true`, если запись создана.
   final Future<bool> Function(PaymentReceipt receipt) onPaid;
 
-  const PaymentScreen({super.key, required this.draft, required this.onBack, required this.onPaid});
+  /// Идёт ли оплата: пока идёт, «Назад» не должна закрывать экран (иначе деньги спишутся без записи)
+  final ValueChanged<bool>? onBusyChanged;
+
+  const PaymentScreen({
+    super.key,
+    required this.draft,
+    required this.onBack,
+    required this.onPaid,
+    this.onBusyChanged,
+  });
 
   @override
   State<PaymentScreen> createState() => _PaymentScreenState();
@@ -49,7 +58,13 @@ class _PaymentScreenState extends State<PaymentScreen> {
   @override
   void dispose() {
     _holdTimer?.cancel();
+    if (_isProcessing) widget.onBusyChanged?.call(false);
     super.dispose();
+  }
+
+  void _setBusy(bool busy) {
+    setState(() => _isProcessing = busy);
+    widget.onBusyChanged?.call(busy);
   }
 
   int _remaining() => widget.draft.holdExpiresAt.difference(AppClock.now()).inSeconds.clamp(0, 1 << 30);
@@ -99,10 +114,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   Future<void> _pay() async {
     if (_isProcessing) return; // второй тап в том же кадре
-    setState(() {
-      _isProcessing = true;
-      _error = null;
-    });
+    _error = null;
+    _setBusy(true);
     final provider = _providers[_selectedProvider].$1;
     try {
       final result = await AppScope.read(context).payments.pay(
@@ -116,10 +129,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
         case Success(:final value):
           // Платёж прошёл — создаём запись; при отказе платёж вернёт вызывающий код
           await widget.onPaid(value);
-          if (mounted) setState(() => _isProcessing = false);
+          if (mounted) _setBusy(false);
         case Failure(:final error):
+          _setBusy(false);
           setState(() {
-            _isProcessing = false;
             _error = error.message;
             _payKey = Uuid.v4(); // следующая попытка — новый платёж
           });
@@ -127,10 +140,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
     } on RepositoryException catch (e) {
       // Связь оборвалась: ключ сохраняется, повтор не спишет деньги дважды
       if (mounted) {
-        setState(() {
-          _isProcessing = false;
-          _error = e.message;
-        });
+        _setBusy(false);
+        setState(() => _error = e.message);
       }
     }
   }

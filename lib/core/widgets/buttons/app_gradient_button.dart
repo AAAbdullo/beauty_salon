@@ -1,10 +1,14 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 
-/// Основная брендовая кнопка действия (358 × 48 dp, градиент CTA, скругленные углы 24 dp)
-class AppGradientButton extends StatelessWidget {
+/// Основная брендовая кнопка действия (358 × 48 dp, градиент CTA, скругленные углы 24 dp).
+///
+/// Если обработчик асинхронный (возвращает `Future`), кнопка сама блокируется и показывает индикатор,
+/// пока он не завершится: повторный тап не запустит действие второй раз.
+class AppGradientButton extends StatefulWidget {
   final String text;
-  final VoidCallback? onPressed;
+  final FutureOr<void> Function()? onPressed;
   final Widget? icon;
   final bool isLoading;
   final double? width;
@@ -21,8 +25,33 @@ class AppGradientButton extends StatelessWidget {
   });
 
   @override
+  State<AppGradientButton> createState() => _AppGradientButtonState();
+}
+
+class _AppGradientButtonState extends State<AppGradientButton> {
+  bool _busy = false;
+
+  Future<void> _handleTap() async {
+    if (_busy) return;
+    final result = widget.onPressed?.call();
+    if (result is Future<void>) {
+      setState(() => _busy = true); // синхронно, до первого await: второй тап в том же кадре уже заблокирован
+      try {
+        await result;
+      } finally {
+        if (mounted) setState(() => _busy = false);
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final isEnabled = onPressed != null && !isLoading;
+    final text = widget.text;
+    final icon = widget.icon;
+    final width = widget.width;
+    final height = widget.height;
+    final isLoading = widget.isLoading || _busy;
+    final isEnabled = widget.onPressed != null && !isLoading;
 
     return Container(
       width: width ?? double.infinity,
@@ -48,7 +77,7 @@ class AppGradientButton extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(height / 2),
-          onTap: isEnabled ? onPressed : null,
+          onTap: isEnabled ? _handleTap : null,
           child: Center(
             child: isLoading
                 ? const SizedBox(
@@ -64,7 +93,7 @@ class AppGradientButton extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       if (icon != null) ...[
-                        icon!,
+                        icon,
                         const SizedBox(width: 8),
                       ],
                       Text(

@@ -21,6 +21,23 @@ class _MasterEarningsScreenState extends State<MasterEarningsScreen> {
   final _repo = MasterCabinetRepository();
   final _appState = AppStateService();
 
+  // Вкладка остаётся живой: доход пересчитывается, когда меняются записи
+  @override
+  void initState() {
+    super.initState();
+    _appState.addListener(_onStateChanged);
+  }
+
+  void _onStateChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _appState.removeListener(_onStateChanged);
+    super.dispose();
+  }
+
   /// 0 — текущий месяц, 1 — предыдущий
   int _monthOffset = 0;
 

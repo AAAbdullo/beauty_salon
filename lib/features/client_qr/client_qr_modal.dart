@@ -57,7 +57,11 @@ class ClientQrModal extends StatefulWidget {
 
 class _ClientQrModalState extends State<ClientQrModal> {
   late final AppDependencies _deps;
+  final _appState = AppStateService();
   Timer? _timer;
+
+  /// Актуальная версия записи из стора (перенос меняет время, отмена и подтверждение — статус)
+  late BookingItem _booking = widget.booking;
 
   // Токен выдаёт и подписывает сервер; код живёт 60 секунд и обновляется до истечения
   VisitQrToken? _token;
@@ -69,14 +73,31 @@ class _ClientQrModalState extends State<ClientQrModal> {
   void initState() {
     super.initState();
     _deps = AppScope.read(context);
+    _appState.addListener(_onBookingChanged);
     unawaited(_refresh());
     _timer = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
   }
 
   @override
   void dispose() {
+    _appState.removeListener(_onBookingChanged);
     _timer?.cancel();
     super.dispose();
+  }
+
+  /// Запись отменили или визит уже подтвердили — код показывать нельзя; перенесли — обновляем время
+  void _onBookingChanged() {
+    if (!mounted) return;
+    final current = _appState.bookingById(widget.booking.id);
+    if (current == null || current.status != BookingStatus.active) {
+      final message = current?.status == BookingStatus.completed
+          ? 'Визит подтверждён'
+          : 'Запись отменена — QR-код больше не действует';
+      Navigator.of(context).maybePop();
+      showAppSnack(context, message);
+      return;
+    }
+    if (current.startsAt != _booking.startsAt) setState(() => _booking = current);
   }
 
   /// Оставшееся время — до срока, который назвал сервер; по истечении запрашиваем новый код
@@ -98,7 +119,7 @@ class _ClientQrModalState extends State<ClientQrModal> {
       _error = null;
     });
     try {
-      final token = await _deps.visitQr.issueToken(widget.booking.id);
+      final token = await _deps.visitQr.issueToken(_booking.id);
       if (!mounted) return;
       setState(() {
         _token = token;
@@ -117,7 +138,7 @@ class _ClientQrModalState extends State<ClientQrModal> {
 
   @override
   Widget build(BuildContext context) {
-    final b = widget.booking;
+    final b = _booking;
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 12, 24, 16),
       decoration: const BoxDecoration(

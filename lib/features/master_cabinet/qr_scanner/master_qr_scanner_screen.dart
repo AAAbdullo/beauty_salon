@@ -17,12 +17,17 @@ class MasterQrScannerScreen extends StatefulWidget {
 
 class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
   final MobileScannerController _scannerController = MobileScannerController(
-    detectionSpeed: DetectionSpeed.noDuplicates,
+    // normal, а не noDuplicates: после «Попробовать снова» тот же код (он живёт 60 с) должен проверяться снова.
+    // Повторы одного кода подавляет сам экран (см. _onDetect).
+    detectionSpeed: DetectionSpeed.normal,
     facing: CameraFacing.back,
     torchEnabled: false,
   );
 
-  bool _isTorchOn = false;
+  // Код, визит по которому только что подтверждён: пока он в кадре, повторно не обрабатываем
+  String? _consumedRaw;
+  DateTime? _consumedAt;
+  static const _consumedCooldown = Duration(seconds: 5);
 
   // Идёт проверка кода на сервере: новые коды в это время игнорируются
   bool _isProcessing = false;
@@ -47,6 +52,10 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
     for (final barcode in barcodes) {
       final value = barcode.rawValue;
       if (value != null && value.isNotEmpty) {
+        final consumedAt = _consumedAt;
+        final stillInFrame =
+            value == _consumedRaw && consumedAt != null && DateTime.now().difference(consumedAt) < _consumedCooldown;
+        if (stillInFrame) continue; // тот же, уже принятый код всё ещё перед камерой
         _processScannedCode(value);
         break;
       }
@@ -78,6 +87,10 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
           _stateView = 2;
         }
       });
+      if (booking != null) {
+        _consumedRaw = rawCode;
+        _consumedAt = DateTime.now();
+      }
     } on RepositoryException catch (e) {
       if (!mounted) return;
       setState(() {
@@ -141,19 +154,22 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink),
         ),
         actions: [
-          IconButton(
-            icon: Icon(
-              _isTorchOn ? Icons.flash_on : Icons.flash_off,
-              color: _isTorchOn ? AppColors.gold : AppColors.ink,
-            ),
-            tooltip: 'Фонарик',
-            onPressed: () async {
-              try {
-                await _scannerController.toggleTorch();
-                if (mounted) setState(() => _isTorchOn = !_isTorchOn);
-              } catch (_) {
-                // Фонарика нет (симулятор / фронтальная камера) — просто игнорируем
-              }
+          // Состояние фонарика читаем у самой камеры: оно не расходится с ней после смены камеры
+          ValueListenableBuilder<MobileScannerState>(
+            valueListenable: _scannerController,
+            builder: (context, state, _) {
+              final isOn = state.torchState == TorchState.on;
+              return IconButton(
+                icon: Icon(isOn ? Icons.flash_on : Icons.flash_off, color: isOn ? AppColors.gold : AppColors.ink),
+                tooltip: 'Фонарик',
+                onPressed: () async {
+                  try {
+                    await _scannerController.toggleTorch();
+                  } catch (_) {
+                    // Фонарика нет (симулятор / фронтальная камера) — просто игнорируем
+                  }
+                },
+              );
             },
           ),
           IconButton(
