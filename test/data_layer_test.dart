@@ -275,6 +275,54 @@ void main() {
       expect(any.valueOrNull!.masterId, 'm-002'); // услугу оказывает только Sabina
     });
 
+    test('после тайм-аута удержания выбор другого слота работает с первого раза (без падения)', () async {
+      Future<Result<SlotHold, BookingError>> hold(DateTime when) => deps.slots.holdSlot(
+        salonId: 's-001',
+        masterId: 'm-002',
+        serviceId: 'm-002-s1',
+        startsAt: when,
+        durationMinutes: 45,
+      );
+      final slots = deps.slots as MockSlotsRepository;
+
+      expect((await hold(at(0, 15))).isSuccess, isTrue);
+      clock.advance(const Duration(minutes: 11)); // удержание истекло, но ещё лежит в реестре
+
+      final next = await hold(at(0, 16)); // раньше: ConcurrentModificationError
+      expect(next.isSuccess, isTrue);
+      expect(slots.activeHoldsCount, 1); // истёкшее убрано, новое действует
+    });
+
+    test('истёкшее удержание того же мастера на то же время не мешает новому', () async {
+      Future<Result<SlotHold, BookingError>> hold() => deps.slots.holdSlot(
+        salonId: 's-001',
+        masterId: 'm-002',
+        serviceId: 'm-002-s1',
+        startsAt: at(0, 15),
+        durationMinutes: 45,
+      );
+
+      expect((await hold()).isSuccess, isTrue);
+      expect((await hold()).errorOrNull?.code, BookingErrorCode.slotUnavailable); // пока действует — конфликт
+
+      clock.advance(const Duration(minutes: 11));
+      expect((await hold()).isSuccess, isTrue); // истекло — слот снова свободен
+    });
+
+    test('счётчик активных удержаний не падает и не считает истёкшие', () async {
+      final slots = deps.slots as MockSlotsRepository;
+      await deps.slots.holdSlot(
+        salonId: 's-001',
+        masterId: 'm-002',
+        serviceId: 'm-002-s1',
+        startsAt: at(0, 15),
+        durationMinutes: 45,
+      );
+      expect(slots.activeHoldsCount, 1);
+      clock.advance(const Duration(minutes: 11));
+      expect(slots.activeHoldsCount, 0);
+    });
+
     test('прошедшее и недоступное время не удерживается', () async {
       Future<Result<SlotHold, BookingError>> hold(DateTime when) => deps.slots.holdSlot(
         salonId: 's-001',

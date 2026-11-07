@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../../core/data/app_scope.dart';
@@ -277,22 +278,24 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 20),
-              // Кнопки симуляции для быстрого тестирования на симуляторе
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(onPressed: _simulateClientQr, child: const Text('Демо: QR клиента')),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => _processScannedCode('GZL|unknown|${DateTime.now().millisecondsSinceEpoch}|demo'),
-                      child: const Text('Демо: чужой код'),
+              // Кнопки симуляции — только в отладочной сборке: в релизе мастер не должен подтверждать визиты без клиента
+              if (kDebugMode) ...[
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(onPressed: _simulateClientQr, child: const Text('Демо: QR клиента')),
                     ),
-                  ),
-                ],
-              ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => _processScannedCode('GZL|unknown|${DateTime.now().millisecondsSinceEpoch}|demo'),
+                        child: const Text('Демо: чужой код'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 20),
             ],
           ),

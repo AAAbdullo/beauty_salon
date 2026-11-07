@@ -46,7 +46,17 @@ class MockSlotsRepository implements SlotsRepository {
     return _holds[id] = hold.copyWith(expiresAt: until);
   }
 
-  int get activeHoldsCount => _holds.keys.where((id) => activeHold(id) != null).length;
+  /// Удалить истёкшие удержания разом. Нельзя удалять их во время обхода словаря
+  /// (`activeHold` внутри `keys.map(...)` давал ConcurrentModificationError), поэтому чистка — отдельным шагом.
+  void _purgeExpired() {
+    final now = AppClock.now();
+    _holds.removeWhere((_, hold) => !now.isBefore(hold.expiresAt));
+  }
+
+  int get activeHoldsCount {
+    _purgeExpired();
+    return _holds.length;
+  }
 
   // --- интерфейс -------------------------------------------------------------------------
 
@@ -101,6 +111,7 @@ class MockSlotsRepository implements SlotsRepository {
     String? replaceHoldId,
   }) => _network<Result<SlotHold, BookingError>>(() {
     if (replaceHoldId != null) _holds.remove(replaceHoldId);
+    _purgeExpired(); // истёкшие удержания не мешают новому и не ломают обход ниже
 
     final now = AppClock.now();
     if (startsAt.isBefore(now.add(const Duration(minutes: BookingRules.minLeadMinutes)))) {
@@ -131,9 +142,7 @@ class MockSlotsRepository implements SlotsRepository {
         );
 
     final endsAt = startsAt.add(Duration(minutes: durationMinutes));
-    final conflict = _holds.keys
-        .map(activeHold)
-        .whereType<SlotHold>()
+    final conflict = _holds.values
         .where((h) => h.salonId == salonId && h.masterId == resolvedMaster)
         .any(
           (h) => h.startsAt.isBefore(endsAt) && startsAt.isBefore(h.startsAt.add(Duration(minutes: h.durationMinutes))),
