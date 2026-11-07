@@ -3,7 +3,9 @@ import '../../core/services/app_state_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/buttons/app_gradient_button.dart';
 import '../../core/widgets/buttons/app_pill_button.dart';
+import '../../core/utils/formatters.dart';
 import '../../core/widgets/cards/app_card.dart';
+import '../../core/widgets/sheets/app_sheet.dart';
 
 class CreditsScreen extends StatefulWidget {
   const CreditsScreen({super.key});
@@ -31,74 +33,111 @@ class _CreditsScreenState extends State<CreditsScreen> {
     super.dispose();
   }
 
+  /// K-08: заморозка 7–30 дней, 1 раз в 3 месяца; срок действия сдвигается
   void _showFreezeDialog() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(_appState.isFrozen ? 'Разморозить абонемент?' : 'Заморозить абонемент?'),
-        content: Text(
-          _appState.isFrozen
-              ? 'Ваш абонемент станет активен сразу после подтверждения.'
-              : 'По правилам ТЗ (K-08) абонемент можно заморозить на 7–30 дней 1 раз в 3 месяца. Срок действия кредитов приостанавливается.',
-          style: const TextStyle(fontSize: 13, color: AppColors.muted),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Отмена', style: TextStyle(color: AppColors.muted)),
+    if (_appState.isFrozen) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('Разморозить абонемент?'),
+          content: Text(
+            'Абонемент заморожен до ${Formatters.fullDate(_appState.frozenUntil ?? DateTime.now())}. '
+            'Неиспользованные дни заморозки не добавятся к сроку действия.',
+            style: const TextStyle(fontSize: 13, color: AppColors.muted),
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Отмена', style: TextStyle(color: AppColors.muted)),
             ),
-            onPressed: () {
-              _appState.toggleFreeze();
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(_appState.isFrozen ? 'Абонемент успешно заморожен' : 'Абонемент разморожен'),
-                ),
-              );
-            },
-            child: Text(_appState.isFrozen ? 'Разморозить' : 'Заморозить', style: const TextStyle(color: Colors.white)),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: () {
+                _appState.unfreezeSubscription();
+                Navigator.pop(ctx);
+                showAppSnack(context, 'Абонемент снова активен');
+              },
+              child: const Text('Разморозить', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    final blockReason = _appState.freezeBlockReason;
+    if (blockReason != null) {
+      showAppSnack(context, blockReason);
+      return;
+    }
+
+    int days = 14;
+    showAppSheet<void>(
+      context: context,
+      title: 'Заморозить абонемент',
+      subtitle:
+          'От 7 до 30 дней, не чаще 1 раза в 3 месяца. На время заморозки срок действия кредитов останавливается.',
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) => Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(
+                spacing: 8,
+                children: [7, 14, 21, 30].map((d) {
+                  final selected = days == d;
+                  return ChoiceChip(
+                    label: Text('$d дн.'),
+                    selected: selected,
+                    selectedColor: AppColors.primary,
+                    labelStyle: TextStyle(color: selected ? Colors.white : AppColors.ink, fontWeight: FontWeight.w700),
+                    onSelected: (_) => setSheet(() => days = d),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Новый срок действия: ${Formatters.fullDate(_appState.subscriptionExpiresAt.add(Duration(days: days)))}',
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primaryText),
+              ),
+              const SizedBox(height: 16),
+              AppGradientButton(
+                text: 'Заморозить на $days дн.',
+                onPressed: () {
+                  final ok = _appState.freezeSubscription(days);
+                  Navigator.pop(ctx);
+                  showAppSnack(context, ok ? 'Абонемент заморожен на $days дн.' : 'Не удалось заморозить абонемент');
+                },
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
 
   void _buyPackage(String name, int credits, int price) {
-    showModalBottomSheet(
+    final isCurrent = name == _appState.subscriptionPlan;
+    showAppSheet<void>(
       context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        padding: const EdgeInsets.all(20),
-        decoration: const BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-        ),
-        child: SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('Купить пакет «$name»', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-              const SizedBox(height: 8),
-              Text('Вам будет начислено +$credits кредитов на баланс.', style: const TextStyle(fontSize: 13, color: AppColors.muted)),
-              const SizedBox(height: 20),
-              AppGradientButton(
-                text: 'Оплатить $price сум',
-                onPressed: () {
-                  _appState.addCredits(credits);
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Пакет «$name» активирован! Начислено +$credits кр.')),
-                  );
-                },
-              ),
-            ],
-          ),
+      title: isCurrent ? 'Продлить «$name»' : 'Перейти на «$name»',
+      subtitle: '+$credits кредитов на 30 дней. До 20% неиспользованных кредитов переносятся при продлении.',
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+        child: AppGradientButton(
+          text: 'Оплатить ${Formatters.formatSum(price)}',
+          onPressed: () {
+            // [BACKEND NOTE]: POST /api/v1/subscriptions → Click / Payme / Uzum
+            _appState.purchasePackage(name, credits);
+            Navigator.pop(ctx);
+            showAppSnack(context, 'Пакет «$name» активирован! Начислено +$credits кр.', success: true);
+          },
         ),
       ),
     );
@@ -114,17 +153,18 @@ class _CreditsScreenState extends State<CreditsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Кредиты и Абонемент', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.ink)),
+        title: const Text(
+          'Кредиты и Абонемент',
+          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.ink),
+        ),
         centerTitle: false,
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppGradients.page,
-        ),
+        decoration: const BoxDecoration(gradient: AppGradients.page),
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -165,7 +205,10 @@ class _CreditsScreenState extends State<CreditsScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 const Text('Текущий тариф', style: TextStyle(fontSize: 11, color: AppColors.muted)),
-                                Text(_appState.subscriptionPlan, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                                Text(
+                                  _appState.subscriptionPlan,
+                                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                                ),
                               ],
                             ),
                           ],
@@ -173,8 +216,14 @@ class _CreditsScreenState extends State<CreditsScreen> {
                         if (_appState.isFrozen)
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(color: Colors.blue.shade100, borderRadius: BorderRadius.circular(12)),
-                            child: const Text('Заморожен', style: TextStyle(color: Colors.blue, fontSize: 11, fontWeight: FontWeight.bold)),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.shade100,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              'Заморожен до ${Formatters.dayLabel(_appState.frozenUntil ?? DateTime.now())}',
+                              style: const TextStyle(color: Colors.blue, fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
                           ),
                       ],
                     ),
@@ -189,7 +238,11 @@ class _CreditsScreenState extends State<CreditsScreen> {
                             const SizedBox(height: 2),
                             Text(
                               '${_appState.clientCredits} кр.',
-                              style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: AppColors.primary),
+                              style: const TextStyle(
+                                fontSize: 32,
+                                fontWeight: FontWeight.w900,
+                                color: AppColors.primary,
+                              ),
                             ),
                           ],
                         ),
@@ -201,16 +254,34 @@ class _CreditsScreenState extends State<CreditsScreen> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 10),
-                    Text('Действует до ${_appState.subscriptionExpiry}', style: const TextStyle(fontSize: 11, color: AppColors.muted)),
+                    const SizedBox(height: 12),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: LinearProgressIndicator(
+                        value: _appState.planTotalCredits == 0
+                            ? 0
+                            : _appState.usedPlanCredits / _appState.planTotalCredits,
+                        minHeight: 6,
+                        backgroundColor: Colors.white70,
+                        valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Использовано ${_appState.usedPlanCredits} из ${_appState.planTotalCredits} кр. · действует до ${_appState.subscriptionExpiry}',
+                      style: const TextStyle(fontSize: 11, color: AppColors.muted),
+                    ),
                   ],
                 ),
               ),
 
               const SizedBox(height: 24),
-              const Text('Купить пакет кредитов (по ТЗ)', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+              const Text('Пакеты кредитов', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
               const SizedBox(height: 4),
-              const Text('Кредиты действуют во всех салонах-партнерах Go\'zallik', style: TextStyle(fontSize: 12, color: AppColors.muted)),
+              const Text(
+                'Кредиты действуют во всех салонах-партнерах Go\'zallik',
+                style: TextStyle(fontSize: 12, color: AppColors.muted),
+              ),
               const SizedBox(height: 16),
 
               ...packages.map((pkg) {
@@ -238,33 +309,52 @@ class _CreditsScreenState extends State<CreditsScreen> {
                             children: [
                               Row(
                                 children: [
-                                  Text(pkg['name'] as String, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                                  Text(
+                                    pkg['name'] as String,
+                                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                                  ),
                                   if (isPopular) ...[
                                     const SizedBox(width: 8),
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                      decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(6)),
-                                      child: const Text('ХИТ', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.primary,
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: const Text(
+                                        'ХИТ',
+                                        style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                                      ),
                                     ),
                                   ],
                                 ],
                               ),
-                              Text('${pkg["credits"]} кредитов / месяц', style: const TextStyle(fontSize: 12, color: AppColors.muted)),
-                              Text(pkg['costPer'] as String, style: const TextStyle(fontSize: 10, color: AppColors.muted)),
+                              Text(
+                                '${pkg["credits"]} кредитов / месяц',
+                                style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                              ),
+                              Text(
+                                pkg['costPer'] as String,
+                                style: const TextStyle(fontSize: 10, color: AppColors.muted),
+                              ),
                             ],
                           ),
                         ),
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            Text('${pkg["price"]} сум', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
+                            Text(
+                              Formatters.formatSum(pkg['price'] as int),
+                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+                            ),
                             const SizedBox(height: 6),
                             AppPillButton(
-                              text: 'Купить',
+                              text: pkg['name'] == _appState.subscriptionPlan ? 'Продлить' : 'Купить',
                               backgroundColor: AppColors.primary,
                               textColor: Colors.white,
                               height: 30,
-                              onPressed: () => _buyPackage(pkg['name'] as String, pkg['credits'] as int, pkg['price'] as int),
+                              onPressed: () =>
+                                  _buyPackage(pkg['name'] as String, pkg['credits'] as int, pkg['price'] as int),
                             ),
                           ],
                         ),

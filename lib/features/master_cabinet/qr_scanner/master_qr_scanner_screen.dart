@@ -7,10 +7,7 @@ import '../../../core/widgets/buttons/app_gradient_button.dart';
 class MasterQrScannerScreen extends StatefulWidget {
   final VoidCallback onBack;
 
-  const MasterQrScannerScreen({
-    super.key,
-    required this.onBack,
-  });
+  const MasterQrScannerScreen({super.key, required this.onBack});
 
   @override
   State<MasterQrScannerScreen> createState() => _MasterQrScannerScreenState();
@@ -26,10 +23,11 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
   bool _isTorchOn = false;
   int _stateView = 0; // 0: Видоискатель, 1: Успех, 2: Ошибка
 
-  String _scannedClientName = 'Zulfiya R.';
-  String _scannedServiceName = 'Маникюр классический';
-  String _scannedTime = '16:30';
-  String _scannedPaymentMethod = 'Кредиты';
+  String _scannedClientName = '';
+  String _scannedServiceName = '';
+  String _scannedTime = '';
+  String _scannedPaymentMethod = '';
+  String _errorMessage = '';
 
   @override
   void dispose() {
@@ -49,22 +47,39 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
     }
   }
 
-  void _processScannedCode(String rawCode) {
+  /// Проверка QR по правилам ТЗ: формат, 60-секундный срок, салон, окно −30/+60 мин
+  void _processScannedCode(String rawCode, {bool ignoreTimeWindow = false}) {
     final appState = AppStateService();
-    final active = appState.activeBookings;
-    if (active.isNotEmpty) {
-      final booking = active.first;
-      appState.completeVisit(booking.id);
-      setState(() {
+    final result = appState.validateVisitQr(rawCode, ignoreTimeWindow: ignoreTimeWindow);
+    final booking = result.booking;
+    setState(() {
+      if (booking != null) {
         _scannedClientName = appState.clientName.isNotEmpty ? appState.clientName : 'Клиент';
         _scannedServiceName = booking.serviceName;
-        _scannedTime = booking.time;
-        _scannedPaymentMethod = booking.paymentMethod;
+        _scannedTime = '${booking.date}, ${booking.time}';
+        _scannedPaymentMethod = booking.isPaidWithCredits
+            ? '${booking.paymentMethod} · ${booking.credits} кр.'
+            : booking.paymentMethod;
         _stateView = 1;
+      } else {
+        _errorMessage = result.error ?? 'Код не распознан.';
+        _stateView = 2;
+      }
+    });
+  }
+
+  /// Демо для симулятора (камеры нет): «клиент» показывает QR ближайшей записи в этот салон
+  void _simulateClientQr() {
+    final appState = AppStateService();
+    final candidates = appState.activeBookings.where((b) => b.salonName == appState.masterSalon);
+    if (candidates.isEmpty) {
+      setState(() {
+        _errorMessage = 'Нет активных записей в салон ${appState.masterSalon} для проверки.';
+        _stateView = 2;
       });
-    } else {
-      setState(() => _stateView = 1);
+      return;
     }
+    _processScannedCode(appState.visitQrToken(candidates.first), ignoreTimeWindow: true);
   }
 
   @override
@@ -108,9 +123,7 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
         elevation: 0,
       ),
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppGradients.page,
-        ),
+        decoration: const BoxDecoration(gradient: AppGradients.page),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSizes.screenPadding),
           child: Column(
@@ -184,10 +197,7 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
               const Spacer(),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFECEF),
-                  borderRadius: BorderRadius.circular(16),
-                ),
+                decoration: BoxDecoration(color: const Color(0xFFFFECEF), borderRadius: BorderRadius.circular(16)),
                 child: const Row(
                   children: [
                     Icon(Icons.access_time, size: 16, color: AppColors.primary),
@@ -206,16 +216,13 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
               Row(
                 children: [
                   Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => _processScannedCode('TEST_BOOKING_QR'),
-                      child: const Text('Тест: Успех'),
-                    ),
+                    child: OutlinedButton(onPressed: _simulateClientQr, child: const Text('Демо: QR клиента')),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: () => setState(() => _stateView = 2),
-                      child: const Text('Тест: Ошибка'),
+                      onPressed: () => _processScannedCode('GZL|unknown|${DateTime.now().millisecondsSinceEpoch}'),
+                      child: const Text('Демо: чужой код'),
                     ),
                   ),
                 ],
@@ -231,9 +238,7 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
   Widget _buildSuccessView() {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppGradients.page,
-        ),
+        decoration: const BoxDecoration(gradient: AppGradients.page),
         child: SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(AppSizes.screenPadding),
@@ -243,10 +248,7 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
                 Container(
                   width: 90,
                   height: 90,
-                  decoration: const BoxDecoration(
-                    color: AppColors.successBg,
-                    shape: BoxShape.circle,
-                  ),
+                  decoration: const BoxDecoration(color: AppColors.successBg, shape: BoxShape.circle),
                   child: const Icon(Icons.check, size: 50, color: AppColors.success),
                 ),
                 const SizedBox(height: 20),
@@ -260,9 +262,7 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
                   decoration: BoxDecoration(
                     color: AppColors.surface,
                     borderRadius: BorderRadius.circular(20),
-                    boxShadow: const [
-                      BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 3)),
-                    ],
+                    boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 3))],
                   ),
                   child: Column(
                     children: [
@@ -274,7 +274,7 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
                             children: [
                               ClipOval(
                                 child: Image.asset(
-                                  'assets/images/clients/client_zulfiya.jpg',
+                                  AppStateService().clientAvatar,
                                   width: 24,
                                   height: 24,
                                   fit: BoxFit.cover,
@@ -282,7 +282,10 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              Text(_scannedClientName, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
+                              Text(
+                                _scannedClientName,
+                                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+                              ),
                             ],
                           ),
                         ],
@@ -292,7 +295,14 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           const Text('Услуга', style: TextStyle(color: AppColors.muted, fontSize: 13)),
-                          Text(_scannedServiceName, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
+                          const SizedBox(width: 12),
+                          Flexible(
+                            child: Text(
+                              _scannedServiceName,
+                              textAlign: TextAlign.end,
+                              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+                            ),
+                          ),
                         ],
                       ),
                       const Divider(height: 20, color: Color(0xFFF3DCE8)),
@@ -300,7 +310,14 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           const Text('Запись', style: TextStyle(color: AppColors.muted, fontSize: 13)),
-                          Text(_scannedTime, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
+                          const SizedBox(width: 12),
+                          Flexible(
+                            child: Text(
+                              _scannedTime,
+                              textAlign: TextAlign.end,
+                              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+                            ),
+                          ),
                         ],
                       ),
                       const Divider(height: 20, color: Color(0xFFF3DCE8)),
@@ -308,7 +325,14 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           const Text('Оплата', style: TextStyle(color: AppColors.muted, fontSize: 13)),
-                          Text(_scannedPaymentMethod, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
+                          const SizedBox(width: 12),
+                          Flexible(
+                            child: Text(
+                              _scannedPaymentMethod,
+                              textAlign: TextAlign.end,
+                              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+                            ),
+                          ),
                         ],
                       ),
                     ],
@@ -339,9 +363,7 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
   Widget _buildErrorView() {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppGradients.page,
-        ),
+        decoration: const BoxDecoration(gradient: AppGradients.page),
         child: SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(AppSizes.screenPadding),
@@ -351,10 +373,7 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
                 Container(
                   width: 90,
                   height: 90,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFFFECEF),
-                    shape: BoxShape.circle,
-                  ),
+                  decoration: const BoxDecoration(color: Color(0xFFFFECEF), shape: BoxShape.circle),
                   child: const Icon(Icons.close, size: 50, color: AppColors.primary),
                 ),
                 const SizedBox(height: 20),
@@ -368,23 +387,17 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
                   decoration: BoxDecoration(
                     color: AppColors.surface,
                     borderRadius: BorderRadius.circular(20),
-                    boxShadow: const [
-                      BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 3)),
-                    ],
+                    boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 3))],
                   ),
-                  child: const Column(
+                  child: Row(
                     children: [
-                      Row(
-                        children: [
-                          Icon(Icons.info_outline, size: 16, color: AppColors.primary),
-                          SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'QR-код не найден в базе активных записей либо истёк его 60-секундный срок действия.',
-                              style: TextStyle(fontSize: 12, color: AppColors.ink, height: 1.3),
-                            ),
-                          ),
-                        ],
+                      const Icon(Icons.info_outline, size: 16, color: AppColors.primary),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _errorMessage,
+                          style: const TextStyle(fontSize: 12, color: AppColors.ink, height: 1.3),
+                        ),
                       ),
                     ],
                   ),

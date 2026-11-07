@@ -34,6 +34,7 @@ class _AuthScreenState extends State<AuthScreen> {
     final login = _loginController.text.trim();
     final pass = _passwordController.text;
 
+    FocusScope.of(context).unfocus();
     setState(() => _errorMessage = null);
 
     if (login == 'client' && pass == '12345678') {
@@ -121,6 +122,8 @@ class _AuthScreenState extends State<AuthScreen> {
                   AppTextField(
                     controller: _loginController,
                     hintText: 'client или master',
+                    textInputAction: TextInputAction.next,
+                    autofillHints: const [AutofillHints.username],
                     prefixIcon: const Icon(Icons.person_outline, color: AppColors.primary),
                   ),
                   const SizedBox(height: 16),
@@ -132,6 +135,9 @@ class _AuthScreenState extends State<AuthScreen> {
                     controller: _passwordController,
                     hintText: '12345678',
                     obscureText: _obscurePassword,
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (_) => _submitLogin(),
+                    autofillHints: const [AutofillHints.password],
                     prefixIcon: const Icon(Icons.lock_outline, color: AppColors.primary),
                     suffixIcon: IconButton(
                       icon: Icon(

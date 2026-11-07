@@ -1,15 +1,13 @@
 import 'package:flutter/material.dart';
 import '../../core/services/app_state_service.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/formatters.dart';
 
 /// Модальное окно переноса времени записи (ТЗ M-10)
 class RescheduleBookingModal extends StatefulWidget {
   final BookingItem booking;
 
-  const RescheduleBookingModal({
-    super.key,
-    required this.booking,
-  });
+  const RescheduleBookingModal({super.key, required this.booking});
 
   static Future<bool?> show(BuildContext context, BookingItem booking) {
     return showModalBottomSheet<bool>(
@@ -26,64 +24,54 @@ class RescheduleBookingModal extends StatefulWidget {
 
 class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
   late int _selectedDayIndex;
-  late String _selectedTime;
+  String? _selectedTime;
   final _appState = AppStateService();
 
   late final List<Map<String, dynamic>> _days;
-  final List<String> _availableSlots = [
-    '09:30',
-    '11:00',
-    '12:30',
-    '14:00',
-    '15:30',
-    '17:00',
-    '18:30',
-    '20:00',
-  ];
-
-  static const _weekDaysRu = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
-  static const _monthNamesRu = [
-    'янв', 'фев', 'мар', 'апр', 'май', 'июн',
-    'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'
-  ];
+  final List<String> _availableSlots = ['09:30', '11:00', '12:30', '14:00', '15:30', '17:00', '18:30', '20:00'];
 
   @override
   void initState() {
     super.initState();
     _selectedDayIndex = 0;
-    _selectedTime = _availableSlots[1]; // по умолчанию второй слот
 
     // Генерируем 7 ближайших дней
     final now = DateTime.now();
     _days = List.generate(7, (i) {
-      final d = now.add(Duration(days: i));
-      final dayName = i == 0
-          ? 'Сегодня'
-          : (i == 1 ? 'Завтра' : _weekDaysRu[d.weekday - 1]);
-      final dateNumber = '${d.day}';
-      final formatted = '$dayName, ${d.day} ${_monthNamesRu[d.month - 1]}';
-      return {
-        'day': dayName,
-        'date': dateNumber,
-        'formatted': formatted,
-        'dateObj': d,
-      };
+      final d = DateTime(now.year, now.month, now.day + i);
+      final dayName = i == 0 ? 'Сегодня' : (i == 1 ? 'Завтра' : Formatters.weekDaysShort[d.weekday - 1]);
+      return {'day': dayName, 'date': '${d.day}', 'dateObj': d};
     });
+    if (_freeSlots(0).isEmpty) _selectedDayIndex = 1;
   }
 
-  void _confirmReschedule() {
-    final selectedDayStr = _days[_selectedDayIndex]['formatted'] as String;
+  DateTime _slotDateTime(int dayIndex, String slot) {
+    final d = _days[dayIndex]['dateObj'] as DateTime;
+    final parts = slot.split(':');
+    return DateTime(d.year, d.month, d.day, int.parse(parts[0]), int.parse(parts[1]));
+  }
 
-    // [BACKEND NOTE]: В будущем здесь будет вызов REST API NestJS:
-    // PATCH /api/v1/bookings/${widget.booking.id}/reschedule
-    // body: { "newDate": selectedDayStr, "newTime": _selectedTime }
-    _appState.rescheduleBooking(
+  /// Слот доступен, если начинается не раньше чем через 2 часа (правило переноса)
+  /// и не совпадает с текущим временем записи
+  bool _isSlotAvailable(int dayIndex, String slot) {
+    final dt = _slotDateTime(dayIndex, slot);
+    final minStart = DateTime.now().add(const Duration(minutes: AppStateService.freeCancelMinutes));
+    return dt.isAfter(minStart) && dt != widget.booking.resolvedDateTime;
+  }
+
+  List<String> _freeSlots(int dayIndex) => _availableSlots.where((s) => _isSlotAvailable(dayIndex, s)).toList();
+
+  void _confirmReschedule() {
+    final time = _selectedTime;
+    if (time == null) return;
+
+    // [BACKEND NOTE]: PATCH /api/v1/bookings/${widget.booking.id}/reschedule  body: { "starts_at": ISO-8601 }
+    final ok = _appState.rescheduleBooking(
       bookingId: widget.booking.id,
-      newDate: selectedDayStr,
-      newTime: _selectedTime,
+      newDateTime: _slotDateTime(_selectedDayIndex, time),
     );
 
-    Navigator.pop(context, true);
+    Navigator.pop(context, ok);
   }
 
   @override
@@ -97,7 +85,7 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
         top: 16,
         left: 20,
         right: 20,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 28,
+        bottom: MediaQuery.viewInsetsOf(context).bottom + MediaQuery.paddingOf(context).bottom + 20,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -108,10 +96,7 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
             child: Container(
               width: 40,
               height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(2),
-              ),
+              decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
             ),
           ),
           const SizedBox(height: 16),
@@ -125,17 +110,10 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
                 children: [
                   Text(
                     'Перенос записи',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.ink,
-                    ),
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.ink),
                   ),
                   SizedBox(height: 2),
-                  Text(
-                    'Выберите новую дату и свободный слот',
-                    style: TextStyle(fontSize: 12, color: AppColors.muted),
-                  ),
+                  Text('Выберите новую дату и свободный слот', style: TextStyle(fontSize: 12, color: AppColors.muted)),
                 ],
               ),
               IconButton(
@@ -160,10 +138,7 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
                 Container(
                   width: 42,
                   height: 42,
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryTint,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  decoration: BoxDecoration(color: AppColors.primaryTint, borderRadius: BorderRadius.circular(12)),
                   child: const Icon(Icons.spa_outlined, color: AppColors.primary, size: 22),
                 ),
                 const SizedBox(width: 12),
@@ -185,11 +160,7 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
                       const SizedBox(height: 2),
                       Text(
                         'Сейчас: ${widget.booking.date}, ${widget.booking.time}',
-                        style: const TextStyle(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 11,
-                        ),
+                        style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 11),
                       ),
                     ],
                   ),
@@ -216,7 +187,10 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
                 final d = _days[index];
                 final isSelected = _selectedDayIndex == index;
                 return GestureDetector(
-                  onTap: () => setState(() => _selectedDayIndex = index),
+                  onTap: () => setState(() {
+                    _selectedDayIndex = index;
+                    if (_selectedTime != null && !_isSlotAvailable(index, _selectedTime!)) _selectedTime = null;
+                  }),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
                     width: 54,
@@ -233,7 +207,7 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
                                 color: AppColors.primary.withValues(alpha: 0.3),
                                 blurRadius: 8,
                                 offset: const Offset(0, 3),
-                              )
+                              ),
                             ]
                           : null,
                     ),
@@ -278,25 +252,31 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
             runSpacing: 8,
             children: _availableSlots.map((slot) {
               final isSelected = _selectedTime == slot;
+              final available = _isSlotAvailable(_selectedDayIndex, slot);
               return GestureDetector(
-                onTap: () => setState(() => _selectedTime = slot),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: isSelected ? AppColors.primaryTint : AppColors.surface,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: isSelected ? AppColors.primary : const Color(0xFFE5E5EA),
-                      width: isSelected ? 1.5 : 1,
+                onTap: available ? () => setState(() => _selectedTime = slot) : null,
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 150),
+                  opacity: available ? 1 : 0.35,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: isSelected ? AppColors.primaryTint : AppColors.surface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isSelected ? AppColors.primary : const Color(0xFFE5E5EA),
+                        width: isSelected ? 1.5 : 1,
+                      ),
                     ),
-                  ),
-                  child: Text(
-                    slot,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                      color: isSelected ? AppColors.primaryText : AppColors.ink,
+                    child: Text(
+                      slot,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                        color: isSelected ? AppColors.primaryText : AppColors.ink,
+                        decoration: available ? null : TextDecoration.lineThrough,
+                      ),
                     ),
                   ),
                 ),
@@ -309,17 +289,14 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
           // Пояснение правила отмены / переноса
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF3F8FF),
-              borderRadius: BorderRadius.circular(10),
-            ),
+            decoration: BoxDecoration(color: const Color(0xFFF3F8FF), borderRadius: BorderRadius.circular(10)),
             child: const Row(
               children: [
                 Icon(Icons.info_outline, size: 16, color: Color(0xFF007AFF)),
                 SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Перенос записи выполняется бесплатно. Ваши кредиты сохраняются.',
+                    'Перенос бесплатный, если до визита больше 2 часов. Кредиты и оплата сохраняются.',
                     style: TextStyle(fontSize: 11, color: Color(0xFF0051A8)),
                   ),
                 ),
@@ -334,19 +311,17 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
             width: double.infinity,
             height: 48,
             child: ElevatedButton(
-              onPressed: _confirmReschedule,
+              onPressed: _selectedTime == null ? null : _confirmReschedule,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 elevation: 0,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               ),
               child: Text(
-                'Перенести на ${_days[_selectedDayIndex]['day']}, $_selectedTime',
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
-                ),
+                _selectedTime == null
+                    ? 'Выберите время'
+                    : 'Перенести на ${_days[_selectedDayIndex]['day']}, $_selectedTime',
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white),
               ),
             ),
           ),

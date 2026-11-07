@@ -16,10 +16,15 @@ import 'features/client_qr/client_qr_modal.dart';
 import 'features/profile_settings/client_profile_screen.dart';
 import 'features/profile_settings/settings_screen.dart';
 import 'features/favorites/favorites_screen.dart';
+import 'features/notifications/notifications_screen.dart';
 import 'features/master_cabinet/dashboard/master_dashboard_screen.dart';
 import 'features/master_cabinet/schedule/master_schedule_screen.dart';
 import 'features/master_cabinet/qr_scanner/master_qr_scanner_screen.dart';
 import 'features/master_cabinet/earnings/master_earnings_screen.dart';
+import 'features/master_cabinet/profile/master_account_screen.dart';
+import 'core/models/booking_draft.dart';
+import 'core/services/masters_repository.dart';
+import 'core/widgets/sheets/app_sheet.dart';
 
 void main() {
   runApp(const GozallikApp());
@@ -62,10 +67,98 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
   int _clientTabIndex = 0; // 0: Главная, 1: Поиск/Карта, 2: Записи, 3: Кредиты, 4: Профиль
   int _masterTabIndex = 0; // 0: Сегодня, 1: Время, 2: Сканер, 3: Доход, 4: Профиль
 
-  // Стек внутренних переходов экранов
-  String _activeSubScreen = '';
+  // Стек внутренних переходов экранов: «Назад» возвращает туда, откуда пришли
+  final List<String> _subStack = [];
+  String get _activeSubScreen => _subStack.isEmpty ? '' : _subStack.last;
+
+  void _push(String screen) => setState(() => _subStack.add(screen));
+  void _pop() => setState(() {
+    if (_subStack.isNotEmpty) _subStack.removeLast();
+  });
+
+  void _openSalon(String name) {
+    _selectedSalonName = name;
+    _push('salon_detail');
+  }
+
+  void _openMaster(String name) {
+    _selectedMasterName = name;
+    _push('master_profile');
+  }
+
+  void _goToClientTab(int index, {int bookingsTab = 0}) => setState(() {
+    _subStack.clear();
+    _clientTabIndex = index;
+    _bookingsInitialTab = bookingsTab;
+    if (index != 1) _mapFocusSalon = null;
+  });
+
   String _selectedSalonName = 'Nur Beauty';
   String _selectedMasterName = 'Алена';
+
+  // Параметры записи (M-08): откуда пришли — салон, мастер, услуга
+  String? _bookingMasterName;
+  MasterServiceItem? _bookingService;
+  BookingDraft? _pendingDraft;
+
+  // Салон, который нужно показать на карте («На карте» из карточки салона)
+  String? _mapFocusSalon;
+
+  // Вкладка «Мои записи», которую открыть (0 — активные, 1 — прошедшие)
+  int _bookingsInitialTab = 0;
+
+  void _startBooking({required String salonName, String? masterName, MasterServiceItem? service}) {
+    _selectedSalonName = salonName;
+    _bookingMasterName = masterName;
+    _bookingService = service;
+    _push('booking');
+  }
+
+  void _showSalonOnMap(String salonName) {
+    setState(() {
+      _subStack.clear();
+      _mapFocusSalon = salonName;
+      _clientTabIndex = 1;
+    });
+  }
+
+  void _onBookingConfirmed(BookingDraft draft, String paymentMethod) {
+    if (paymentMethod == PaymentMethods.online) {
+      _pendingDraft = draft;
+      _push('payment');
+      return;
+    }
+    _finalizeBooking(draft, paymentMethod);
+  }
+
+  void _finalizeBooking(BookingDraft draft, String paymentMethod) {
+    AppStateService().createBooking(
+      salonName: draft.salonName,
+      serviceName: draft.serviceName,
+      masterName: draft.masterName,
+      dateTime: draft.dateTime,
+      credits: draft.credits,
+      sumPrice: draft.sumPrice,
+      paymentMethod: paymentMethod,
+      durationLabel: draft.durationLabel,
+    );
+    _pendingDraft = null;
+    _goToClientTab(2); // Переходим сразу во вкладку «Мои записи»
+
+    final message = switch (paymentMethod) {
+      PaymentMethods.credits => 'Запись оформлена! Зарезервировано ${draft.credits} кр.',
+      PaymentMethods.online => 'Оплата прошла, запись оформлена!',
+      _ => 'Запись оформлена! Оплата при визите в салон.',
+    };
+    showAppSnack(context, message, success: true);
+  }
+
+  void _logout() => setState(() {
+    _isAuthenticated = false;
+    _subStack.clear();
+    _clientTabIndex = 0;
+    _masterTabIndex = 0;
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -93,7 +186,7 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
             _isAuthenticated = true;
             _clientTabIndex = 0;
             _masterTabIndex = 0;
-            _activeSubScreen = '';
+            _subStack.clear();
           });
         },
         onRegisterTap: () {
@@ -102,19 +195,20 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
       );
     }
 
-    return Scaffold(
-      body: Stack(
-        children: [
-          _buildCurrentScreen(),
-          // Нижний плавающий бар отображается только в основных вкладках
-          if (_activeSubScreen.isEmpty)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: _isMasterMode ? _buildMasterBottomBar() : _buildClientBottomBar(),
-            ),
-        ],
+    // Бар — штатный bottomNavigationBar: тело экрана заканчивается над ним,
+    // контент не уходит под бар, а бар не перекрывает кнопки экранов.
+    return PopScope(
+      canPop: _subStack.isEmpty,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _pop();
+      },
+      child: Scaffold(
+        backgroundColor: FloatingBottomBar.backgroundColor,
+        body: _buildCurrentScreen(),
+        // Бар отображается только в основных вкладках
+        bottomNavigationBar: _activeSubScreen.isEmpty
+            ? (_isMasterMode ? _buildMasterBottomBar() : _buildClientBottomBar())
+            : null,
       ),
     );
   }
@@ -123,87 +217,77 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
     // Внутренние подэкраны
     if (_activeSubScreen == 'salon_detail') {
       return SalonDetailScreen(
+        key: ValueKey('salon_$_selectedSalonName'),
         salonName: _selectedSalonName,
-        onBack: () => setState(() => _activeSubScreen = ''),
-        onBookNow: () => setState(() => _activeSubScreen = 'booking'),
-        onMasterTap: (masterName) {
-          setState(() {
-            _selectedMasterName = masterName;
-            _activeSubScreen = 'master_profile';
-          });
-        },
+        onBack: _pop,
+        onBook: ({masterName, service}) =>
+            _startBooking(salonName: _selectedSalonName, masterName: masterName, service: service),
+        onMasterTap: _openMaster,
+        onShowOnMap: _showSalonOnMap,
       );
     }
     if (_activeSubScreen == 'master_profile') {
       return MasterProfileScreen(
+        key: ValueKey('master_$_selectedMasterName'),
         masterName: _selectedMasterName,
-        onBack: () => setState(() => _activeSubScreen = 'salon_detail'),
-        onBookMaster: () => setState(() => _activeSubScreen = 'booking'),
+        onBack: _pop,
+        onBookMaster: (service) {
+          final master = MastersRepository().getMaster(_selectedMasterName);
+          _startBooking(salonName: master.salonName, masterName: master.shortName, service: service);
+        },
+        onOpenSalon: _openSalon,
       );
     }
     if (_activeSubScreen == 'booking') {
       return BookingScreen(
-        onBack: () => setState(() => _activeSubScreen = 'salon_detail'),
-        onPaymentStep: () => setState(() => _activeSubScreen = 'payment'),
+        key: ValueKey('booking_${_selectedSalonName}_${_bookingMasterName}_${_bookingService?.name}'),
+        salonName: _selectedSalonName,
+        initialMasterName: _bookingMasterName,
+        initialService: _bookingService,
+        onBack: _pop,
+        onConfirm: _onBookingConfirmed,
+        onTopUpCredits: () => _goToClientTab(3),
       );
     }
-    if (_activeSubScreen == 'payment') {
+    if (_activeSubScreen == 'payment' && _pendingDraft != null) {
       return PaymentScreen(
-        onBack: () => setState(() => _activeSubScreen = 'booking'),
-        onPaymentSuccess: () {
-          AppStateService().createBooking(
-            salonName: _selectedSalonName,
-            serviceName: 'Маникюр классический',
-            masterName: 'Алена',
-            date: 'Сегодня',
-            time: '16:30',
-            credits: 34,
-            sumPrice: 150000,
-            paymentMethod: 'Кредиты',
-          );
-          setState(() {
-            _activeSubScreen = '';
-            _clientTabIndex = 2; // Переходим сразу во вкладку «Мои записи»
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              backgroundColor: AppColors.primary,
-              content: Text('Запись успешно оформлена! Списано 34 кр.'),
-            ),
-          );
-        },
+        draft: _pendingDraft!,
+        onBack: _pop,
+        onPaymentSuccess: () => _finalizeBooking(_pendingDraft!, PaymentMethods.online),
       );
     }
     if (_activeSubScreen == 'favorites') {
       return FavoritesScreen(
-        onBack: () => setState(() => _activeSubScreen = ''),
-        onSalonTap: (salonName) {
-          setState(() {
-            _selectedSalonName = salonName;
-            _activeSubScreen = 'salon_detail';
-          });
-        },
-        onMasterTap: (masterName) {
-          setState(() {
-            _selectedMasterName = masterName;
-            _activeSubScreen = 'master_profile';
-          });
-        },
-        onBookSalon: (salonName) {
-          setState(() {
-            _selectedSalonName = salonName;
-            _activeSubScreen = 'booking';
-          });
+        onBack: _pop,
+        onSalonTap: _openSalon,
+        onMasterTap: _openMaster,
+        onBookSalon: (salonName) => _startBooking(salonName: salonName),
+      );
+    }
+    if (_activeSubScreen == 'notifications') {
+      return NotificationsScreen(
+        onBack: _pop,
+        onNotificationTap: (notification) {
+          switch (notification.type) {
+            case AppNotificationType.reminder:
+              _goToClientTab(2);
+            case AppNotificationType.review:
+              _goToClientTab(2, bookingsTab: 1);
+            case AppNotificationType.credits:
+              _goToClientTab(3);
+            case AppNotificationType.promo:
+              _openSalon('Lola Studio');
+          }
         },
       );
     }
     if (_activeSubScreen == 'settings') {
       return SettingsScreen(
-        onBack: () => setState(() => _activeSubScreen = ''),
-        onLogout: () => setState(() {
-          _isAuthenticated = false;
-          _activeSubScreen = '';
-        }),
+        isMaster: _isMasterMode,
+        onBack: _pop,
+        onLogout: _logout,
+        onOpenNotifications: _isMasterMode ? null : () => _push('notifications'),
+        onOpenCredits: _isMasterMode ? null : () => _goToClientTab(3),
       );
     }
 
@@ -217,22 +301,19 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
             onScanQr: () => setState(() => _masterTabIndex = 2),
           );
         case 1:
-          return MasterScheduleScreen(
-            onBack: () => setState(() => _masterTabIndex = 0),
-          );
+          return MasterScheduleScreen(onBack: () => setState(() => _masterTabIndex = 0));
         case 2:
-          return MasterQrScannerScreen(
-            onBack: () => setState(() => _masterTabIndex = 0),
-          );
+          return MasterQrScannerScreen(onBack: () => setState(() => _masterTabIndex = 0));
         case 3:
-          return MasterEarningsScreen(
-            onBack: () => setState(() => _masterTabIndex = 0),
-          );
+          return MasterEarningsScreen(onBack: () => setState(() => _masterTabIndex = 0));
         case 4:
         default:
-          return ClientProfileScreen(
-            onOpenSettings: () => setState(() => _activeSubScreen = 'settings'),
-            onOpenQr: () => setState(() => _masterTabIndex = 2),
+          return MasterAccountScreen(
+            onOpenSchedule: () => setState(() => _masterTabIndex = 1),
+            onOpenEarnings: () => setState(() => _masterTabIndex = 3),
+            onOpenScanner: () => setState(() => _masterTabIndex = 2),
+            onOpenSettings: () => _push('settings'),
+            onLogout: _logout,
           );
       }
     }
@@ -241,33 +322,40 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
     switch (_clientTabIndex) {
       case 0:
         return ClientHomeScreen(
-          onOpenMap: () => setState(() => _clientTabIndex = 1),
-          onSalonTap: (name) => setState(() {
-            _selectedSalonName = name;
-            _activeSubScreen = 'salon_detail';
-          }),
-          onOpenFavorites: () => setState(() => _activeSubScreen = 'favorites'),
+          onOpenMap: () => _goToClientTab(1),
+          onSalonTap: _openSalon,
+          onMasterTap: _openMaster,
+          onOpenFavorites: () => _push('favorites'),
+          onOpenNotifications: () => _push('notifications'),
+          onOpenCredits: () => _goToClientTab(3),
+          onOpenProfile: () => _goToClientTab(4),
         );
       case 1:
         return SalonsMapScreen(
-          onBack: () => setState(() => _clientTabIndex = 0),
-          onSelectSalon: (name) => setState(() {
-            _selectedSalonName = name;
-            _activeSubScreen = 'salon_detail';
-          }),
+          key: ValueKey('map_$_mapFocusSalon'),
+          initialSalonName: _mapFocusSalon,
+          onBack: () => _goToClientTab(0),
+          onSelectSalon: _openSalon,
         );
       case 2:
         return MyBookingsScreen(
-          onBookNew: () => setState(() => _clientTabIndex = 0),
+          key: ValueKey('bookings_$_bookingsInitialTab'),
+          initialTab: _bookingsInitialTab,
+          onBookNew: () => _goToClientTab(0),
+          onOpenSalon: _openSalon,
         );
       case 3:
         return const CreditsScreen();
       case 4:
       default:
         return ClientProfileScreen(
-          onOpenSettings: () => setState(() => _activeSubScreen = 'settings'),
-          onOpenQr: () => ClientQrModal.show(context),
-          onOpenFavorites: () => setState(() => _activeSubScreen = 'favorites'),
+          onOpenSettings: () => _push('settings'),
+          onOpenQr: () => ClientQrModal.showForNearestBooking(context, onBookNew: () => _goToClientTab(0)),
+          onOpenFavorites: () => _push('favorites'),
+          onOpenNotifications: () => _push('notifications'),
+          onOpenBookings: (tab) => _goToClientTab(2, bookingsTab: tab),
+          onOpenCredits: () => _goToClientTab(3),
+          onOpenMap: () => _goToClientTab(1),
         );
     }
   }
@@ -275,33 +363,17 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
   Widget _buildClientBottomBar() {
     return FloatingBottomBar(
       currentIndex: _clientTabIndex,
-      onTap: (index) => setState(() => _clientTabIndex = index),
+      onTap: (index) => _goToClientTab(index),
       items: const [
-        FloatingBarItem(
-          icon: Icons.home_outlined,
-          selectedIcon: Icons.home,
-          label: 'Главная',
-        ),
-        FloatingBarItem(
-          icon: Icons.search,
-          selectedIcon: Icons.search,
-          label: 'Поиск',
-        ),
-        FloatingBarItem(
-          icon: Icons.calendar_today_outlined,
-          selectedIcon: Icons.calendar_today,
-          label: 'Записи',
-        ),
+        FloatingBarItem(icon: Icons.home_outlined, selectedIcon: Icons.home, label: 'Главная'),
+        FloatingBarItem(icon: Icons.search, selectedIcon: Icons.search, label: 'Поиск'),
+        FloatingBarItem(icon: Icons.calendar_today_outlined, selectedIcon: Icons.calendar_today, label: 'Записи'),
         FloatingBarItem(
           icon: Icons.account_balance_wallet_outlined,
           selectedIcon: Icons.account_balance_wallet,
           label: 'Кредиты',
         ),
-        FloatingBarItem(
-          icon: Icons.person_outline,
-          selectedIcon: Icons.person,
-          label: 'Профиль',
-        ),
+        FloatingBarItem(icon: Icons.person_outline, selectedIcon: Icons.person, label: 'Профиль'),
       ],
     );
   }
@@ -311,31 +383,11 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
       currentIndex: _masterTabIndex,
       onTap: (index) => setState(() => _masterTabIndex = index),
       items: const [
-        FloatingBarItem(
-          icon: Icons.calendar_today_outlined,
-          selectedIcon: Icons.calendar_today,
-          label: 'Сегодня',
-        ),
-        FloatingBarItem(
-          icon: Icons.access_time_outlined,
-          selectedIcon: Icons.access_time,
-          label: 'Время',
-        ),
-        FloatingBarItem(
-          icon: Icons.qr_code_scanner,
-          selectedIcon: Icons.qr_code_scanner,
-          label: 'Сканер',
-        ),
-        FloatingBarItem(
-          icon: Icons.bar_chart_outlined,
-          selectedIcon: Icons.bar_chart,
-          label: 'Доход',
-        ),
-        FloatingBarItem(
-          icon: Icons.person_outline,
-          selectedIcon: Icons.person,
-          label: 'Профиль',
-        ),
+        FloatingBarItem(icon: Icons.calendar_today_outlined, selectedIcon: Icons.calendar_today, label: 'Сегодня'),
+        FloatingBarItem(icon: Icons.access_time_outlined, selectedIcon: Icons.access_time, label: 'Время'),
+        FloatingBarItem(icon: Icons.qr_code_scanner, selectedIcon: Icons.qr_code_scanner, label: 'Сканер'),
+        FloatingBarItem(icon: Icons.bar_chart_outlined, selectedIcon: Icons.bar_chart, label: 'Доход'),
+        FloatingBarItem(icon: Icons.person_outline, selectedIcon: Icons.person, label: 'Профиль'),
       ],
     );
   }

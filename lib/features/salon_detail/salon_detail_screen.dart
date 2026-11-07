@@ -1,39 +1,63 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../core/services/app_state_service.dart';
+import '../../core/services/masters_repository.dart';
 import '../../core/services/salons_repository.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/formatters.dart';
 import '../../core/widgets/badges/app_status_badge.dart';
 import '../../core/widgets/buttons/app_gradient_button.dart';
+import '../../core/widgets/buttons/app_pill_button.dart';
 import '../../core/widgets/cards/app_card.dart';
-import 'master_profile_screen.dart';
+import '../../core/widgets/sheets/app_sheet.dart';
+import 'photo_viewer.dart';
 
+/// Запись из карточки салона: можно сразу передать мастера и/или услугу
+typedef SalonBookCallback = void Function({String? masterName, MasterServiceItem? service});
+
+/// Детальная страница салона (ТЗ M-06): галерея, удобства, вкладки Услуги / Мастера / Отзывы / О салоне
 class SalonDetailScreen extends StatefulWidget {
   final String salonName;
   final VoidCallback onBack;
-  final VoidCallback onBookNow;
-  final Function(String masterName)? onMasterTap;
+  final SalonBookCallback onBook;
+  final ValueChanged<String> onMasterTap;
+  final ValueChanged<String> onShowOnMap;
 
   const SalonDetailScreen({
     super.key,
     required this.salonName,
     required this.onBack,
-    required this.onBookNow,
-    this.onMasterTap,
+    required this.onBook,
+    required this.onMasterTap,
+    required this.onShowOnMap,
   });
 
   @override
   State<SalonDetailScreen> createState() => _SalonDetailScreenState();
 }
 
-class _SalonDetailScreenState extends State<SalonDetailScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _SalonDetailScreenState extends State<SalonDetailScreen> with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
   final _appState = AppStateService();
+  final _salonsRepo = SalonsRepository();
+  final _mastersRepo = MastersRepository();
+
+  late final SalonModel _salon;
+  late final List<MasterServiceItem> _services;
+  late final List<MasterProfileModel> _masters;
+  late final List<MasterReviewItem> _reviews;
+  late final List<String> _photos;
+  int _photoIndex = 0;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
+    _salon = _salonsRepo.getSalonByName(widget.salonName) ?? _salonsRepo.getSalons().first;
+    _services = _salonsRepo.getSalonServices(_salon.name);
+    _masters = _mastersRepo.getMastersForSalon(_salon.name);
+    _reviews = _salonsRepo.getSalonReviews(_salon.name);
+    _photos = _salonsRepo.getSalonPhotos(_salon.name);
     _appState.addListener(_onStateChanged);
   }
 
@@ -48,169 +72,200 @@ class _SalonDetailScreenState extends State<SalonDetailScreen>
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Stack(
+  // ---------------------------------------------------------------------------
+  // Действия
+  // ---------------------------------------------------------------------------
+
+  void _toggleFavorite() {
+    final wasFav = _appState.isSalonFavorite(_salon.name);
+    _appState.toggleSalonFavorite(_salon.name);
+    showAppSnack(
+      context,
+      wasFav ? 'Салон «${_salon.name}» удалён из Избранного' : 'Салон «${_salon.name}» добавлен в Избранное',
+    );
+  }
+
+  void _share() {
+    // [BACKEND NOTE]: ссылка-приглашение будет вести на deep link / Telegram Mini App
+    final link = 'https://gozallik.uz/salon/${_salon.id}';
+    Clipboard.setData(ClipboardData(text: '${_salon.name} — $link'));
+    showAppSnack(context, 'Ссылка на салон скопирована');
+  }
+
+  void _showContacts() {
+    showAppSheet<void>(
+      context: context,
+      title: 'Связаться с салоном',
+      subtitle: '${_salon.name} · ${_salon.workingHours}',
+      builder: (ctx) => ListView(
+        shrinkWrap: true,
+        padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
         children: [
-          CustomScrollView(
-            slivers: [
-              _buildSliverAppBar(),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildHeaderInfo(),
-                      const SizedBox(height: 16),
-                      _buildAmenitiesRow(),
-                      const SizedBox(height: 20),
-                      _buildTabs(),
-                      const SizedBox(height: 20),
-                      _buildPopularServices(),
-                      const SizedBox(height: 24),
-                      _buildMastersSection(),
-                      const SizedBox(height: 24),
-                      _buildSalonPhotos(),
-                    ],
-                  ),
-                ),
-              ),
-            ],
+          ListTile(
+            leading: const Icon(Icons.phone_outlined, color: AppColors.primary),
+            title: Text(_salon.phone, style: const TextStyle(fontWeight: FontWeight.w700)),
+            subtitle: const Text('Нажмите, чтобы скопировать номер'),
+            onTap: () {
+              Clipboard.setData(ClipboardData(text: _salon.phone));
+              Navigator.pop(ctx);
+              showAppSnack(context, 'Номер салона скопирован');
+            },
           ),
-          _buildBottomAction(),
+          ListTile(
+            leading: const Icon(Icons.location_on_outlined, color: AppColors.primary),
+            title: Text(_salon.address, style: const TextStyle(fontWeight: FontWeight.w700)),
+            subtitle: Text('${_salon.district} район · ${_salon.distance}'),
+            trailing: const Icon(Icons.chevron_right, color: AppColors.muted),
+            onTap: () {
+              Navigator.pop(ctx);
+              widget.onShowOnMap(_salon.name);
+            },
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildSliverAppBar() {
-    final allSalons = SalonsRepository().getSalons(null);
-    final salon = allSalons.firstWhere(
-      (s) => s.name == widget.salonName,
-      orElse: () => allSalons.first,
-    );
+  void _openPhotos(int index) => PhotoViewer.show(context, photos: _photos, initialIndex: index);
 
-    return SliverAppBar(
-      expandedHeight: 250,
-      pinned: true,
-      leading: Padding(
-        padding: const EdgeInsets.all(8),
-        child: CircleAvatar(
-          backgroundColor: AppColors.surface,
-          child: IconButton(
-            icon: const Icon(Icons.arrow_back, color: AppColors.ink, size: 20),
-            onPressed: widget.onBack,
+  // ---------------------------------------------------------------------------
+  // UI
+  // ---------------------------------------------------------------------------
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: CustomScrollView(
+        slivers: [
+          _buildSliverAppBar(),
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            sliver: SliverToBoxAdapter(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildHeaderInfo(),
+                  const SizedBox(height: 14),
+                  _buildAmenities(),
+                  const SizedBox(height: 18),
+                  _buildTabs(),
+                  const SizedBox(height: 16),
+                ],
+              ),
+            ),
           ),
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+            sliver: SliverToBoxAdapter(
+              child: AnimatedBuilder(
+                animation: _tabController,
+                builder: (context, _) {
+                  switch (_tabController.index) {
+                    case 0:
+                      return _buildServicesTab();
+                    case 1:
+                      return _buildMastersTab();
+                    case 2:
+                      return _buildReviewsTab();
+                    default:
+                      return _buildAboutTab();
+                  }
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+      bottomNavigationBar: _buildBottomAction(),
+    );
+  }
+
+  Widget _circleAction({required IconData icon, required VoidCallback onPressed, Color color = AppColors.ink}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Material(
+        color: AppColors.surface,
+        shape: const CircleBorder(),
+        child: IconButton(
+          icon: Icon(icon, color: color, size: 20),
+          onPressed: onPressed,
         ),
       ),
+    );
+  }
+
+  Widget _buildSliverAppBar() {
+    final isFav = _appState.isSalonFavorite(_salon.name);
+    return SliverAppBar(
+      expandedHeight: 260,
+      pinned: true,
+      backgroundColor: AppColors.surface,
+      surfaceTintColor: Colors.transparent,
+      leadingWidth: 64,
+      leading: Center(
+        child: _circleAction(icon: Icons.arrow_back, onPressed: widget.onBack),
+      ),
       actions: [
-        CircleAvatar(
-          backgroundColor: AppColors.surface,
-          child: IconButton(
-            icon: const Icon(
-              Icons.share_outlined,
-              color: AppColors.ink,
-              size: 20,
-            ),
-            onPressed: () {},
-          ),
+        _circleAction(icon: Icons.share_outlined, onPressed: _share),
+        _circleAction(
+          icon: isFav ? Icons.favorite : Icons.favorite_border,
+          color: AppColors.primary,
+          onPressed: _toggleFavorite,
         ),
-        const SizedBox(width: 8),
-        CircleAvatar(
-          backgroundColor: AppColors.surface,
-          child: IconButton(
-            icon: Icon(
-              _appState.isSalonFavorite(widget.salonName)
-                  ? Icons.favorite
-                  : Icons.favorite_border,
-              color: AppColors.primary,
-              size: 20,
-            ),
-            onPressed: () {
-              final isFav = _appState.isSalonFavorite(widget.salonName);
-              _appState.toggleSalonFavorite(widget.salonName);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  backgroundColor: AppColors.ink,
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  content: Text(
-                    !isFav
-                        ? 'Салон «${widget.salonName}» добавлен в Избранное'
-                        : 'Салон «${widget.salonName}» удален из Избранного',
-                  ),
-                  duration: const Duration(seconds: 2),
-                ),
-              );
-            },
-          ),
-        ),
-        const SizedBox(width: 16),
+        const SizedBox(width: 12),
       ],
       flexibleSpace: FlexibleSpaceBar(
         background: Stack(
           fit: StackFit.expand,
           children: [
-            Image.asset(
-              salon.imageAsset,
-              fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Color(0xFFFFD1DC), Color(0xFFFFB6C1)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+            PageView.builder(
+              itemCount: _photos.length,
+              onPageChanged: (i) => setState(() => _photoIndex = i),
+              itemBuilder: (context, index) => GestureDetector(
+                onTap: () => _openPhotos(index),
+                child: Image.asset(
+                  _photos[index],
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => Container(
+                    color: AppColors.primaryTint,
+                    child: const Center(child: Icon(Icons.storefront, size: 80, color: AppColors.primary)),
                   ),
-                ),
-                child: const Center(
-                  child: Icon(Icons.storefront, size: 80, color: Colors.white70),
                 ),
               ),
             ),
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withValues(alpha: 0.35),
-                    Colors.transparent,
-                    Colors.black.withValues(alpha: 0.55),
-                  ],
+            IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withValues(alpha: 0.35),
+                      Colors.transparent,
+                      Colors.black.withValues(alpha: 0.45),
+                    ],
+                  ),
                 ),
               ),
             ),
             Positioned(
               right: 16,
               bottom: 16,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.black54,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(
-                      Icons.photo_library_outlined,
-                      size: 14,
-                      color: Colors.white,
-                    ),
-                    SizedBox(width: 4),
-                    Text(
-                      '1/12',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
+              child: GestureDetector(
+                onTap: () => _openPhotos(_photoIndex),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(14)),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.photo_library_outlined, size: 14, color: Colors.white),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${_photoIndex + 1}/${_photos.length}',
+                        style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -225,92 +280,81 @@ class _SalonDetailScreenState extends State<SalonDetailScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Row(
-              children: [
-                Text(
-                  widget.salonName,
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                const Icon(Icons.verified, color: AppColors.primary, size: 20),
-              ],
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFF7E6),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: AppColors.gold.withValues(alpha: 0.5),
-                ),
+            Flexible(
+              child: Text(
+                _salon.name,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
               ),
-              child: const Row(
-                children: [
-                  Icon(
-                    Icons.monetization_on_outlined,
-                    size: 14,
-                    color: AppColors.gold,
-                  ),
-                  SizedBox(width: 4),
-                  Text(
-                    '86 кредитов',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF8A5D00),
+            ),
+            const SizedBox(width: 6),
+            const Icon(Icons.verified, color: AppColors.primary, size: 20),
+            const Spacer(),
+            if (_salon.creditsAccepted)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF7E6),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.gold.withValues(alpha: 0.5)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.account_balance_wallet_outlined, size: 14, color: AppColors.gold),
+                    const SizedBox(width: 4),
+                    Text(
+                      'У вас ${_appState.clientCredits} кр.',
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF8A5D00)),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
           ],
         ),
         const SizedBox(height: 4),
-        const Text(
-          'Маникюр · Педикюр · Брови',
-          style: TextStyle(fontSize: 13, color: AppColors.muted),
-        ),
-        const SizedBox(height: 6),
-        const Row(
-          children: [
-            Icon(Icons.star, size: 15, color: AppColors.primary),
-            SizedBox(width: 4),
-            Text(
-              '4.8 (126 отзывов)',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-            ),
-            Spacer(),
-            AppStatusBadge(text: 'Открыто до 21:00'),
-          ],
-        ),
-        const SizedBox(height: 6),
+        Text(_salon.services, style: const TextStyle(fontSize: 13, color: AppColors.muted)),
+        const SizedBox(height: 8),
         Row(
           children: [
-            const Icon(
-              Icons.location_on_outlined,
-              size: 14,
-              color: AppColors.muted,
-            ),
+            const Icon(Icons.star, size: 15, color: AppColors.primary),
             const SizedBox(width: 4),
-            const Text(
-              '0,6 км · Ташкент',
-              style: TextStyle(fontSize: 12, color: AppColors.muted),
+            GestureDetector(
+              onTap: () => _tabController.animateTo(2),
+              child: Text(
+                '${_salon.rating} (${_salon.reviewsCount} отзывов)',
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+              ),
+            ),
+            const Spacer(),
+            AppStatusBadge(text: _salon.workingHours),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            const Icon(Icons.location_on_outlined, size: 14, color: AppColors.muted),
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(
+                '${_salon.distance} · ${_salon.address}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12, color: AppColors.muted),
+              ),
             ),
             const SizedBox(width: 8),
             GestureDetector(
-              onTap: () {},
-              child: const Text(
-                'На карте >',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.primaryText,
-                ),
+              onTap: () => widget.onShowOnMap(_salon.name),
+              child: const Row(
+                children: [
+                  Text(
+                    'На карте',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primaryText),
+                  ),
+                  Icon(Icons.chevron_right, size: 16, color: AppColors.primaryText),
+                ],
               ),
             ),
           ],
@@ -319,37 +363,31 @@ class _SalonDetailScreenState extends State<SalonDetailScreen>
     );
   }
 
-  Widget _buildAmenitiesRow() {
-    final amenities = [
-      {'icon': Icons.diamond_outlined, 'title': 'Мастера'},
-      {'icon': Icons.verified_user_outlined, 'title': 'Чистота'},
-      {'icon': Icons.percent, 'title': 'Скидки'},
-      {'icon': Icons.credit_card, 'title': 'Оплата картой'},
-      {'icon': Icons.local_parking, 'title': 'Парковка'},
+  /// Удобства — из реальных атрибутов салона (M-04)
+  Widget _buildAmenities() {
+    final amenities = <(IconData, String)>[
+      if (_salon.creditsAccepted) (Icons.account_balance_wallet_outlined, 'Кредиты'),
+      if (_salon.onlyWomen) (Icons.female, 'Женский зал'),
+      if (_salon.homeVisit) (Icons.home_outlined, 'Выезд на дом'),
+      if (_salon.availableToday) (Icons.event_available_outlined, 'Свободно сегодня'),
+      (Icons.credit_card, 'Оплата картой'),
     ];
 
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
       children: amenities.map((a) {
         return Container(
-          width: 60,
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          decoration: BoxDecoration(
-            color: AppColors.primaryTint,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Column(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(color: AppColors.primaryTint, borderRadius: BorderRadius.circular(14)),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(a['icon'] as IconData, size: 20, color: AppColors.primary),
-              const SizedBox(height: 4),
+              Icon(a.$1, size: 15, color: AppColors.primary),
+              const SizedBox(width: 5),
               Text(
-                a['title'] as String,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 9,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.ink,
-                ),
+                a.$2,
+                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.ink),
               ),
             ],
           ),
@@ -361,21 +399,16 @@ class _SalonDetailScreenState extends State<SalonDetailScreen>
   Widget _buildTabs() {
     return Container(
       height: 40,
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
-      ),
+      decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(20)),
       child: TabBar(
         controller: _tabController,
-        indicator: BoxDecoration(
-          color: AppColors.primary,
-          borderRadius: BorderRadius.circular(20),
-        ),
+        indicator: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(20)),
         indicatorSize: TabBarIndicatorSize.tab,
         dividerColor: Colors.transparent,
         labelColor: Colors.white,
         unselectedLabelColor: AppColors.muted,
         labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+        labelPadding: EdgeInsets.zero,
         tabs: const [
           Tab(text: 'Услуги'),
           Tab(text: 'Мастера'),
@@ -386,287 +419,257 @@ class _SalonDetailScreenState extends State<SalonDetailScreen>
     );
   }
 
-  Widget _buildPopularServices() {
-    final services = [
-      {
-        'name': 'Маникюр классический',
-        'time': '60 мин',
-        'price': '150 000 сум',
-      },
-      {
-        'name': 'Педикюр классический',
-        'time': '90 мин',
-        'price': '200 000 сум',
-      },
-      {'name': 'Окрашивание бровей', 'time': '40 мин', 'price': '80 000 сум'},
-    ];
-
+  // --- Вкладка «Услуги»
+  Widget _buildServicesTab() {
+    if (_services.isEmpty) {
+      return const _EmptyTab(icon: Icons.spa_outlined, text: 'Салон пока не добавил услуги');
+    }
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Популярные услуги',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-        ),
-        const SizedBox(height: 12),
-        SizedBox(
-          height: 175,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: services.length,
-            separatorBuilder: (_, index) => const SizedBox(width: 12),
-            itemBuilder: (context, index) {
-              final s = services[index];
-              return SizedBox(
-                width: 145,
-                child: AppCard(
-                  padding: const EdgeInsets.all(10),
+      children: _services.map((s) {
+        final showCredits = _salon.creditsAccepted && s.creditsPrice > 0;
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: AppCard(
+            padding: const EdgeInsets.all(12),
+            onTap: () => widget.onBook(service: s),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(color: AppColors.primaryTint, borderRadius: BorderRadius.circular(12)),
+                  child: const Icon(Icons.spa_outlined, color: AppColors.primary, size: 22),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        height: 75,
-                        decoration: BoxDecoration(
-                          color: AppColors.primaryTint,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Center(
-                          child: Icon(
-                            Icons.spa,
-                            color: AppColors.primary,
-                            size: 30,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 6),
+                      Text(s.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 2),
                       Text(
-                        s['name']!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                        ),
+                        '${s.duration} · ${Formatters.formatSum(s.sumPrice)}',
+                        style: const TextStyle(fontSize: 11, color: AppColors.muted),
                       ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    if (showCredits)
                       Text(
-                        s['time']!,
-                        style: const TextStyle(
-                          fontSize: 10,
-                          color: AppColors.muted,
-                        ),
+                        Formatters.formatCredits(s.creditsPrice),
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.primaryText),
                       ),
-                      const Spacer(),
+                    const SizedBox(height: 4),
+                    AppPillButton(
+                      text: 'Записаться',
+                      onPressed: () => widget.onBook(service: s),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  // --- Вкладка «Мастера»
+  Widget _buildMastersTab() {
+    if (_masters.isEmpty) {
+      return _EmptyTab(
+        icon: Icons.groups_2_outlined,
+        text: 'Салон подберёт свободного мастера под вашу услугу',
+        action: AppPillButton(text: 'Записаться', height: 34, onPressed: () => widget.onBook()),
+      );
+    }
+    return Column(
+      children: _masters.map((m) {
+        final isFav = _appState.isMasterFavorite(m.shortName);
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: AppCard(
+            padding: const EdgeInsets.all(12),
+            onTap: () => widget.onMasterTap(m.shortName),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 28,
+                  backgroundColor: AppColors.primaryTint,
+                  backgroundImage: AssetImage(m.avatarAsset),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(m.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 2),
+                      Text(m.specialty, style: const TextStyle(fontSize: 11, color: AppColors.muted)),
+                      const SizedBox(height: 4),
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Expanded(
-                            child: Text(
-                              s['price']!,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
-                                color: AppColors.primaryText,
-                              ),
-                            ),
-                          ),
-                          Container(
-                            width: 24,
-                            height: 24,
-                            decoration: const BoxDecoration(
-                              color: AppColors.primary,
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.add,
-                              color: Colors.white,
-                              size: 16,
-                            ),
+                          const Icon(Icons.star, size: 13, color: AppColors.primary),
+                          const SizedBox(width: 3),
+                          Text(
+                            '${m.rating} · ${m.reviewsCount} отзывов · ${m.experienceYears} лет опыта',
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
                           ),
                         ],
                       ),
                     ],
                   ),
                 ),
-              );
-            },
+                IconButton(
+                  icon: Icon(isFav ? Icons.favorite : Icons.favorite_border, color: AppColors.primary, size: 20),
+                  onPressed: () => _appState.toggleMasterFavorite(m.shortName),
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
+        );
+      }).toList(),
     );
   }
 
-  Widget _buildMastersSection() {
-    final masters = [
-      {'name': 'Алена', 'role': 'Маникюр · Педикюр', 'rating': '4.9', 'avatar': 'assets/images/masters/master_alena.jpg'},
-      {'name': 'Сабина', 'role': 'Брови · Ресницы', 'rating': '4.8', 'avatar': 'assets/images/masters/master_sabina.jpg'},
-      {'name': 'Дилноза', 'role': 'Стрижки · Укладка', 'rating': '4.7', 'avatar': 'assets/images/masters/master_dilnoza.jpg'},
-      {'name': 'Мадина', 'role': 'Косметология', 'rating': '4.9', 'avatar': 'assets/images/masters/master_madina.jpg'},
-      {'name': 'Тимур', 'role': 'Барбер · Стиль', 'rating': '4.8', 'avatar': 'assets/images/masters/master_timur.jpg'},
-    ];
-
+  // --- Вкладка «Отзывы»
+  Widget _buildReviewsTab() {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Мастера салона',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-        ),
-        const SizedBox(height: 12),
-        SizedBox(
-          height: 124,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: masters.length,
-            separatorBuilder: (_, index) => const SizedBox(width: 14),
-            itemBuilder: (context, index) {
-              final m = masters[index];
-              return InkWell(
-                onTap: () {
-                  if (widget.onMasterTap != null) {
-                    widget.onMasterTap!(m['name']!);
-                  } else {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => MasterProfileScreen(
-                          masterName: m['name']!,
-                          onBack: () => Navigator.pop(context),
-                          onBookMaster: () {
-                            Navigator.pop(context);
-                            widget.onBookNow();
-                          },
-                        ),
-                      ),
-                    );
-                  }
-                },
-                borderRadius: BorderRadius.circular(16),
+        AppCard(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Text('${_salon.rating}', style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w900)),
+              const SizedBox(width: 12),
+              Expanded(
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Stack(
-                      children: [
-                        Container(
-                          width: 60,
-                          height: 60,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: AppColors.primary,
-                              width: 2,
-                            ),
-                          ),
-                          child: ClipOval(
-                            child: Image.asset(
-                              m['avatar']!,
-                              width: 60,
-                              height: 60,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, _, _) => Container(
-                                color: AppColors.primaryTint,
-                                child: const Icon(
-                                  Icons.person,
-                                  color: AppColors.primary,
-                                  size: 36,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          bottom: 2,
-                          right: 2,
-                          child: Container(
-                            width: 12,
-                            height: 12,
-                            decoration: const BoxDecoration(
-                              color: AppColors.success,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      m['name']!,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    Text(
-                      m['role']!,
-                      style: const TextStyle(
-                        fontSize: 9,
-                        color: AppColors.muted,
-                      ),
-                    ),
                     Row(
-                      children: [
-                        const Icon(
-                          Icons.star,
-                          size: 10,
-                          color: AppColors.primary,
+                      children: List.generate(
+                        5,
+                        (i) => Icon(
+                          i < _salon.rating.round() ? Icons.star_rounded : Icons.star_outline_rounded,
+                          size: 18,
+                          color: AppColors.gold,
                         ),
-                        const SizedBox(width: 2),
-                        Text(
-                          m['rating']!,
-                          style: const TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
+                      ),
+                    ),
+                    Text(
+                      'На основе ${_salon.reviewsCount} отзывов после подтверждённых визитов',
+                      style: const TextStyle(fontSize: 11, color: AppColors.muted),
                     ),
                   ],
                 ),
-              );
-            },
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        ..._reviews.map(
+          (r) => Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: AppCard(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(r.authorName, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                      Row(
+                        children: [
+                          const Icon(Icons.star, color: AppColors.gold, size: 14),
+                          const SizedBox(width: 2),
+                          Text('${r.rating}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                        ],
+                      ),
+                    ],
+                  ),
+                  Text(r.date, style: const TextStyle(fontSize: 10, color: AppColors.muted)),
+                  const SizedBox(height: 6),
+                  Text(r.comment, style: const TextStyle(fontSize: 12, color: AppColors.ink, height: 1.35)),
+                ],
+              ),
+            ),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildSalonPhotos() {
-    final photos = [
-      'assets/images/salons/salon_nur_beauty.jpg',
-      'assets/images/salons/salon_mira_hair.jpg',
-      'assets/images/salons/salon_lola_studio.jpg',
-      'assets/images/portfolio/portfolio_manicure_1.jpg',
-      'assets/images/portfolio/portfolio_hair_1.jpg',
-      'assets/images/portfolio/portfolio_brows_1.jpg',
-    ];
+  // --- Вкладка «О салоне»
+  Widget _buildAboutTab() {
+    Widget row(IconData icon, String title, String value, {VoidCallback? onTap}) {
+      return ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+        leading: Icon(icon, color: AppColors.primary),
+        title: Text(title, style: const TextStyle(fontSize: 11, color: AppColors.muted)),
+        subtitle: Text(
+          value,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.ink),
+        ),
+        trailing: onTap != null ? const Icon(Icons.chevron_right, color: AppColors.muted) : null,
+        onTap: onTap,
+      );
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Фото салона и работ',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+        AppCard(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Column(
+            children: [
+              row(
+                Icons.location_on_outlined,
+                'Адрес',
+                '${_salon.address}, ${_salon.district} район',
+                onTap: () => widget.onShowOnMap(_salon.name),
+              ),
+              row(Icons.schedule, 'Часы работы', _salon.workingHours),
+              row(Icons.phone_outlined, 'Телефон', _salon.phone, onTap: _showContacts),
+              row(
+                Icons.payments_outlined,
+                'Цены',
+                _salon.creditsAccepted && _salon.minCredits > 0
+                    ? 'от ${_salon.minCredits} кр. или ${Formatters.formatSum(_salon.minPriceSum)}'
+                    : 'от ${Formatters.formatSum(_salon.minPriceSum)}',
+              ),
+            ],
+          ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 18),
+        const Text('Фото салона и работ', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 10),
         SizedBox(
-          height: 85,
+          height: 90,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
-            itemCount: photos.length,
-            separatorBuilder: (_, index) => const SizedBox(width: 10),
+            itemCount: _photos.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 10),
             itemBuilder: (context, index) {
-              return ClipRRect(
-                borderRadius: BorderRadius.circular(14),
-                child: Image.asset(
-                  photos[index],
-                  width: 120,
-                  height: 85,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => Container(
+              return GestureDetector(
+                onTap: () => _openPhotos(index),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: Image.asset(
+                    _photos[index],
                     width: 120,
-                    height: 85,
-                    color: Colors.pink.shade50,
-                    child: const Icon(Icons.camera_alt_outlined, color: AppColors.primary),
+                    height: 90,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => Container(
+                      width: 120,
+                      height: 90,
+                      color: AppColors.primaryTint,
+                      child: const Icon(Icons.camera_alt_outlined, color: AppColors.primary),
+                    ),
                   ),
                 ),
               );
@@ -678,44 +681,63 @@ class _SalonDetailScreenState extends State<SalonDetailScreen>
   }
 
   Widget _buildBottomAction() {
-    return Positioned(
-      bottom: 0,
-      left: 0,
-      right: 0,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
-              blurRadius: 16,
-              offset: const Offset(0, -4),
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 16, offset: const Offset(0, -4)),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          children: [
+            Material(
+              color: AppColors.primaryTint,
+              shape: const CircleBorder(),
+              child: IconButton(
+                iconSize: 22,
+                padding: const EdgeInsets.all(13),
+                icon: const Icon(Icons.phone, color: AppColors.primary),
+                tooltip: 'Связаться с салоном',
+                onPressed: _showContacts,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: AppGradientButton(text: 'Записаться', onPressed: () => widget.onBook()),
             ),
           ],
         ),
-        child: SafeArea(
-          top: false,
-          child: Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: AppColors.primaryTint,
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: const Icon(Icons.phone, color: AppColors.primary),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: AppGradientButton(
-                  text: 'Записаться',
-                  onPressed: widget.onBookNow,
-                ),
-              ),
-            ],
-          ),
+      ),
+    );
+  }
+}
+
+class _EmptyTab extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  final Widget? action;
+
+  const _EmptyTab({required this.icon, required this.text, this.action});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 24),
+      child: Center(
+        child: Column(
+          children: [
+            Icon(icon, size: 44, color: AppColors.muted.withValues(alpha: 0.6)),
+            const SizedBox(height: 10),
+            Text(
+              text,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 13, color: AppColors.muted),
+            ),
+            if (action != null) ...[const SizedBox(height: 12), action!],
+          ],
         ),
       ),
     );

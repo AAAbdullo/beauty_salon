@@ -1,5 +1,6 @@
 import 'package:yandex_mapkit/yandex_mapkit.dart';
 import '../models/salon_filter_params.dart';
+import 'masters_repository.dart';
 
 /// Модель салона красоты с полным набором атрибутов по ТЗ
 class SalonModel {
@@ -41,6 +42,17 @@ class SalonModel {
     this.imageAsset = 'assets/images/salons/salon_nur_beauty.jpg',
   });
 
+  /// Числовая часть id («s-007» → 7)
+  int get _index => int.tryParse(id.replaceAll(RegExp(r'\D'), '')) ?? 0;
+
+  /// Телефон салона (мок до появления поля в API)
+  String get phone =>
+      '+998 71 200 ${_index.toString().padLeft(2, '0')} ${(_index * 37 % 100).toString().padLeft(2, '0')}';
+
+  /// Цена «от …» для карточек: в кредитах, если салон их принимает, иначе в сумах
+  String get minPriceLabel =>
+      creditsAccepted && minCredits > 0 ? 'от $minCredits кр.' : 'от ${(minPriceSum / 1000).round()} тыс. сум';
+
   /// Для будущего парсинга из JSON ответа бэкенда
   factory SalonModel.fromJson(Map<String, dynamic> json) {
     return SalonModel(
@@ -59,10 +71,7 @@ class SalonModel {
       availableToday: json['available_today'] as bool? ?? true,
       minPriceSum: json['min_price_sum'] as int,
       minCredits: json['min_credits'] as int,
-      point: Point(
-        latitude: (json['lat'] as num).toDouble(),
-        longitude: (json['lng'] as num).toDouble(),
-      ),
+      point: Point(latitude: (json['lat'] as num).toDouble(), longitude: (json['lng'] as num).toDouble()),
     );
   }
 }
@@ -279,6 +288,99 @@ class SalonsRepository {
     'Сергелийский',
     'Учтепинский',
   ];
+
+  /// Салон по названию (null, если не найден)
+  /// [BACKEND NOTE]: GET /api/v1/catalog/salons/:id
+  SalonModel? getSalonByName(String name) {
+    for (final s in _mockSalons) {
+      if (s.name == name) return s;
+    }
+    return null;
+  }
+
+  // Шаблоны услуг по категориям — для салонов, у которых в моках нет мастеров.
+  // (название, длительность, коэффициент к минимальной цене салона)
+  static const Map<String, (String, String, double)> _serviceTemplates = {
+    'Маникюр': ('Маникюр классический', '60 мин', 1.0),
+    'Педикюр': ('Педикюр классический', '90 мин', 1.3),
+    'Брови': ('Коррекция и окрашивание бровей', '40 мин', 0.7),
+    'Макияж': ('Дневной макияж', '60 мин', 1.2),
+    'Стрижки': ('Женская стрижка', '45 мин', 1.0),
+    'Окрашивание': ('Окрашивание волос', '120 мин', 2.2),
+    'Укладка': ('Укладка', '40 мин', 0.8),
+    'Косметология': ('Чистка лица', '90 мин', 1.4),
+    'Уход': ('Уходовая процедура для лица', '60 мин', 1.1),
+    'Ресницы': ('Ламинирование ресниц', '60 мин', 1.0),
+    'Ногти': ('Маникюр + гель-лак', '75 мин', 1.2),
+    'Борода': ('Оформление бороды', '30 мин', 0.6),
+    'Массаж': ('Массаж спины', '60 мин', 1.3),
+    'Спа': ('SPA-программа', '90 мин', 1.6),
+    'Уход за волосами': ('Восстанавливающий уход за волосами', '60 мин', 1.0),
+  };
+
+  /// Услуги салона: услуги его мастеров, а если мастеров нет — из категорий салона.
+  /// [BACKEND NOTE]: GET /api/v1/salons/:id/services
+  List<MasterServiceItem> getSalonServices(String salonName) {
+    final masters = MastersRepository().getMastersForSalon(salonName);
+    if (masters.isNotEmpty) {
+      final seen = <String>{};
+      return [
+        for (final m in masters)
+          for (final service in m.services)
+            if (seen.add(service.name)) service,
+      ];
+    }
+
+    final salon = getSalonByName(salonName);
+    if (salon == null) return const [];
+    final baseCredits = salon.minCredits > 0 ? salon.minCredits : 0;
+    return salon.services.split('·').map((raw) => raw.trim()).where((c) => c.isNotEmpty).map((category) {
+      final template = _serviceTemplates[category] ?? (category, '60 мин', 1.0);
+      return MasterServiceItem(
+        name: template.$1,
+        duration: template.$2,
+        creditsPrice: (baseCredits * template.$3).round(),
+        sumPrice: ((salon.minPriceSum * template.$3) / 10000).round() * 10000,
+      );
+    }).toList();
+  }
+
+  /// Отзывы о салоне: отзывы о его мастерах, иначе общие отзывы салона (моки)
+  /// [BACKEND NOTE]: GET /api/v1/salons/:id/reviews
+  List<MasterReviewItem> getSalonReviews(String salonName) {
+    final masters = MastersRepository().getMastersForSalon(salonName);
+    final reviews = [for (final m in masters) ...m.reviews];
+    if (reviews.isNotEmpty) return reviews;
+    return const [
+      MasterReviewItem(
+        authorName: 'Гульнора А.',
+        rating: 5.0,
+        date: 'На прошлой неделе',
+        comment: 'Уютно, чисто, мастера внимательные. Записалась по кредитам без проблем.',
+      ),
+      MasterReviewItem(
+        authorName: 'Камила Р.',
+        rating: 4.7,
+        date: '2 недели назад',
+        comment: 'Хороший сервис, приняли точно по времени. Приду ещё.',
+      ),
+    ];
+  }
+
+  /// Фото салона: фасад/интерьер + работы мастеров
+  List<String> getSalonPhotos(String salonName) {
+    final salon = getSalonByName(salonName);
+    final masters = MastersRepository().getMastersForSalon(salonName);
+    final photos = <String>{?salon?.imageAsset, for (final m in masters) ...m.portfolioImages};
+    if (photos.length < 3) {
+      photos.addAll(const [
+        'assets/images/portfolio/portfolio_manicure_1.jpg',
+        'assets/images/portfolio/portfolio_hair_1.jpg',
+        'assets/images/portfolio/portfolio_brows_1.jpg',
+      ]);
+    }
+    return photos.toList();
+  }
 
   /// Получение отфильтрованных салонов
   List<SalonModel> getSalons([SalonFilterParams? params]) {

@@ -30,6 +30,12 @@ class MasterProfileModel {
     required this.services,
     required this.reviews,
   });
+
+  /// Короткое имя («Алена») — ключ мастера в записях, избранном и навигации
+  String get shortName => name.split(' ').first;
+
+  /// Мастер оказывает услугу с таким названием
+  bool offers(String serviceName) => services.any((s) => s.name == serviceName);
 }
 
 class MasterServiceItem {
@@ -52,12 +58,7 @@ class MasterReviewItem {
   final String date;
   final String comment;
 
-  const MasterReviewItem({
-    required this.authorName,
-    required this.rating,
-    required this.date,
-    required this.comment,
-  });
+  const MasterReviewItem({required this.authorName, required this.rating, required this.date, required this.comment});
 }
 
 /// Репозиторий профиля мастера (МОК-ДАННЫЕ)
@@ -182,19 +183,13 @@ class MastersRepository {
       reviewsCount: 145,
       experienceYears: 7,
       avatarAsset: 'assets/images/masters/master_dilnoza.jpg',
-      about:
-          'Колорист-эксперт: аиртач, балаяж, сложное окрашивание, авторские женские стрижки и салонный уход.',
+      about: 'Колорист-эксперт: аиртач, балаяж, сложное окрашивание, авторские женские стрижки и салонный уход.',
       portfolioImages: [
         'assets/images/portfolio/portfolio_hair_1.jpg',
         'assets/images/portfolio/portfolio_brows_1.jpg',
       ],
       services: [
-        MasterServiceItem(
-          name: 'Женская стрижка + брашинг',
-          duration: '60 мин',
-          creditsPrice: 32,
-          sumPrice: 140000,
-        ),
+        MasterServiceItem(name: 'Женская стрижка + брашинг', duration: '60 мин', creditsPrice: 32, sumPrice: 140000),
         MasterServiceItem(
           name: 'Сложное окрашивание Balayage',
           duration: '180 мин',
@@ -222,16 +217,9 @@ class MastersRepository {
       avatarAsset: 'assets/images/masters/master_madina.jpg',
       about:
           'Медицинское образование. Уходовые процедуры, ультразвуковая чистка, безинъекционная мезотерапия и пилинги.',
-      portfolioImages: [
-        'assets/images/portfolio/portfolio_brows_1.jpg',
-      ],
+      portfolioImages: ['assets/images/portfolio/portfolio_brows_1.jpg'],
       services: [
-        MasterServiceItem(
-          name: 'Комбинированная чистка лица',
-          duration: '90 мин',
-          creditsPrice: 45,
-          sumPrice: 200000,
-        ),
+        MasterServiceItem(name: 'Комбинированная чистка лица', duration: '90 мин', creditsPrice: 45, sumPrice: 200000),
       ],
       reviews: [
         MasterReviewItem(
@@ -253,9 +241,7 @@ class MastersRepository {
       avatarAsset: 'assets/images/masters/master_timur.jpg',
       about:
           'Классические и трендовые мужские стрижки, королевское бритье опасной бритвой, камуфляж седины и оформление бороды.',
-      portfolioImages: [
-        'assets/images/portfolio/portfolio_hair_1.jpg',
-      ],
+      portfolioImages: ['assets/images/portfolio/portfolio_hair_1.jpg'],
       services: [
         MasterServiceItem(
           name: 'Мужская стрижка + мытье + стайлинг',
@@ -263,12 +249,7 @@ class MastersRepository {
           creditsPrice: 26,
           sumPrice: 110000,
         ),
-        MasterServiceItem(
-          name: 'Моделирование бороды и усов',
-          duration: '30 мин',
-          creditsPrice: 18,
-          sumPrice: 80000,
-        ),
+        MasterServiceItem(name: 'Моделирование бороды и усов', duration: '30 мин', creditsPrice: 18, sumPrice: 80000),
       ],
       reviews: [
         MasterReviewItem(
@@ -287,10 +268,24 @@ class MastersRepository {
     return _mockMasters.values.toList();
   }
 
-  MasterProfileModel getMaster(String name) {
-    if (_mockMasters.containsKey(name)) {
-      return _mockMasters[name]!;
+  /// Мастера конкретного салона
+  /// [BACKEND NOTE]: GET /api/v1/salons/:id/masters
+  List<MasterProfileModel> getMastersForSalon(String salonName) {
+    return _mockMasters.values.where((m) => m.salonName == salonName).toList();
+  }
+
+  /// Поиск мастера по короткому имени («Алена») или полному («Алена Смирнова»)
+  MasterProfileModel? findMaster(String name) {
+    if (_mockMasters.containsKey(name)) return _mockMasters[name];
+    for (final m in _mockMasters.values) {
+      if (m.name == name || m.shortName == name) return m;
     }
+    return null;
+  }
+
+  MasterProfileModel getMaster(String name) {
+    final found = findMaster(name);
+    if (found != null) return found;
     // Фоллбэк если мастер другой
     return MasterProfileModel(
       id: 'm-default',
@@ -301,14 +296,10 @@ class MastersRepository {
       reviewsCount: 65,
       experienceYears: 5,
       about: 'Профессиональный мастер индустрии красоты с международным опытом.',
-      portfolioImages: ['web/icons/Icon-192.png'],
+      avatarAsset: 'assets/images/masters/master_sabina.jpg',
+      portfolioImages: ['assets/images/portfolio/portfolio_manicure_1.jpg'],
       services: const [
-        MasterServiceItem(
-          name: 'Комплексная услуга эксперта',
-          duration: '60 мин',
-          creditsPrice: 35,
-          sumPrice: 160000,
-        ),
+        MasterServiceItem(name: 'Комплексная услуга эксперта', duration: '60 мин', creditsPrice: 35, sumPrice: 160000),
       ],
       reviews: const [
         MasterReviewItem(

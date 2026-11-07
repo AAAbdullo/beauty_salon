@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../core/services/app_state_service.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/formatters.dart';
 import '../../core/widgets/buttons/app_gradient_button.dart';
 import '../../core/widgets/inputs/app_text_field.dart';
 
@@ -45,11 +47,6 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
   String? _profileError;
 
   @override
-  void initState() {
-    super.initState();
-  }
-
-  @override
   void dispose() {
     _countdownTimer?.cancel();
     _phoneController.dispose();
@@ -69,6 +66,10 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
     _countdownTimer?.cancel();
     setState(() => _timerSeconds = 45);
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
       if (_timerSeconds > 0) {
         setState(() => _timerSeconds--);
       } else {
@@ -78,13 +79,18 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
   }
 
   void _submitPhone() {
-    final raw = _phoneController.text.replaceAll(' ', '');
-    if (raw.length < 9) {
+    final raw = _phoneController.text.replaceAll(RegExp(r'\D'), '');
+    if (raw.length != UzPhoneInputFormatter.digitsCount) {
       setState(() => _phoneError = 'Введите корректный 9-значный номер');
       return;
     }
+    FocusScope.of(context).unfocus();
+    for (final c in _otpControllers) {
+      c.clear();
+    }
     setState(() {
       _phoneError = null;
+      _otpError = null;
       _currentStep = 2;
     });
     _startTimer();
@@ -102,6 +108,8 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
       setState(() => _otpError = 'Введите 4-значный код из SMS');
       return;
     }
+    FocusScope.of(context).unfocus();
+    _countdownTimer?.cancel();
     setState(() {
       _otpError = null;
       _currentStep = 3;
@@ -111,7 +119,7 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
   Future<void> _selectBirthDate() async {
     final picked = await showDatePicker(
       context: context,
-      initialDate: DateTime(1998, 5, 14),
+      initialDate: _parseBirthDate() ?? DateTime(1998, 5, 14),
       firstDate: DateTime(1940),
       lastDate: DateTime.now(),
       builder: (context, child) {
@@ -135,6 +143,28 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
         _birthDateController.text = '$day.$month.$year';
       });
     }
+  }
+
+  DateTime? _parseBirthDate() {
+    final parts = _birthDateController.text.split('.');
+    if (parts.length != 3) return null;
+    final d = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    final y = int.tryParse(parts[2]);
+    if (d == null || m == null || y == null) return null;
+    final date = DateTime(y, m, d);
+    return date.isAfter(DateTime.now()) ? null : date;
+  }
+
+  void _showSocialUnavailable(String provider) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.ink,
+          content: Text('Вход через $provider появится после подключения сервера. Используйте номер телефона.'),
+        ),
+      );
   }
 
   void _submitProfile() {
@@ -300,6 +330,10 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
                 child: TextField(
                   controller: _phoneController,
                   keyboardType: TextInputType.phone,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _submitPhone(),
+                  inputFormatters: const [UzPhoneInputFormatter()],
+                  autofillHints: const [AutofillHints.telephoneNumberNational],
                   style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.ink),
                   decoration: const InputDecoration(
                     hintText: '90 123 45 67',
@@ -340,19 +374,25 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
   }
 
   Widget _buildSocialButton(IconData icon, String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
+    return Material(
+      color: AppColors.surface,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.black.withValues(alpha: 0.08)),
+        side: BorderSide(color: Colors.black.withValues(alpha: 0.08)),
       ),
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: AppColors.ink),
-          const SizedBox(width: 6),
-          Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-        ],
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => _showSocialUnavailable(label),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(
+            children: [
+              Icon(icon, size: 18, color: AppColors.ink),
+              const SizedBox(width: 6),
+              Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -399,20 +439,40 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
                     focusNode: _otpFocusNodes[index],
                     keyboardType: TextInputType.number,
                     textAlign: TextAlign.center,
-                    maxLength: 1,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    autofillHints: index == 0 ? const [AutofillHints.oneTimeCode] : null,
                     style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.primary),
                     decoration: const InputDecoration(
                       counterText: '',
                       border: InputBorder.none,
                     ),
                     onChanged: (val) {
+                      // Вставка/автозаполнение всего кода в одно поле — раскладываем по ячейкам
+                      if (val.length > 1) {
+                        final digits = val.split('');
+                        for (var i = 0; i < 4; i++) {
+                          final src = index + i < 4 ? i : -1;
+                          if (src >= 0 && src < digits.length) {
+                            _otpControllers[index + i].text = digits[src];
+                          }
+                        }
+                        setState(() {});
+                        final filled = _otpControllers.every((c) => c.text.isNotEmpty);
+                        if (filled) {
+                          _submitOtp();
+                        } else {
+                          final next = (index + digits.length).clamp(0, 3);
+                          _otpFocusNodes[next].requestFocus();
+                        }
+                        return;
+                      }
                       setState(() {});
                       if (val.isNotEmpty && index < 3) {
                         _otpFocusNodes[index + 1].requestFocus();
                       } else if (val.isEmpty && index > 0) {
                         _otpFocusNodes[index - 1].requestFocus();
                       }
-                      if (index == 3 && val.isNotEmpty) {
+                      if (val.isNotEmpty && _otpControllers.every((c) => c.text.isNotEmpty)) {
                         _submitOtp();
                       }
                     },
@@ -467,33 +527,18 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
         ),
         const SizedBox(height: 24),
 
-        // Аватар
+        // Аватар (загрузка фото появится вместе с бэкендом — пока без кнопки камеры,
+        // чтобы не показывать нерабочее действие)
         Center(
-          child: Stack(
-            children: [
-              Container(
-                width: 86,
-                height: 86,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppColors.primaryTint,
-                  border: Border.all(color: AppColors.primary, width: 2),
-                ),
-                child: const Icon(Icons.person, size: 50, color: AppColors.primary),
-              ),
-              Positioned(
-                bottom: 0,
-                right: 0,
-                child: Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: const BoxDecoration(
-                    color: AppColors.primary,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.camera_alt, color: Colors.white, size: 16),
-                ),
-              ),
-            ],
+          child: Container(
+            width: 86,
+            height: 86,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppColors.primaryTint,
+              border: Border.all(color: AppColors.primary, width: 2),
+            ),
+            child: const Icon(Icons.person, size: 50, color: AppColors.primary),
           ),
         ),
         const SizedBox(height: 24),
@@ -504,6 +549,8 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
         AppTextField(
           controller: _firstNameController,
           hintText: 'Ваше имя',
+          textInputAction: TextInputAction.next,
+          textCapitalization: TextCapitalization.words,
           prefixIcon: const Icon(Icons.badge_outlined, color: AppColors.primary),
         ),
         const SizedBox(height: 14),
@@ -514,6 +561,8 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
         AppTextField(
           controller: _lastNameController,
           hintText: 'Ваша фамилия (необязательно)',
+          textInputAction: TextInputAction.done,
+          textCapitalization: TextCapitalization.words,
           prefixIcon: const Icon(Icons.person_outline, color: AppColors.primary),
         ),
         const SizedBox(height: 14),

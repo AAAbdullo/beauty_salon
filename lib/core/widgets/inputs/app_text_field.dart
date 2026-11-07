@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../theme/app_theme.dart';
 
 /// Поле ввода с закруглением 28 dp, мягким фоном и иконками
@@ -12,6 +13,11 @@ class AppTextField extends StatelessWidget {
   final ValueChanged<String>? onChanged;
   final bool readOnly;
   final VoidCallback? onTap;
+  final TextInputAction? textInputAction;
+  final ValueChanged<String>? onSubmitted;
+  final List<TextInputFormatter>? inputFormatters;
+  final TextCapitalization textCapitalization;
+  final Iterable<String>? autofillHints;
 
   const AppTextField({
     super.key,
@@ -24,6 +30,11 @@ class AppTextField extends StatelessWidget {
     this.onChanged,
     this.readOnly = false,
     this.onTap,
+    this.textInputAction,
+    this.onSubmitted,
+    this.inputFormatters,
+    this.textCapitalization = TextCapitalization.none,
+    this.autofillHints,
   });
 
   @override
@@ -33,11 +44,7 @@ class AppTextField extends StatelessWidget {
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(28),
         boxShadow: [
-          BoxShadow(
-            color: const Color(0xFFC5238A).withValues(alpha: 0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 3),
-          ),
+          BoxShadow(color: const Color(0xFFC5238A).withValues(alpha: 0.04), blurRadius: 12, offset: const Offset(0, 3)),
         ],
       ),
       child: TextField(
@@ -47,16 +54,13 @@ class AppTextField extends StatelessWidget {
         readOnly: readOnly,
         onTap: onTap,
         onChanged: onChanged,
-        style: const TextStyle(
-          color: AppColors.ink,
-          fontSize: 15,
-          fontWeight: FontWeight.w500,
-        ),
-        decoration: InputDecoration(
-          hintText: hintText,
-          prefixIcon: prefixIcon,
-          suffixIcon: suffixIcon,
-        ),
+        textInputAction: textInputAction,
+        onSubmitted: onSubmitted,
+        inputFormatters: inputFormatters,
+        textCapitalization: textCapitalization,
+        autofillHints: autofillHints,
+        style: const TextStyle(color: AppColors.ink, fontSize: 15, fontWeight: FontWeight.w500),
+        decoration: InputDecoration(hintText: hintText, prefixIcon: prefixIcon, suffixIcon: suffixIcon),
       ),
     );
   }

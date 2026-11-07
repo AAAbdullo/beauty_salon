@@ -20,34 +20,26 @@ class AppCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cardContent = Container(
-      padding: padding,
+    final radius = BorderRadius.circular(AppSizes.cardRadius);
+
+    // Тень — на внешнем контейнере, фон и ripple — на Material,
+    // чтобы эффект нажатия был виден поверх фона карточки.
+    return DecoratedBox(
       decoration: BoxDecoration(
-        color: color ?? AppColors.surface,
-        borderRadius: BorderRadius.circular(AppSizes.cardRadius),
-        border: border,
+        borderRadius: radius,
         boxShadow: [
-          BoxShadow(
-            color: const Color(0xFFC5238A).withValues(alpha: 0.05),
-            blurRadius: 18,
-            offset: const Offset(0, 4),
-          ),
+          BoxShadow(color: const Color(0xFFC5238A).withValues(alpha: 0.05), blurRadius: 18, offset: const Offset(0, 4)),
         ],
       ),
-      child: child,
-    );
-
-    if (onTap != null) {
-      return Material(
-        color: Colors.transparent,
+      child: Material(
+        color: color ?? AppColors.surface,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(borderRadius: radius, side: border?.top ?? BorderSide.none),
         child: InkWell(
-          borderRadius: BorderRadius.circular(AppSizes.cardRadius),
           onTap: onTap,
-          child: cardContent,
+          child: Padding(padding: padding, child: child),
         ),
-      );
-    }
-
-    return cardContent;
+      ),
+    );
   }
 }

@@ -3,17 +3,29 @@ import '../../core/services/app_state_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/badges/app_status_badge.dart';
 import '../../core/widgets/cards/app_card.dart';
+import 'profile_sheets.dart';
 
+/// Профиль клиента: данные, статистика, абонемент, быстрые действия, последние записи
 class ClientProfileScreen extends StatefulWidget {
   final VoidCallback onOpenSettings;
   final VoidCallback onOpenQr;
-  final VoidCallback? onOpenFavorites;
+  final VoidCallback onOpenFavorites;
+  final VoidCallback onOpenNotifications;
+
+  /// Открыть «Мои записи» на вкладке: 0 — активные, 1 — прошедшие
+  final ValueChanged<int> onOpenBookings;
+  final VoidCallback onOpenCredits;
+  final VoidCallback onOpenMap;
 
   const ClientProfileScreen({
     super.key,
     required this.onOpenSettings,
     required this.onOpenQr,
-    this.onOpenFavorites,
+    required this.onOpenFavorites,
+    required this.onOpenNotifications,
+    required this.onOpenBookings,
+    required this.onOpenCredits,
+    required this.onOpenMap,
   });
 
   @override
@@ -42,19 +54,18 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.transparent,
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppGradients.page,
-        ),
+        decoration: const BoxDecoration(gradient: AppGradients.page),
         child: SafeArea(
           bottom: false,
           child: SingleChildScrollView(
-            padding: const EdgeInsets.only(bottom: 100),
+            padding: const EdgeInsets.only(bottom: 24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _buildTopBar(),
-                const SizedBox(height: 16),
+                const SizedBox(height: 8),
                 _buildUserCard(),
                 const SizedBox(height: 16),
                 _buildStatsRow(),
@@ -73,39 +84,31 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
   }
 
   Widget _buildTopBar() {
+    final unread = _appState.unreadNotificationsCount;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppSizes.screenPadding, vertical: 8),
+      padding: const EdgeInsets.fromLTRB(AppSizes.screenPadding, 8, 8, 0),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          IconButton(
-            icon: const Icon(Icons.hexagon_outlined, color: AppColors.ink, size: 24),
-            onPressed: () {},
+          const Expanded(
+            child: Text(
+              'Профиль',
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.ink),
+            ),
           ),
-          Row(
-            children: [
-              Stack(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.notifications_none_rounded, color: AppColors.ink, size: 24),
-                    onPressed: () {},
-                  ),
-                  Positioned(
-                    right: 8,
-                    top: 8,
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle),
-                      child: const Text('3', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                    ),
-                  ),
-                ],
-              ),
-              IconButton(
-                icon: const Icon(Icons.qr_code_scanner, color: AppColors.ink, size: 24),
-                onPressed: widget.onOpenQr,
-              ),
-            ],
+          IconButton(
+            tooltip: 'Уведомления',
+            onPressed: widget.onOpenNotifications,
+            icon: Badge(
+              isLabelVisible: unread > 0,
+              backgroundColor: AppColors.primary,
+              label: Text('$unread'),
+              child: const Icon(Icons.notifications_none_rounded, color: AppColors.ink, size: 24),
+            ),
+          ),
+          IconButton(
+            tooltip: 'QR визита',
+            icon: const Icon(Icons.qr_code_2_rounded, color: AppColors.ink, size: 24),
+            onPressed: widget.onOpenQr,
           ),
         ],
       ),
@@ -117,69 +120,58 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
       padding: const EdgeInsets.symmetric(horizontal: AppSizes.screenPadding),
       child: Row(
         children: [
-          Stack(
-            children: [
-              Container(
+          Container(
+            width: 74,
+            height: 74,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.primary, width: 2),
+            ),
+            child: ClipOval(
+              child: Image.asset(
+                _appState.clientAvatar,
                 width: 74,
                 height: 74,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: AppColors.primary, width: 2),
-                ),
-                child: ClipOval(
-                  child: Image.asset(
-                    _appState.clientAvatar,
-                    width: 74,
-                    height: 74,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => Container(
-                      color: AppColors.primaryTint,
-                      child: const Icon(Icons.person, size: 45, color: AppColors.primary),
-                    ),
-                  ),
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => Container(
+                  color: AppColors.primaryTint,
+                  child: const Icon(Icons.person, size: 45, color: AppColors.primary),
                 ),
               ),
-              Positioned(
-                bottom: 2,
-                right: 2,
-                child: Container(
-                  width: 14,
-                  height: 14,
-                  decoration: const BoxDecoration(color: AppColors.success, shape: BoxShape.circle),
-                ),
-              ),
-            ],
+            ),
           ),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Text(_appState.clientName, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
-                    const SizedBox(width: 4),
-                    const Icon(Icons.auto_awesome, color: AppColors.primary, size: 18),
-                  ],
+                Text(
+                  _appState.clientName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 2),
                 Text(_appState.clientPhone, style: const TextStyle(fontSize: 13, color: AppColors.muted)),
                 const SizedBox(height: 4),
-                const Row(
+                Row(
                   children: [
-                    Icon(Icons.workspace_premium, size: 14, color: AppColors.primaryText),
-                    SizedBox(width: 4),
-                    Text('Постоянный клиент', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.primaryText)),
+                    const Icon(Icons.workspace_premium, size: 14, color: AppColors.primaryText),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Тариф ${_appState.subscriptionPlan}',
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.primaryText),
+                    ),
                   ],
                 ),
               ],
             ),
           ),
           TextButton(
-            onPressed: () {},
+            onPressed: () => ProfileSheets.editProfile(context),
             child: const Row(
               children: [
-                Text('Редактировать', style: TextStyle(fontSize: 12, color: AppColors.muted)),
+                Text('Изменить', style: TextStyle(fontSize: 12, color: AppColors.muted)),
                 Icon(Icons.chevron_right, size: 16, color: AppColors.muted),
               ],
             ),
@@ -190,34 +182,42 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
   }
 
   Widget _buildStatsRow() {
-    final stats = [
-      {'val': '${_appState.bookings.length}', 'label': 'Записей', 'icon': Icons.calendar_today_outlined},
-      {'val': '${_appState.totalFavoritesCount}', 'label': 'Любимых', 'icon': Icons.favorite_border, 'action': widget.onOpenFavorites},
-      {'val': '1 900', 'label': 'Бонусных баллов', 'icon': Icons.star_border},
-      {'val': '${_appState.clientCredits}', 'label': 'Кредитов', 'icon': Icons.account_balance_wallet_outlined},
+    final stats = <(String, String, IconData, VoidCallback)>[
+      (
+        '${_appState.activeBookings.length}',
+        'Предстоящих',
+        Icons.calendar_today_outlined,
+        () => widget.onOpenBookings(0),
+      ),
+      ('${_appState.completedBookings.length}', 'Визитов', Icons.check_circle_outline, () => widget.onOpenBookings(1)),
+      ('${_appState.totalFavoritesCount}', 'Избранных', Icons.favorite_border, widget.onOpenFavorites),
+      ('${_appState.clientCredits}', 'Кредитов', Icons.account_balance_wallet_outlined, widget.onOpenCredits),
     ];
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppSizes.screenPadding),
+      padding: const EdgeInsets.symmetric(horizontal: AppSizes.screenPadding - 4),
       child: Row(
         children: stats.map((s) {
           return Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: InkWell(
-                onTap: s['action'] as VoidCallback?,
-                borderRadius: BorderRadius.circular(16),
-                child: AppCard(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: Column(
-                    children: [
-                      Icon(s['icon'] as IconData, size: 18, color: AppColors.primary),
-                      const SizedBox(height: 6),
-                      Text(s['val'] as String, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-                      const SizedBox(height: 2),
-                      Text(s['label'] as String, textAlign: TextAlign.center, maxLines: 1, style: const TextStyle(fontSize: 9, color: AppColors.muted)),
-                    ],
-                  ),
+              child: AppCard(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                onTap: s.$4,
+                child: Column(
+                  children: [
+                    Icon(s.$3, size: 18, color: AppColors.primary),
+                    const SizedBox(height: 6),
+                    Text(s.$1, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 2),
+                    Text(
+                      s.$2,
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 10, color: AppColors.muted),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -228,84 +228,105 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
   }
 
   Widget _buildSubscriptionCard() {
+    final total = _appState.planTotalCredits;
+    final used = _appState.usedPlanCredits;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSizes.screenPadding),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          gradient: const LinearGradient(
-            colors: [Color(0xFFFFE8F5), Color(0xFFFDD5EC)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+      child: Material(
+        borderRadius: BorderRadius.circular(20),
+        clipBehavior: Clip.antiAlias,
+        child: Ink(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFFFFE8F5), Color(0xFFFDD5EC)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
           ),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primary.withValues(alpha: 0.1),
-              blurRadius: 14,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: const BoxDecoration(color: AppColors.gold, shape: BoxShape.circle),
-                  child: const Icon(Icons.workspace_premium, color: Colors.white, size: 20),
-                ),
-                const SizedBox(width: 8),
-                const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Ваш тариф', style: TextStyle(fontSize: 11, color: AppColors.muted)),
-                    Text('Премиум', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
-                  ],
-                ),
-                const Spacer(),
-                const Icon(Icons.chevron_right, color: AppColors.muted),
-              ],
-            ),
-            const SizedBox(height: 8),
-            const Text('До 12 ноября 2024', style: TextStyle(fontSize: 12, color: AppColors.muted)),
-            const SizedBox(height: 10),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: const LinearProgressIndicator(
-                value: 14 / 20,
-                minHeight: 6,
-                backgroundColor: Colors.white70,
-                valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+          child: InkWell(
+            onTap: widget.onOpenCredits,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 32,
+                        height: 32,
+                        decoration: const BoxDecoration(color: AppColors.gold, shape: BoxShape.circle),
+                        child: const Icon(Icons.workspace_premium, color: Colors.white, size: 20),
+                      ),
+                      const SizedBox(width: 8),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Ваш тариф', style: TextStyle(fontSize: 11, color: AppColors.muted)),
+                          Text(
+                            _appState.subscriptionPlan,
+                            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+                          ),
+                        ],
+                      ),
+                      const Spacer(),
+                      if (_appState.isFrozen) ...[
+                        const AppStatusBadge(
+                          text: 'Заморожен',
+                          backgroundColor: Color(0xFFE3F0FF),
+                          textColor: Color(0xFF1565C0),
+                        ),
+                        const SizedBox(width: 4),
+                      ],
+                      const Icon(Icons.chevron_right, color: AppColors.muted),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Действует до ${_appState.subscriptionExpiry}',
+                    style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                  ),
+                  const SizedBox(height: 10),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: LinearProgressIndicator(
+                      value: total == 0 ? 0 : used / total,
+                      minHeight: 6,
+                      backgroundColor: Colors.white70,
+                      valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Использовано $used из $total кредитов · осталось ${_appState.clientCredits}',
+                    style: const TextStyle(fontSize: 11, color: AppColors.muted),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 6),
-            const Text('Использовано 14 из 20 кредитов', style: TextStyle(fontSize: 11, color: AppColors.muted)),
-          ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildQuickActionsGrid() {
-    final actions = [
-      {'title': 'Мои записи', 'icon': Icons.calendar_month_outlined},
-      {'title': 'Оплата и кредиты', 'icon': Icons.credit_card_outlined},
-      {'title': 'Избранное', 'icon': Icons.favorite_border, 'action': widget.onOpenFavorites},
-      {'title': 'Отзывы', 'icon': Icons.chat_bubble_outline},
-      {'title': 'Адреса салонов', 'icon': Icons.location_on_outlined},
-      {'title': 'Бонусы и промокоды', 'icon': Icons.card_giftcard_outlined},
-      {'title': 'Поддержка', 'icon': Icons.help_outline},
-      {'title': 'Настройки', 'icon': Icons.settings_outlined, 'action': widget.onOpenSettings},
+    final actions = <(String, IconData, VoidCallback)>[
+      ('Мои записи', Icons.calendar_month_outlined, () => widget.onOpenBookings(0)),
+      ('Кредиты и оплата', Icons.credit_card_outlined, widget.onOpenCredits),
+      ('Избранное', Icons.favorite_border, widget.onOpenFavorites),
+      ('Мои отзывы', Icons.chat_bubble_outline, () => widget.onOpenBookings(1)),
+      ('Салоны на карте', Icons.location_on_outlined, widget.onOpenMap),
+      ('Вопросы', Icons.quiz_outlined, () => ProfileSheets.faq(context)),
+      ('Поддержка', Icons.help_outline, () => ProfileSheets.support(context)),
+      ('Настройки', Icons.settings_outlined, widget.onOpenSettings),
     ];
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSizes.screenPadding),
       child: GridView.builder(
         shrinkWrap: true,
+        padding: EdgeInsets.zero,
         physics: const NeverScrollableScrollPhysics(),
         itemCount: actions.length,
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -316,21 +337,20 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
         ),
         itemBuilder: (context, index) {
           final item = actions[index];
-          return InkWell(
-            onTap: item['action'] as VoidCallback?,
-            borderRadius: BorderRadius.circular(16),
-            child: AppCard(
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+          return AppCard(
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+            onTap: item.$3,
+            child: Center(
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(item['icon'] as IconData, size: 22, color: AppColors.primary),
+                  Icon(item.$2, size: 22, color: AppColors.primary),
                   const SizedBox(height: 6),
                   Text(
-                    item['title'] as String,
+                    item.$1,
                     textAlign: TextAlign.center,
                     maxLines: 2,
-                    style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700),
+                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700),
                   ),
                 ],
               ),
@@ -342,52 +362,83 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
   }
 
   Widget _buildRecentBookings() {
-    final bookings = [
-      {'title': 'Маникюр классический', 'salon': 'Nur Beauty · Алена', 'date': '12 окт 2024 · 16:30'},
-      {'title': 'Окрашивание бровей', 'salon': 'Lola Studio · Сабина', 'date': '5 окт 2024 · 14:00'},
-      {'title': 'Стрижка женская', 'salon': 'Mira Hair · Дилноза', 'date': '28 сен 2024 · 10:00'},
-    ];
+    final recent = [..._appState.activeBookings, ..._appState.completedBookings].take(3).toList();
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSizes.screenPadding),
       child: Column(
         children: [
-          const Row(
+          Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Недавние записи', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-              Text('Все записи >', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.primaryText)),
+              const Text('Недавние записи', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+              GestureDetector(
+                onTap: () => widget.onOpenBookings(0),
+                child: const Row(
+                  children: [
+                    Text(
+                      'Все записи',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.primaryText),
+                    ),
+                    Icon(Icons.chevron_right, size: 18, color: AppColors.primaryText),
+                  ],
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 12),
-          ...bookings.map((b) {
+          if (recent.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Text('Записей пока нет', style: TextStyle(color: AppColors.muted)),
+            ),
+          ...recent.map((b) {
+            final isActive = b.status == 'active';
             return Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: AppCard(
                 padding: const EdgeInsets.all(12),
+                onTap: () => widget.onOpenBookings(isActive ? 0 : 1),
                 child: Row(
                   children: [
                     Container(
                       width: 48,
                       height: 48,
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryTint,
-                        borderRadius: BorderRadius.circular(12),
+                      decoration: BoxDecoration(color: AppColors.primaryTint, borderRadius: BorderRadius.circular(12)),
+                      child: Icon(
+                        isActive ? Icons.event_available_outlined : Icons.check_circle_outline,
+                        color: AppColors.primary,
                       ),
-                      child: const Icon(Icons.check_circle_outline, color: AppColors.primary),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(b['title']!, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-                          Text(b['salon']!, style: const TextStyle(fontSize: 12, color: AppColors.muted)),
-                          Text(b['date']!, style: const TextStyle(fontSize: 11, color: AppColors.muted)),
+                          Text(
+                            b.serviceName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                          ),
+                          Text(
+                            '${b.salonName} · ${b.masterName}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                          ),
+                          Text('${b.date} · ${b.time}', style: const TextStyle(fontSize: 11, color: AppColors.muted)),
                         ],
                       ),
                     ),
-                    const AppStatusBadge(text: 'Завершено'),
+                    const SizedBox(width: 8),
+                    isActive
+                        ? const AppStatusBadge(text: 'Предстоит')
+                        : AppStatusBadge(
+                            text: 'Завершено',
+                            backgroundColor: Colors.grey.shade200,
+                            textColor: AppColors.muted,
+                          ),
                   ],
                 ),
               ),

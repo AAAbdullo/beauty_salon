@@ -916,8 +916,9 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Высота отступа с учетом FloatingBottomBar (высота 64 + отступы 16 + SafeArea)
-    final bottomNavOffset = MediaQuery.of(context).padding.bottom + 92.0;
+    // Нижний бар — штатный bottomNavigationBar, тело карты заканчивается над ним,
+    // поэтому нужен только небольшой отступ (+ системный, если бар скрыт).
+    final bottomNavOffset = MediaQuery.paddingOf(context).bottom + 12.0;
 
     return Scaffold(
       body: Stack(
