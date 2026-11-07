@@ -1,8 +1,14 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../core/models/salon_filter_params.dart';
 import '../../core/services/app_state_service.dart';
+import '../../core/data/app_dependencies.dart';
+import '../../core/data/app_scope.dart';
+import '../../core/data/repository_exception.dart';
 import '../../core/services/masters_repository.dart';
 import '../../core/services/salons_repository.dart';
+import '../../core/widgets/sheets/app_sheet.dart';
+import '../../core/widgets/states/async_screen.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/badges/app_status_badge.dart';
@@ -45,13 +51,19 @@ class _PopularService {
 }
 
 class _ClientHomeScreenState extends State<ClientHomeScreen> {
-  final _repository = SalonsRepository();
-  final _mastersRepository = MastersRepository();
+  late final AppDependencies _deps;
   final _appState = AppStateService();
   final _searchController = TextEditingController();
 
   SalonFilterParams _filterParams = const SalonFilterParams();
   String _searchQuery = '';
+
+  // Салоны (по текущим фильтрам) и мастера (для поиска) приходят из каталога
+  List<SalonModel> _salons = const [];
+  List<MasterProfileModel> _masters = const [];
+  bool _salonsLoading = true;
+  Object? _salonsError;
+  int _salonsRequestId = 0;
 
   static const _popularServices = [
     _PopularService('Маникюр комплекс', 'Маникюр', '34 кр.', '60 мин', Icons.back_hand_outlined),
@@ -63,7 +75,49 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
   @override
   void initState() {
     super.initState();
+    _deps = AppScope.read(context);
     _appState.addListener(_onAppStateChanged);
+    unawaited(_loadSalons());
+    unawaited(_loadMasters());
+  }
+
+  /// Любое изменение фильтров: сохраняем и перезагружаем список салонов
+  void _setFilter(SalonFilterParams params) {
+    setState(() => _filterParams = params);
+    unawaited(_loadSalons());
+  }
+
+  Future<void> _loadSalons() async {
+    final requestId = ++_salonsRequestId;
+    setState(() {
+      _salonsLoading = true;
+      _salonsError = null;
+    });
+    try {
+      final result = await _deps.catalog.getSalons(_filterParams);
+      // Ответ на устаревший запрос (фильтр успели сменить) отбрасываем
+      if (!mounted || requestId != _salonsRequestId) return;
+      setState(() {
+        _salons = result;
+        _salonsLoading = false;
+      });
+    } on RepositoryException catch (e) {
+      if (!mounted || requestId != _salonsRequestId) return;
+      setState(() {
+        _salonsLoading = false;
+        _salonsError = e;
+      });
+    }
+  }
+
+  /// Мастера нужны только для поиска; если загрузить не удалось, поиск идёт по салонам
+  Future<void> _loadMasters() async {
+    try {
+      final masters = await _deps.catalog.getMasters();
+      if (mounted) setState(() => _masters = masters);
+    } on RepositoryException {
+      // не критично
+    }
   }
 
   void _onAppStateChanged() {
@@ -81,10 +135,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
   List<MasterProfileModel> _matchingMasters() {
     if (_searchQuery.isEmpty) return const [];
     final q = _searchQuery.toLowerCase();
-    return _mastersRepository
-        .getMasters()
-        .where((m) => m.name.toLowerCase().contains(q) || m.specialty.toLowerCase().contains(q))
-        .toList();
+    return _masters.where((m) => m.name.toLowerCase().contains(q) || m.specialty.toLowerCase().contains(q)).toList();
   }
 
   /// Выбор района из шапки — тот же фильтр district, что и в модалке фильтров
@@ -141,11 +192,11 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                         trailing: isSelected ? const Icon(Icons.check, color: AppColors.primary) : null,
                         onTap: () {
                           Navigator.pop(ctx);
-                          setState(() {
-                            _filterParams = district == null
+                          _setFilter(
+                            district == null
                                 ? _filterParams.copyWith(clearDistrict: true)
-                                : _filterParams.copyWith(district: district);
-                          });
+                                : _filterParams.copyWith(district: district),
+                          );
                         },
                       );
                     }).toList(),
@@ -160,11 +211,17 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
   }
 
   /// Где сделать популярную услугу: список салонов, у которых она есть
-  void _openServiceSalons(_PopularService service) {
-    final salons = _repository
-        .getSalons()
-        .where((s) => s.services.toLowerCase().contains(service.query.toLowerCase()))
-        .toList();
+  Future<void> _openServiceSalons(_PopularService service) async {
+    final List<SalonModel> salons;
+    try {
+      salons = (await _deps.catalog.getSalons())
+          .where((s) => s.services.toLowerCase().contains(service.query.toLowerCase()))
+          .toList();
+    } on RepositoryException catch (e) {
+      if (mounted) showAppSnack(context, e.message);
+      return;
+    }
+    if (!mounted) return;
 
     showModalBottomSheet(
       context: context,
@@ -252,11 +309,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
     SearchFilterModal.show(
       context: context,
       currentParams: _filterParams,
-      onApply: (updated) {
-        setState(() {
-          _filterParams = updated;
-        });
-      },
+      onApply: _setFilter,
     );
   }
 
@@ -267,7 +320,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
 
     // Получаем список салонов через репозиторий с учетом фильтров.
     // Поиск: название, услуги, район или мастер, работающий в салоне.
-    final filteredSalons = _repository.getSalons(_filterParams).where((s) {
+    final filteredSalons = _salons.where((s) {
       if (_searchQuery.isEmpty) return true;
       final q = _searchQuery.toLowerCase();
       return s.name.toLowerCase().contains(q) ||
@@ -578,23 +631,23 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
           children: [
             if (_filterParams.district != null)
               _buildFilterChip('Район: ${_filterParams.district}', () {
-                setState(() => _filterParams = _filterParams.copyWith(clearDistrict: true));
+                _setFilter(_filterParams.copyWith(clearDistrict: true));
               }),
             if (_filterParams.onlyWomen)
               _buildFilterChip('Только для женщин', () {
-                setState(() => _filterParams = _filterParams.copyWith(onlyWomen: false));
+                _setFilter(_filterParams.copyWith(onlyWomen: false));
               }),
             if (_filterParams.homeVisit)
               _buildFilterChip('Выезд на дом', () {
-                setState(() => _filterParams = _filterParams.copyWith(homeVisit: false));
+                _setFilter(_filterParams.copyWith(homeVisit: false));
               }),
             if (_filterParams.creditsOnly)
               _buildFilterChip('По кредитам', () {
-                setState(() => _filterParams = _filterParams.copyWith(creditsOnly: false));
+                _setFilter(_filterParams.copyWith(creditsOnly: false));
               }),
             if (_filterParams.availableToday)
               _buildFilterChip('Свободно сегодня', () {
-                setState(() => _filterParams = _filterParams.copyWith(availableToday: false));
+                _setFilter(_filterParams.copyWith(availableToday: false));
               }),
           ],
         ),
@@ -751,12 +804,12 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
               return GestureDetector(
                 onTap: () {
                   final name = cat['name'] as String;
-                  setState(() {
-                    // Повторный тап по активной категории сбрасывает её на «Все»
-                    _filterParams = (isSelected || name == 'Все')
+                  // Повторный тап по активной категории сбрасывает её на «Все»
+                  _setFilter(
+                    (isSelected || name == 'Все')
                         ? _filterParams.copyWith(clearCategory: true)
-                        : _filterParams.copyWith(serviceCategory: name);
-                  });
+                        : _filterParams.copyWith(serviceCategory: name),
+                  );
                 },
                 child: Column(
                   children: [
@@ -827,7 +880,15 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
           ),
         ),
         const SizedBox(height: 14),
-        if (salons.isEmpty)
+        if (_salonsLoading || _salonsError != null)
+          AsyncSection(
+            isLoading: _salonsLoading,
+            error: _salonsError,
+            onRetry: () => unawaited(_loadSalons()),
+            minHeight: 140,
+            child: const SizedBox.shrink(),
+          )
+        else if (salons.isEmpty)
           Container(
             padding: const EdgeInsets.all(24),
             margin: const EdgeInsets.symmetric(horizontal: 16),

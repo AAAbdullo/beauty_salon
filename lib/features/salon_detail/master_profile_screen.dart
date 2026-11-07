@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/data/app_scope.dart';
 import '../../core/services/app_state_service.dart';
 import '../../core/services/masters_repository.dart';
 import '../../core/theme/app_theme.dart';
@@ -7,6 +8,7 @@ import '../../core/utils/formatters.dart';
 import '../../core/widgets/buttons/app_pill_button.dart';
 import '../../core/widgets/cards/app_card.dart';
 import '../../core/widgets/sheets/app_sheet.dart';
+import '../../core/widgets/states/async_screen.dart';
 import '../../core/widgets/states/not_found_screen.dart';
 import 'photo_viewer.dart';
 
@@ -17,7 +19,7 @@ class MasterProfileScreen extends StatelessWidget {
   final VoidCallback onBack;
 
   /// Запись к мастеру; [service] — если клиент выбрал конкретную услугу
-  final ValueChanged<MasterServiceItem?> onBookMaster;
+  final void Function(MasterProfileModel master, MasterServiceItem? service) onBookMaster;
 
   /// Открыть салон мастера (передаётся id салона)
   final ValueChanged<String>? onOpenSalon;
@@ -32,20 +34,27 @@ class MasterProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final master = MastersRepository().getMasterById(masterId);
-    if (master == null) {
-      return NotFoundScreen(
-        title: 'Мастер',
-        message: 'Мастер не найден. Возможно, он больше не работает в салоне.',
-        onBack: onBack,
-      );
-    }
-    return _MasterProfileView(
-      key: ValueKey(master.id),
-      master: master,
+    return AsyncScreen<MasterProfileModel?>(
+      title: 'Мастер',
       onBack: onBack,
-      onBookMaster: onBookMaster,
-      onOpenSalon: onOpenSalon,
+      reloadKey: masterId,
+      load: () => AppScope.read(context).catalog.getMaster(masterId),
+      builder: (context, master) {
+        if (master == null) {
+          return NotFoundScreen(
+            title: 'Мастер',
+            message: 'Мастер не найден. Возможно, он больше не работает в салоне.',
+            onBack: onBack,
+          );
+        }
+        return _MasterProfileView(
+          key: ValueKey(master.id),
+          master: master,
+          onBack: onBack,
+          onBookMaster: onBookMaster,
+          onOpenSalon: onOpenSalon,
+        );
+      },
     );
   }
 }
@@ -53,7 +62,7 @@ class MasterProfileScreen extends StatelessWidget {
 class _MasterProfileView extends StatefulWidget {
   final MasterProfileModel master;
   final VoidCallback onBack;
-  final ValueChanged<MasterServiceItem?> onBookMaster;
+  final void Function(MasterProfileModel master, MasterServiceItem? service) onBookMaster;
   final ValueChanged<String>? onOpenSalon;
 
   const _MasterProfileView({
@@ -387,7 +396,7 @@ class _MasterProfileViewState extends State<_MasterProfileView> with SingleTicke
           margin: const EdgeInsets.only(bottom: 10),
           child: AppCard(
             padding: const EdgeInsets.all(12),
-            onTap: () => widget.onBookMaster(s),
+            onTap: () => widget.onBookMaster(_master, s),
             child: Row(
               children: [
                 Container(
@@ -419,7 +428,7 @@ class _MasterProfileViewState extends State<_MasterProfileView> with SingleTicke
                       style: const TextStyle(fontSize: 11, color: AppColors.muted),
                     ),
                     const SizedBox(height: 4),
-                    AppPillButton(text: 'Записаться', onPressed: () => widget.onBookMaster(s)),
+                    AppPillButton(text: 'Записаться', onPressed: () => widget.onBookMaster(_master, s)),
                   ],
                 ),
               ],
@@ -524,7 +533,7 @@ class _MasterProfileViewState extends State<_MasterProfileView> with SingleTicke
       ),
       child: SafeArea(
         top: false,
-        child: AppGradientButton(text: 'Записаться к мастеру', onPressed: () => widget.onBookMaster(null)),
+        child: AppGradientButton(text: 'Записаться к мастеру', onPressed: () => widget.onBookMaster(_master, null)),
       ),
     );
   }

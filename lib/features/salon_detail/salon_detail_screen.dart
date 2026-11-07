@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../core/data/app_scope.dart';
+import '../../core/data/repositories/catalog_repository.dart';
 import '../../core/services/app_state_service.dart';
 import '../../core/services/masters_repository.dart';
 import '../../core/services/salons_repository.dart';
@@ -10,6 +12,7 @@ import '../../core/widgets/buttons/app_gradient_button.dart';
 import '../../core/widgets/buttons/app_pill_button.dart';
 import '../../core/widgets/cards/app_card.dart';
 import '../../core/widgets/sheets/app_sheet.dart';
+import '../../core/widgets/states/async_screen.dart';
 import '../../core/widgets/states/not_found_screen.dart';
 import 'photo_viewer.dart';
 
@@ -39,27 +42,35 @@ class SalonDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final salon = SalonsRepository().getSalonById(salonId);
-    if (salon == null) {
-      return NotFoundScreen(
-        title: 'Салон',
-        message: 'Салон не найден. Возможно, он больше не работает с Go\'zallik.',
-        onBack: onBack,
-      );
-    }
-    return _SalonDetailView(
-      key: ValueKey(salon.id),
-      salon: salon,
+    // Салон грузится из каталога: загрузка → данные / «не найдено» / ошибка с повтором
+    return AsyncScreen<SalonDetails?>(
+      title: 'Салон',
       onBack: onBack,
-      onBook: onBook,
-      onMasterTap: onMasterTap,
-      onShowOnMap: onShowOnMap,
+      reloadKey: salonId,
+      load: () => AppScope.read(context).catalog.getSalonDetails(salonId),
+      builder: (context, details) {
+        if (details == null) {
+          return NotFoundScreen(
+            title: 'Салон',
+            message: 'Салон не найден. Возможно, он больше не работает с Go\'zallik.',
+            onBack: onBack,
+          );
+        }
+        return _SalonDetailView(
+          key: ValueKey(details.salon.id),
+          details: details,
+          onBack: onBack,
+          onBook: onBook,
+          onMasterTap: onMasterTap,
+          onShowOnMap: onShowOnMap,
+        );
+      },
     );
   }
 }
 
 class _SalonDetailView extends StatefulWidget {
-  final SalonModel salon;
+  final SalonDetails details;
   final VoidCallback onBack;
   final SalonBookCallback onBook;
   final ValueChanged<String> onMasterTap;
@@ -67,7 +78,7 @@ class _SalonDetailView extends StatefulWidget {
 
   const _SalonDetailView({
     super.key,
-    required this.salon,
+    required this.details,
     required this.onBack,
     required this.onBook,
     required this.onMasterTap,
@@ -81,8 +92,6 @@ class _SalonDetailView extends StatefulWidget {
 class _SalonDetailViewState extends State<_SalonDetailView> with SingleTickerProviderStateMixin {
   late final TabController _tabController;
   final _appState = AppStateService();
-  final _salonsRepo = SalonsRepository();
-  final _mastersRepo = MastersRepository();
 
   late final SalonModel _salon;
   late final List<MasterServiceItem> _services;
@@ -95,11 +104,12 @@ class _SalonDetailViewState extends State<_SalonDetailView> with SingleTickerPro
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
-    _salon = widget.salon;
-    _services = _salonsRepo.getSalonServices(_salon.id);
-    _masters = _mastersRepo.getMastersForSalon(_salon.id);
-    _reviews = _salonsRepo.getSalonReviews(_salon.id);
-    _photos = _salonsRepo.getSalonPhotos(_salon.id);
+    final details = widget.details;
+    _salon = details.salon;
+    _services = details.services;
+    _masters = details.masters;
+    _reviews = details.reviews;
+    _photos = details.photos;
     _appState.addListener(_onStateChanged);
   }
 

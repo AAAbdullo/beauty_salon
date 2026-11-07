@@ -1,4 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../../core/data/app_scope.dart';
+import '../../../core/data/repository_exception.dart';
 import '../../../core/services/app_state_service.dart';
 import '../../../core/services/master_cabinet_repository.dart';
 import '../../../core/services/masters_repository.dart';
@@ -9,7 +12,7 @@ import '../../profile_settings/profile_sheets.dart';
 
 /// Вкладка «Профиль» кабинета мастера (ТЗ, раздел 6 «Usta»):
 /// данные мастера, показатели месяца, быстрые переходы, настройки и выход.
-class MasterAccountScreen extends StatelessWidget {
+class MasterAccountScreen extends StatefulWidget {
   final VoidCallback onOpenSchedule;
   final VoidCallback onOpenEarnings;
   final VoidCallback onOpenScanner;
@@ -26,10 +29,33 @@ class MasterAccountScreen extends StatelessWidget {
   });
 
   @override
+  State<MasterAccountScreen> createState() => _MasterAccountScreenState();
+}
+
+class _MasterAccountScreenState extends State<MasterAccountScreen> {
+  // Профиль мастера (специализация, рейтинг) приходит из каталога; пока он грузится — нейтральные подписи
+  MasterProfileModel? _profileData;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadProfile());
+  }
+
+  Future<void> _loadProfile() async {
+    try {
+      final profile = await AppScope.read(context).catalog.getMaster(AppStateService().masterId);
+      if (mounted) setState(() => _profileData = profile);
+    } on RepositoryException {
+      // Остаёмся с подписями по умолчанию
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final appState = AppStateService();
     final cabinet = MasterCabinetRepository();
-    final profile = MastersRepository().getMasterById(appState.masterId);
+    final profile = _profileData;
 
     return ListenableBuilder(
       listenable: appState,
@@ -116,7 +142,7 @@ class MasterAccountScreen extends StatelessWidget {
                   const SizedBox(height: 12),
                   AppCard(
                     padding: const EdgeInsets.all(14),
-                    onTap: onOpenEarnings,
+                    onTap: widget.onOpenEarnings,
                     child: Row(
                       children: [
                         const Icon(Icons.account_balance_wallet_outlined, color: AppColors.primary),
@@ -146,15 +172,15 @@ class MasterAccountScreen extends StatelessWidget {
                     padding: EdgeInsets.zero,
                     child: Column(
                       children: [
-                        _tile(Icons.access_time, 'Рабочий график', onOpenSchedule),
+                        _tile(Icons.access_time, 'Рабочий график', widget.onOpenSchedule),
                         _divider(),
-                        _tile(Icons.qr_code_scanner, 'Сканер визитов', onOpenScanner),
+                        _tile(Icons.qr_code_scanner, 'Сканер визитов', widget.onOpenScanner),
                         _divider(),
-                        _tile(Icons.bar_chart_outlined, 'Доход и выплаты', onOpenEarnings),
+                        _tile(Icons.bar_chart_outlined, 'Доход и выплаты', widget.onOpenEarnings),
                         _divider(),
                         _tile(Icons.help_outline, 'Поддержка', () => ProfileSheets.support(context)),
                         _divider(),
-                        _tile(Icons.settings_outlined, 'Настройки', onOpenSettings),
+                        _tile(Icons.settings_outlined, 'Настройки', widget.onOpenSettings),
                       ],
                     ),
                   ),
@@ -164,7 +190,7 @@ class MasterAccountScreen extends StatelessWidget {
                     borderRadius: BorderRadius.circular(24),
                     child: InkWell(
                       borderRadius: BorderRadius.circular(24),
-                      onTap: () => ProfileSheets.confirmLogout(context, onLogout),
+                      onTap: () => ProfileSheets.confirmLogout(context, widget.onLogout),
                       child: const SizedBox(
                         height: 48,
                         child: Row(

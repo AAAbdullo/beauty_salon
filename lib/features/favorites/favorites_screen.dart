@@ -1,4 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../core/data/app_dependencies.dart';
+import '../../core/data/app_scope.dart';
+import '../../core/data/repository_exception.dart';
 import '../../core/services/app_state_service.dart';
 import '../../core/services/masters_repository.dart';
 import '../../core/services/salons_repository.dart';
@@ -7,6 +11,7 @@ import '../../core/utils/formatters.dart';
 import '../../core/widgets/badges/app_status_badge.dart';
 import '../../core/widgets/buttons/app_pill_button.dart';
 import '../../core/widgets/cards/app_card.dart';
+import '../../core/widgets/states/async_screen.dart';
 
 /// Экран «Избранное» (ТЗ M-15: Избранные салоны и мастера)
 class FavoritesScreen extends StatefulWidget {
@@ -31,14 +36,43 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final _appState = AppStateService();
-  final _salonsRepo = SalonsRepository();
-  final _mastersRepo = MastersRepository();
+  late final AppDependencies _deps;
+
+  // Избранное хранится как id; сами салоны и мастера приходят из каталога
+  List<SalonModel> _allSalons = const [];
+  List<MasterProfileModel> _allMasters = const [];
+  bool _loading = true;
+  Object? _error;
 
   @override
   void initState() {
     super.initState();
+    _deps = AppScope.read(context);
     _tabController = TabController(length: 2, vsync: this);
     _appState.addListener(_onStateChanged);
+    unawaited(_load());
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final results = await Future.wait([_deps.catalog.getSalons(), _deps.catalog.getMasters()]);
+      if (!mounted) return;
+      setState(() {
+        _allSalons = results[0] as List<SalonModel>;
+        _allMasters = results[1] as List<MasterProfileModel>;
+        _loading = false;
+      });
+    } on RepositoryException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = e;
+      });
+    }
   }
 
   void _onStateChanged() {
@@ -55,13 +89,11 @@ class _FavoritesScreenState extends State<FavoritesScreen>
   @override
   Widget build(BuildContext context) {
     // Получаем избранные салоны и мастера
-    final allSalons = _salonsRepo.getSalons();
-    final favoriteSalons = allSalons
+    final favoriteSalons = _allSalons
         .where((s) => _appState.isSalonFavorite(s.id))
         .toList();
 
-    final allMasters = _mastersRepo.getMasters();
-    final favoriteMasters = allMasters
+    final favoriteMasters = _allMasters
         .where((m) => _appState.isMasterFavorite(m.id))
         .toList();
 
@@ -122,7 +154,15 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         decoration: const BoxDecoration(
           gradient: AppGradients.page,
         ),
-        child: TabBarView(
+        child: _loading || _error != null
+            ? AsyncSection(
+                isLoading: _loading,
+                error: _error,
+                onRetry: () => unawaited(_load()),
+                minHeight: 240,
+                child: const SizedBox.shrink(),
+              )
+            : TabBarView(
           controller: _tabController,
           children: [
             _buildSalonsList(favoriteSalons),

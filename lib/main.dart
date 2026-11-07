@@ -42,7 +42,11 @@ class GozallikApp extends StatefulWidget {
   /// Зависимости приложения; по умолчанию — мок-реализации. В тестах подставляются свои.
   final AppDependencies? dependencies;
 
-  const GozallikApp({super.key, this.dependencies});
+  /// Тема вместо стандартной — для тестов (стандартная тянет шрифты Google по сети)
+  @visibleForTesting
+  final ThemeData? themeOverride;
+
+  const GozallikApp({super.key, this.dependencies, this.themeOverride});
 
   @override
   State<GozallikApp> createState() => _GozallikAppState();
@@ -59,8 +63,8 @@ class _GozallikAppState extends State<GozallikApp> {
       child: MaterialApp(
         title: "Go'zallik",
         debugShowCheckedModeBanner: false,
-        theme: lightTheme,
-        darkTheme: darkTheme,
+        theme: widget.themeOverride ?? lightTheme,
+        darkTheme: widget.themeOverride == null ? darkTheme : null,
         themeMode: ThemeMode.light,
         home: const RootNavigationContainer(),
       ),
@@ -306,7 +310,9 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
   @override
   Widget build(BuildContext context) {
     if (_isRestoringSession) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator(color: AppColors.primary)));
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+      );
     }
     if (!_isAuthenticated) {
       if (_isRegistering) {
@@ -383,11 +389,8 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
         key: ValueKey('master_$_selectedMasterId'),
         masterId: _selectedMasterId,
         onBack: _pop,
-        onBookMaster: (service) {
-          final master = MastersRepository().getMasterById(_selectedMasterId);
-          if (master == null) return;
-          _startBooking(salonId: master.salonId, masterId: master.id, service: service);
-        },
+        onBookMaster: (master, service) =>
+            _startBooking(salonId: master.salonId, masterId: master.id, service: service),
         onOpenSalon: _openSalon,
       );
     }

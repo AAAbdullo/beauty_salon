@@ -1,4 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../../core/data/app_scope.dart';
+import '../../../core/data/repository_exception.dart';
 import '../../../core/services/app_state_service.dart';
 import '../../../core/services/master_cabinet_repository.dart';
 import '../../../core/services/masters_repository.dart';
@@ -39,6 +42,7 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
   void initState() {
     super.initState();
     _appState.addListener(_onStateChanged);
+    unawaited(_loadProfile());
   }
 
   void _onStateChanged() {
@@ -58,7 +62,17 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
   int _activeCount({required bool tomorrow}) =>
       _repo.getAppointments(tomorrow: tomorrow).where((a) => !a.isCancelled).length;
 
-  MasterProfileModel? get _profile => MastersRepository().getMasterById(AppStateService().masterId);
+  // Профиль мастера (специализация, услуги) приходит из каталога
+  MasterProfileModel? _profile;
+
+  Future<void> _loadProfile() async {
+    try {
+      final profile = await AppScope.read(context).catalog.getMaster(AppStateService().masterId);
+      if (mounted) setState(() => _profile = profile);
+    } on RepositoryException {
+      // Остаёмся с подписями по умолчанию
+    }
+  }
 
   int get _nowMinutes {
     final now = DateTime.now();

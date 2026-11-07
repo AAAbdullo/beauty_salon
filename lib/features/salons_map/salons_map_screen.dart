@@ -4,8 +4,12 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:yandex_mapkit/yandex_mapkit.dart';
+import '../../core/data/app_dependencies.dart';
+import '../../core/data/app_scope.dart';
+import '../../core/data/repository_exception.dart';
 import '../../core/models/salon_filter_params.dart';
 import '../../core/services/app_state_service.dart';
+import '../../core/services/location_permission_service.dart';
 import '../../core/services/salons_repository.dart';
 import '../../core/services/voice_guidance_service.dart';
 import '../../core/theme/app_theme.dart';
@@ -14,6 +18,7 @@ import '../../core/widgets/badges/app_status_badge.dart';
 import '../../core/widgets/buttons/app_gradient_button.dart';
 import '../../core/widgets/buttons/app_pill_button.dart';
 import '../../core/widgets/cards/app_card.dart';
+import '../../core/widgets/sheets/app_sheet.dart';
 import '../client_home/search_filter_modal.dart';
 
 /// Генератор стилизованных векторных пинов салонов для карты Yandex MapKit
@@ -193,7 +198,8 @@ class SalonsMapScreen extends StatefulWidget {
 }
 
 class _SalonsMapScreenState extends State<SalonsMapScreen> {
-  final SalonsRepository _repository = SalonsRepository();
+  late final AppDependencies _deps;
+  final LocationPermissionService _locationPermission = LocationPermissionService();
   YandexMapController? _mapController;
 
   // Локация пользователя (по умолчанию: сквер Амира Темура в центре Ташкента)
@@ -220,7 +226,11 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
   SalonFilterParams _filterParams = const SalonFilterParams();
 
   // Список салонов для отображения
-  late List<SalonModel> _salons;
+  // Салоны приходят из каталога асинхронно
+  List<SalonModel> _salons = const [];
+  bool _salonsLoading = true;
+  Object? _salonsError;
+  int _salonsRequestId = 0;
 
   // Выбранный салон (для мини-окна)
   SalonModel? _selectedSalon;
@@ -260,16 +270,41 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
   @override
   void initState() {
     super.initState();
-    _salons = _repository.getSalons(_filterParams);
+    _deps = AppScope.read(context);
+    unawaited(_loadSalons(selectInitial: true));
+  }
 
-    if (widget.initialSalonId != null) {
-      final found = _salons.where((s) => s.id == widget.initialSalonId).toList();
-      if (found.isNotEmpty) {
-        _selectedSalon = found.first;
+  /// Загрузка салонов по текущим фильтрам. Ответ на устаревший запрос отбрасывается.
+  Future<void> _loadSalons({bool selectInitial = false}) async {
+    final requestId = ++_salonsRequestId;
+    setState(() {
+      _salonsLoading = true;
+      _salonsError = null;
+    });
+    try {
+      final salons = await _deps.catalog.getSalons(_filterParams);
+      if (!mounted || requestId != _salonsRequestId) return;
+      setState(() {
+        _salons = salons;
+        _salonsLoading = false;
+        if (selectInitial && widget.initialSalonId != null) {
+          final found = salons.where((s) => s.id == widget.initialSalonId);
+          if (found.isNotEmpty) _selectedSalon = found.first;
+        }
+      });
+      await _refreshMapObjects();
+      // Пришли с «На карте» из карточки салона — показываем его, когда данные загрузились
+      final focus = _selectedSalon;
+      if (selectInitial && focus != null && _mapController != null) {
+        await _zoomToPoint(focus.point, zoom: 15.5);
       }
+    } on RepositoryException catch (e) {
+      if (!mounted || requestId != _salonsRequestId) return;
+      setState(() {
+        _salonsLoading = false;
+        _salonsError = e;
+      });
     }
-
-    _refreshMapObjects();
   }
 
   @override
@@ -371,10 +406,30 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
     );
   }
 
+  /// Можно ли пользоваться геолокацией: включена настройка и есть разрешение системы.
+  /// Системное окно разрешения показывается здесь, при открытии карты, а не при запуске приложения.
+  /// [showFeedback] — объяснить пользователю, почему геолокация недоступна (только по кнопке).
+  Future<bool> _ensureLocationAccess({required bool showFeedback}) async {
+    if (!AppStateService().useLocationEnabled) {
+      if (showFeedback && mounted) {
+        showAppSnack(context, 'Геолокация выключена в настройках приложения («Показывать салоны рядом со мной»).');
+      }
+      return false;
+    }
+    final status = await _locationPermission.request();
+    if (status == LocationPermissionStatus.granted) return true;
+    if (showFeedback && mounted && status != LocationPermissionStatus.unsupported) {
+      showAppSnack(context, 'Нет доступа к геолокации. Разрешите его в настройках телефона.');
+    }
+    return false;
+  }
+
   /// Определение реальной геопозиции пользователя через Yandex MapKit UserLocation
   /// [showFeedback] — сообщать, если геопозицию определить не удалось (только по кнопке)
   Future<void> _detectAndCenterRealLocation({bool showFeedback = true}) async {
     if (_mapController == null) return;
+    if (!await _ensureLocationAccess(showFeedback: showFeedback)) return;
+    if (!mounted) return;
 
     try {
       await _mapController!.toggleUserLayer(
@@ -890,10 +945,9 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
       onApply: (params) {
         setState(() {
           _filterParams = params;
-          _salons = _repository.getSalons(_filterParams);
           _selectedCategoryIndex = 0;
         });
-        _refreshMapObjects();
+        unawaited(_loadSalons());
       },
     );
   }
@@ -908,11 +962,9 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
         serviceCategory: category == 'Все' ? null : category,
         clearCategory: category == 'Все',
       );
-
-      _salons = _repository.getSalons(_filterParams);
     });
 
-    _refreshMapObjects();
+    unawaited(_loadSalons());
   }
 
   @override
@@ -935,9 +987,10 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                 await controller.toggleTrafficLayer(visible: true);
               } catch (_) {}
 
-              final useLocation = AppStateService().useLocationEnabled;
+              // Слой пользователя включаем, только если разрешена настройка и дано разрешение системы
+              final useLocation = await _ensureLocationAccess(showFeedback: false);
+              if (!mounted) return;
 
-              // Включаем нативный слой пользователя (если клиент разрешил в настройках)
               if (useLocation) {
                 try {
                   await controller.toggleUserLayer(
@@ -1065,12 +1118,20 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                       color: AppColors.ink,
                     ),
                   ),
-                  Row(
+                  GestureDetector(
+                    // При ошибке тап по подзаголовку повторяет загрузку
+                    onTap: _salonsError != null ? () => unawaited(_loadSalons()) : null,
+                    behavior: HitTestBehavior.opaque,
+                    child: Row(
                     children: [
                       Text(
-                        _isRealGpsActive
-                            ? 'GPS активен (${_salons.length} салонов)'
-                            : 'Ташкент (${_salons.length} салонов)',
+                        _salonsLoading
+                            ? 'Загружаем салоны…'
+                            : _salonsError != null
+                            ? 'Не удалось загрузить · Повторить'
+                            : _isRealGpsActive
+                            ? 'GPS активен (${Formatters.plural(_salons.length, 'салон', 'салона', 'салонов')})'
+                            : 'Ташкент (${Formatters.plural(_salons.length, 'салон', 'салона', 'салонов')})',
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
@@ -1084,6 +1145,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                         color: _isRealGpsActive ? const Color(0xFF1AAA4C) : AppColors.primary,
                       ),
                     ],
+                    ),
                   ),
                 ],
               ),

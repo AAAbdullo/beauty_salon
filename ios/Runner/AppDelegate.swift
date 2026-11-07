@@ -6,7 +6,10 @@ import AVFoundation
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate, CLLocationManagerDelegate {
+  // Менеджер геолокации создаётся только когда нужно запросить разрешение (при открытии карты),
+  // а не при запуске приложения: до входа, у мастера и при выключенной настройке геолокация не нужна.
   private var locationManager: CLLocationManager?
+  private var pendingLocationResult: FlutterResult?
   private let speechSynthesizer = AVSpeechSynthesizer()
 
   override init() {
@@ -21,16 +24,10 @@ import AVFoundation
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
 
-    // Инициализация и системный запрос разрешения на геопозицию для Yandex MapKit
-    locationManager = CLLocationManager()
-    locationManager?.delegate = self
-    locationManager?.desiredAccuracy = kCLLocationAccuracyBest
-    locationManager?.requestWhenInUseAuthorization()
-    locationManager?.startUpdatingLocation()
-
-    // Регистрация MethodChannel голосовой навигации (TTS)
+    // Регистрация MethodChannel голосовой навигации (TTS) и запроса геолокации
     if let controller = window?.rootViewController as? FlutterViewController {
       setupTtsChannel(binaryMessenger: controller.binaryMessenger)
+      setupLocationChannel(binaryMessenger: controller.binaryMessenger)
     }
 
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
@@ -64,15 +61,63 @@ import AVFoundation
     }
   }
 
-  func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-    let status: CLAuthorizationStatus
-    if #available(iOS 14.0, *) {
-      status = manager.authorizationStatus
-    } else {
-      status = CLLocationManager.authorizationStatus()
+  // MARK: - Разрешение на геолокацию (канал com.beauty_salon/location)
+
+  private func setupLocationChannel(binaryMessenger: FlutterBinaryMessenger) {
+    let channel = FlutterMethodChannel(name: "com.beauty_salon/location", binaryMessenger: binaryMessenger)
+    channel.setMethodCallHandler { [weak self] (call, result) in
+      guard let self = self else {
+        result("denied")
+        return
+      }
+      switch call.method {
+      case "status":
+        result(self.statusString(self.currentAuthorizationStatus()))
+      case "request":
+        self.requestLocationPermission(result)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
     }
-    if status == .authorizedWhenInUse || status == .authorizedAlways {
-      manager.startUpdatingLocation()
+  }
+
+  private func currentAuthorizationStatus() -> CLAuthorizationStatus {
+    if #available(iOS 14.0, *) {
+      return (locationManager ?? CLLocationManager()).authorizationStatus
+    }
+    return CLLocationManager.authorizationStatus()
+  }
+
+  private func statusString(_ status: CLAuthorizationStatus) -> String {
+    switch status {
+    case .notDetermined: return "notDetermined"
+    case .restricted: return "restricted"
+    case .denied: return "denied"
+    case .authorizedAlways, .authorizedWhenInUse: return "granted"
+    @unknown default: return "denied"
+    }
+  }
+
+  /// Показывает системное окно, только если пользователя ещё не спрашивали; иначе сразу отдаёт состояние
+  private func requestLocationPermission(_ result: @escaping FlutterResult) {
+    let status = currentAuthorizationStatus()
+    if status != .notDetermined || pendingLocationResult != nil {
+      result(statusString(status))
+      return
+    }
+    pendingLocationResult = result
+    let manager = locationManager ?? CLLocationManager()
+    locationManager = manager
+    manager.delegate = self
+    manager.requestWhenInUseAuthorization()
+  }
+
+  func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+    let status = currentAuthorizationStatus()
+    // Первый вызов приходит сразу после установки делегата, пока пользователь ещё не ответил
+    if status != .notDetermined, let pending = pendingLocationResult {
+      pendingLocationResult = nil
+      pending(statusString(status))
     }
   }
 
@@ -81,6 +126,7 @@ import AVFoundation
     // У FlutterImplicitEngineBridge нет binaryMessenger — берём его через registrar.
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "BeautySalonTts") {
       setupTtsChannel(binaryMessenger: registrar.messenger())
+      setupLocationChannel(binaryMessenger: registrar.messenger())
     }
   }
 }

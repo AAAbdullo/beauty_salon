@@ -1,7 +1,7 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'helpers/test_fonts.dart';
 
 import 'package:beauty_salons/core/data/app_dependencies.dart';
 import 'package:beauty_salons/core/data/app_scope.dart';
@@ -31,24 +31,7 @@ import 'package:beauty_salons/features/subscription_credits/credits_screen.dart'
 void main() {
   void noop() {}
 
-  // Реальные метрики шрифта вместо тестового «квадратного» — иначе переполнения ложные
-  setUpAll(() async {
-    // flutter_tester лежит внутри SDK: <flutter>/bin/cache/artifacts/engine/...
-    final exe = Platform.resolvedExecutable;
-    final cacheIndex = exe.indexOf('${Platform.pathSeparator}bin${Platform.pathSeparator}cache');
-    if (cacheIndex == -1) return;
-    final fontsDir = '${exe.substring(0, cacheIndex)}/bin/cache/artifacts/material_fonts';
-    if (!File('$fontsDir/Roboto-Regular.ttf').existsSync()) return;
-    final loader = FontLoader('Roboto');
-    for (final w in ['Regular', 'Medium', 'Bold', 'Black']) {
-      final bytes = File('$fontsDir/Roboto-$w.ttf').readAsBytesSync();
-      loader.addFont(Future.value(ByteData.view(bytes.buffer)));
-    }
-    await loader.load();
-    final icons = FontLoader('MaterialIcons')
-      ..addFont(Future.value(ByteData.view(File('$fontsDir/MaterialIcons-Regular.otf').readAsBytesSync().buffer)));
-    await icons.load();
-  });
+  setUpAll(loadTestFonts);
 
   final screens = <String, Widget Function()>{
     'Auth': () => AuthScreen(onLoginSuccess: (_) {}),
@@ -73,7 +56,7 @@ void main() {
         onShowOnMap: (_) {},
       ),
     for (final masterId in ['m-001', 'm-unknown'])
-      'Master $masterId': () => MasterProfileScreen(masterId: masterId, onBack: noop, onBookMaster: (_) {}),
+      'Master $masterId': () => MasterProfileScreen(masterId: masterId, onBack: noop, onBookMaster: (_, _) {}),
     for (final salonId in ['s-001', 's-005', 's-004', 's-unknown'])
       'Booking $salonId': () => BookingScreen(salonId: salonId, onBack: noop, onConfirm: (_, _) async => true),
     'Payment': () => PaymentScreen(

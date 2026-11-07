@@ -119,7 +119,12 @@ class _AsyncScreenState<T> extends State<AsyncScreen<T>> {
     if (oldWidget.reloadKey != widget.reloadKey) _reload();
   }
 
-  void _reload() => setState(() => _future = widget.load());
+  void _reload() {
+    // Блок, а не стрелка: setState не должен получать Future из колбэка
+    setState(() {
+      _future = widget.load();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
