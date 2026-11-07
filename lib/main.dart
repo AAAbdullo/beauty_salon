@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'core/services/app_preferences.dart';
 import 'core/services/app_state_service.dart';
 import 'core/l10n/app_locale.dart';
 import 'core/theme/app_appearance.dart';
@@ -37,7 +38,9 @@ import 'core/utils/result.dart';
 import 'core/services/masters_repository.dart';
 import 'core/widgets/sheets/app_sheet.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await AppPreferences.restoreAndWatch(); // язык и тема с прошлого запуска
   runApp(const GozallikApp());
 }
 
