@@ -49,11 +49,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _pickLanguage() {
-    // ТЗ: uz-Latn, uz-Cyrl, ru. Узбекская кириллица пока не готова.
+    // ТЗ: uz-Latn, uz-Cyrl, ru
     const languages = [
-      ("O'zbekcha (lotin)", AppLanguage.uz, true),
-      ('Ўзбекча (кирилл)', null, false),
-      ('Русский', AppLanguage.ru, true),
+      ("O'zbekcha (lotin)", AppLanguage.uz),
+      ('Ўзбекча (кирилл)', AppLanguage.uzCyrl),
+      ('Русский', AppLanguage.ru),
     ];
     showAppSheet<void>(
       context: context,
@@ -64,13 +64,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: languages
             .map(
               (l) => ListTile(
-                enabled: l.$3,
                 title: Text(l.$1, style: const TextStyle(fontWeight: FontWeight.w700)),
-                subtitle: l.$3 ? null : const Text('Перевод готовится'),
                 trailing: l.$2 == AppLocale.instance.language ? Icon(Icons.check, color: AppColors.primary) : null,
                 onTap: () {
-                  final language = l.$2;
-                  if (language != null) AppLocale.instance.setLanguage(language);
+                  AppLocale.instance.setLanguage(l.$2);
                   Navigator.pop(ctx);
                 },
               ),
@@ -80,14 +77,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  String get _languageLabel => AppLocale.instance.language == AppLanguage.uz ? "O'zbekcha" : 'Русский';
+  String get _languageLabel => switch (AppLocale.instance.language) {
+    AppLanguage.uz => "O'zbekcha",
+    AppLanguage.uzCyrl => 'Ўзбекча',
+    AppLanguage.ru => 'Русский',
+  };
 
   void _pickTheme() {
-    const options = [
-      (ThemeMode.system, 'Как в системе'),
-      (ThemeMode.light, 'Светлая'),
-      (ThemeMode.dark, 'Тёмная'),
-    ];
+    const options = [(ThemeMode.system, 'Как в системе'), (ThemeMode.light, 'Светлая'), (ThemeMode.dark, 'Тёмная')];
     showAppSheet<void>(
       context: context,
       title: 'Тема оформления',

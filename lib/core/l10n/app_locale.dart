@@ -3,7 +3,7 @@ import 'uz_strings.dart';
 
 /// Язык интерфейса. Тексты в коде написаны по-русски; при выборе узбекского они переводятся в момент показа
 /// через [tr] по словарю [uzExact] / [uzTemplates] (динамические фразы — по шаблонам с подстановкой).
-enum AppLanguage { ru, uz }
+enum AppLanguage { ru, uz, uzCyrl }
 
 class AppLocale extends ChangeNotifier {
   AppLocale._();
@@ -13,7 +13,9 @@ class AppLocale extends ChangeNotifier {
   AppLanguage get language => _language;
 
   /// Быстрая проверка для [tr]
-  static bool get isUz => instance._language == AppLanguage.uz;
+  static bool get isUz => instance._language != AppLanguage.ru;
+
+  static bool get isCyrillicUz => instance._language == AppLanguage.uzCyrl;
 
   void setLanguage(AppLanguage language) {
     if (_language == language) return;
@@ -45,7 +47,7 @@ const _keepAsIs = {'Русский', 'Ўзбекча (кирилл)'};
 
 String? _translate(String s) {
   if (_keepAsIs.contains(s)) return null;
-  final exact = uzExact[s];
+  final exact = _exact[s];
   if (exact != null) return exact;
 
   // Края из пробелов не входят в ключ словаря
@@ -87,7 +89,8 @@ String? _translate(String s) {
   }
 
   // Имена людей (в т.ч. введённые пользователем): «Алена», «Дилноза Юсупова» — транслитерация
-  if (_nameRegex.hasMatch(s)) return _transliterate(s);
+  // (в узбекской кириллице имена остаются как есть)
+  if (!AppLocale.isCyrillicUz && _nameRegex.hasMatch(s)) return _transliterate(s);
 
   // Текст со скобками: «4.8 (126 отзывов)»
   final bracket = RegExp(r'^(.*?)\((.+)\)(.*)$', dotAll: true).firstMatch(s);
@@ -124,11 +127,15 @@ class _Template {
   _Template(this.regex, this.target, this.staticLength);
 }
 
-final List<_Template> _templates = _buildTemplates();
+final _templatesLatin = _buildTemplates(uzTemplates);
+final _templatesCyrl = _buildTemplates(uzCyrlTemplates);
 
-List<_Template> _buildTemplates() {
+Map<String, String> get _exact => AppLocale.isCyrillicUz ? uzCyrlExact : uzExact;
+List<_Template> get _templates => AppLocale.isCyrillicUz ? _templatesCyrl : _templatesLatin;
+
+List<_Template> _buildTemplates(Map<String, String> source0) {
   final list = <_Template>[];
-  uzTemplates.forEach((source, target) {
+  source0.forEach((source, target) {
     final buf = StringBuffer('^');
     var staticLength = 0;
     var last = 0;
@@ -174,7 +181,7 @@ final _dateRegex = RegExp(
 String? _byDate(String s) {
   final m = _dateRegex.firstMatch(s);
   if (m == null) return null;
-  final month = uzExact[m.group(2)!] ?? m.group(2)!;
+  final month = _exact[m.group(2)!] ?? m.group(2)!;
   return '${m.group(1)} $month${m.group(3) ?? ''}';
 }
 

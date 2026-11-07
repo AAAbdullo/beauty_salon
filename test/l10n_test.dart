@@ -51,6 +51,48 @@ void main() {
     });
   });
 
+  group('Узбекская кириллица', () {
+    setUp(() => AppLocale.instance.setLanguage(AppLanguage.uzCyrl));
+
+    test('фразы, шаблоны, бренды и имена', () {
+      expect(tr('Главная'), 'Бош саҳифа');
+      expect(tr('Салоны (10)'), 'Салонлар (10)');
+      expect(
+        tr('• Платежи обрабатывают Click, Payme и Uzum — данные карт приложение не хранит.'),
+        contains('Click, Payme ва Uzum'),
+      );
+      expect(tr('Алена'), 'Алена'); // имена остаются как есть
+      expect(tr('12 ноября 2026'), '12 ноябр 2026');
+      expect(tr('126 отзывов'), '126 та шарҳ');
+    });
+
+    testWidgets('экраны входа и главной — без русских слов', (tester) async {
+      useBigPhone(tester);
+      await tester.pumpWidget(
+        GozallikApp(
+          dependencies: AppDependencies.mock(network: MockNetwork()),
+          themeOverride: ThemeData(fontFamily: 'Roboto'),
+        ),
+      );
+      await settle(tester);
+      expect(find.text('Кириш'), findsWidgets);
+      expect(find.text('Войти'), findsNothing);
+
+      await tester.enterText(find.byType(TextField).at(0), 'client');
+      await tester.enterText(find.byType(TextField).at(1), '12345678');
+      await tester.tap(find.text('Кириш').first);
+      await settle(tester, frames: 12);
+      final russianOnly = RegExp(r'[ыщь]');
+      final left = tester
+          .widgetList<Text>(find.byType(Text))
+          .map((t) => t.data ?? '')
+          .where((t) => russianOnly.hasMatch(t) && t != 'Русский')
+          .toSet();
+      expect(left, isEmpty);
+      await disposeTree(tester);
+    });
+  });
+
   group('Экраны на узбекском', () {
     final cyrillic = RegExp(r'[А-Яа-яЁё]');
     // названия языков и служебные поля остаются на своём языке

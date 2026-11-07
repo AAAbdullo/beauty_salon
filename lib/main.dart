@@ -105,7 +105,7 @@ class _GozallikAppState extends State<GozallikApp> with WidgetsBindingObserver {
         theme: widget.themeOverride ?? lightTheme,
         darkTheme: widget.themeOverride == null ? darkTheme : null,
         themeMode: AppColors.isDark ? ThemeMode.dark : ThemeMode.light,
-        locale: Locale(AppLocale.instance.language.name),
+        locale: Locale(AppLocale.isUz ? 'uz' : 'ru'),
         supportedLocales: const [Locale('ru'), Locale('uz')],
         localizationsDelegates: GlobalMaterialLocalizations.delegates,
         themeAnimationDuration: Duration.zero, // палитра переключается мгновенно и целиком
