@@ -228,6 +228,8 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
   final VoiceGuidanceService _voiceGuidance = VoiceGuidanceService();
 
   // Режим активной 3D навигации (как в Яндекс Навигаторе)
+  static const double _sheetInitialExtent = 0.30;
+  final DraggableScrollableController _sheetController = DraggableScrollableController();
   bool _isNavigating = false;
   int _navStepIndex = 0;
   Timer? _navTrackingTimer;
@@ -297,6 +299,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
 
   @override
   void dispose() {
+    _sheetController.dispose();
     _navTrackingTimer?.cancel();
     _voiceGuidance.stop();
     _drivingSession?.close();
@@ -1073,19 +1076,40 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
             else
               _buildNavigationTopHud(context),
 
-            // 3. Кнопка определения местоположения (поднята строго выше карточки салона)
-            if (!_isNavigating)
+            // 3–4. Кнопка геопозиции и мини-окно выбранного салона: кнопка всегда лежит над карточкой
+            if (!_isNavigating && _selectedSalon != null)
               Positioned(
+                left: 16,
                 right: 16,
-                bottom: _selectedSalon != null
-                    ? (bottomNavOffset + (_primaryRoutePolyline != null ? 360.0 : 250.0))
-                    : 260.0,
-                child: _buildMapControls(),
+                bottom: bottomNavOffset,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [_buildMapControls(), const SizedBox(height: 12), _buildSalonMiniWindow(_selectedSalon!)],
+                ),
               ),
 
-            // 4. Информационное МИНИ-ОКНО выбранного салона (плавает ровно над FloatingBottomBar)
-            if (!_isNavigating && _selectedSalon != null)
-              Positioned(left: 16, right: 16, bottom: bottomNavOffset, child: _buildSalonMiniWindow(_selectedSalon!)),
+            // Кнопка геопозиции без выбранного салона: едет вместе с выдвижным списком
+            if (!_isNavigating && _selectedSalon == null)
+              Positioned.fill(
+                child: LayoutBuilder(
+                  builder: (context, box) => ListenableBuilder(
+                    listenable: _sheetController,
+                    builder: (context, _) {
+                      final extent = _sheetController.isAttached ? _sheetController.size : _sheetInitialExtent;
+                      // не выше верхней шапки и не ниже безопасной зоны
+                      final maxBottom = box.maxHeight - MediaQuery.paddingOf(context).top - 190;
+                      final bottom = (box.maxHeight * extent + 12).clamp(
+                        bottomNavOffset,
+                        maxBottom < bottomNavOffset ? bottomNavOffset : maxBottom,
+                      );
+                      return Stack(
+                        children: [Positioned(right: 16, bottom: bottom, child: _buildMapControls())],
+                      );
+                    },
+                  ),
+                ),
+              ),
 
             // 5. Нижний HUD навигатора со спидометром
             if (_isNavigating) _buildNavigationBottomHud(context),
@@ -1436,22 +1460,33 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Row(
-                          children: [
-                            Icon(
-                              _isWalkingRoute ? Icons.directions_walk : Icons.directions_car,
-                              size: 16,
-                              color: _isWalkingRoute ? const Color(0xFF247659) : AppColors.primary,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              _primaryRouteDuration ?? 'Маршрут построен',
-                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.ink),
-                            ),
-                          ],
+                        Flexible(
+                          child: Row(
+                            children: [
+                              Icon(
+                                _isWalkingRoute ? Icons.directions_walk : Icons.directions_car,
+                                size: 16,
+                                color: _isWalkingRoute ? const Color(0xFF247659) : AppColors.primary,
+                              ),
+                              const SizedBox(width: 6),
+                              Flexible(
+                                child: Text(
+                                  _primaryRouteDuration ?? 'Маршрут построен',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppColors.ink,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
+                        const SizedBox(width: 8),
                         Text(
-                          'Расстояние: ${_primaryRouteDistance ?? salon.distance}',
+                          _primaryRouteDistance ?? salon.distance,
                           style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.muted),
                         ),
                       ],
@@ -1464,12 +1499,16 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                           children: [
                             const Icon(Icons.alt_route, size: 14, color: AppColors.primary),
                             const SizedBox(width: 4),
-                            Text(
-                              'Есть 2-й вариант (${_alternativeRouteDuration ?? ""}) · Нажмите чтобы переключить',
-                              style: const TextStyle(
-                                fontSize: 11,
-                                color: AppColors.primaryText,
-                                fontWeight: FontWeight.w600,
+                            Flexible(
+                              child: Text(
+                                '2-й вариант (${_alternativeRouteDuration ?? ""}) · нажмите, чтобы переключить',
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.primaryText,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
                           ],
@@ -1490,7 +1529,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                   Expanded(
                     flex: 4,
                     child: AppGradientButton(
-                      text: _isWalkingRoute ? '🚶 Пойти' : '🚗 Поехали',
+                      text: _isWalkingRoute ? 'Пойти' : 'Поехали',
                       icon: const Icon(Icons.navigation_rounded, color: Colors.white, size: 18),
                       height: 44,
                       onPressed: _startNavigationMode,
@@ -1757,7 +1796,8 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
   /// Выдвижной нижний лист со списком салонов
   Widget _buildDraggableSalonsList(double bottomNavOffset) {
     return DraggableScrollableSheet(
-      initialChildSize: 0.30,
+      controller: _sheetController,
+      initialChildSize: _sheetInitialExtent,
       minChildSize: 0.14,
       maxChildSize: 0.82,
       builder: (context, scrollController) {
