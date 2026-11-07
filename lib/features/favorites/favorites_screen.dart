@@ -99,7 +99,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'Избранное',
           style: TextStyle(
             fontSize: 22,
@@ -115,7 +115,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
           child: CircleAvatar(
             backgroundColor: AppColors.surface,
             child: IconButton(
-              icon: const Icon(Icons.arrow_back, color: AppColors.ink, size: 20),
+              icon: Icon(Icons.arrow_back, color: AppColors.ink, size: 20),
               onPressed: widget.onBack,
             ),
           ),
@@ -151,7 +151,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         ),
       ),
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: AppGradients.page,
         ),
         child: _loading || _error != null
@@ -233,7 +233,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                             const SizedBox(height: 2),
                             Text(
                               '${s.district} · ${s.address}',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 12,
                                 color: AppColors.muted,
                               ),
@@ -256,7 +256,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                                 const SizedBox(width: 4),
                                 Text(
                                   '(${s.reviewsCount})',
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 11,
                                     color: AppColors.muted,
                                   ),
@@ -264,7 +264,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                                 const Spacer(),
                                 Text(
                                   s.minPriceLabel,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w800,
                                     color: AppColors.primaryText,
@@ -309,9 +309,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                     runSpacing: 4,
                     children: [
                       if (s.onlyWomen)
-                        const AppStatusBadge(
+                        AppStatusBadge(
                           text: 'Faqat ayollar',
-                          backgroundColor: Color(0xFFFFECEF),
+                          backgroundColor: AppColors.soft(const Color(0xFFFFECEF)),
                           textColor: AppColors.primary,
                         ),
                       if (s.homeVisit)
@@ -321,10 +321,10 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                           textColor: Colors.blue.shade800,
                         ),
                       if (s.creditsAccepted)
-                        const AppStatusBadge(
+                        AppStatusBadge(
                           text: 'Kredit bilan',
-                          backgroundColor: Color(0xFFE8F5E9),
-                          textColor: Color(0xFF2E7D32),
+                          backgroundColor: AppColors.soft(const Color(0xFFE8F5E9)),
+                          textColor: AppColors.onSoft(const Color(0xFF2E7D32)),
                         ),
                     ],
                   ),
@@ -449,7 +449,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                             const SizedBox(height: 2),
                             Text(
                               '${m.specialty} · ${m.salonName}',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 12,
                                 color: AppColors.muted,
                               ),
@@ -470,7 +470,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                                 const SizedBox(width: 4),
                                 Text(
                                   '(${Formatters.reviews(m.reviewsCount)})',
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 11,
                                     color: AppColors.muted,
                                   ),
@@ -478,7 +478,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                                 const Spacer(),
                                 Text(
                                   'Стаж ${Formatters.years(m.experienceYears)}',
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w600,
                                     color: AppColors.muted,
@@ -569,7 +569,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
             Text(
               subtitle,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 12, color: AppColors.muted),
+              style: TextStyle(fontSize: 12, color: AppColors.muted),
             ),
             const SizedBox(height: 16),
             AppPillButton(

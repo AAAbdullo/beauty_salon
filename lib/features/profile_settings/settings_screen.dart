@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/services/app_state_service.dart';
+import '../../core/theme/app_appearance.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/cards/app_card.dart';
 import '../../core/widgets/sheets/app_sheet.dart';
@@ -69,15 +70,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  void _pickTheme() {
+    const options = [
+      (ThemeMode.system, 'Как в системе'),
+      (ThemeMode.light, 'Светлая'),
+      (ThemeMode.dark, 'Тёмная'),
+    ];
+    showAppSheet<void>(
+      context: context,
+      title: 'Тема оформления',
+      builder: (ctx) => ListView(
+        shrinkWrap: true,
+        padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
+        children: options
+            .map(
+              (o) => ListTile(
+                title: Text(o.$2, style: const TextStyle(fontWeight: FontWeight.w700)),
+                trailing: AppAppearance.instance.mode == o.$1 ? Icon(Icons.check, color: AppColors.primary) : null,
+                onTap: () {
+                  AppAppearance.instance.setMode(o.$1);
+                  setState(() {});
+                  Navigator.pop(ctx);
+                },
+              ),
+            )
+            .toList(),
+      ),
+    );
+  }
+
+  String get _themeLabel => switch (AppAppearance.instance.mode) {
+    ThemeMode.system => 'Как в системе',
+    ThemeMode.light => 'Светлая',
+    ThemeMode.dark => 'Тёмная',
+  };
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.ink),
+          icon: Icon(Icons.arrow_back, color: AppColors.ink),
           onPressed: widget.onBack,
         ),
-        title: const Text(
+        title: Text(
           'Настройки',
           style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.ink),
         ),
@@ -86,7 +122,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         elevation: 0,
       ),
       body: Container(
-        decoration: const BoxDecoration(gradient: AppGradients.page),
+        decoration: BoxDecoration(gradient: AppGradients.page),
         child: SafeArea(
           top: false,
           child: SingleChildScrollView(
@@ -122,7 +158,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _buildSectionTitle(String title) {
     return Text(
       title,
-      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.muted),
+      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.muted),
     );
   }
 
@@ -159,18 +195,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
               children: [
                 Text(name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
                 const SizedBox(height: 2),
-                Text(subtitle, style: const TextStyle(fontSize: 13, color: AppColors.muted)),
+                Text(subtitle, style: TextStyle(fontSize: 13, color: AppColors.muted)),
                 if (!widget.isMaster) ...[
                   const SizedBox(height: 4),
                   Text(
                     'Тариф ${_appState.subscriptionPlan}',
-                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.primaryText),
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.primaryText),
                   ),
                 ],
               ],
             ),
           ),
-          if (!widget.isMaster) const Icon(Icons.chevron_right, color: AppColors.muted),
+          if (!widget.isMaster) Icon(Icons.chevron_right, color: AppColors.muted),
         ],
       ),
     );
@@ -201,6 +237,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       child: Column(
         children: [
           _buildListTile(Icons.language, 'Язык приложения', _pickLanguage, value: 'Русский'),
+          _buildDivider(),
+          _buildListTile(Icons.dark_mode_outlined, 'Тема оформления', _pickTheme, value: _themeLabel),
           _buildDivider(),
           _buildSwitchTile(
             Icons.notifications_active_outlined,
@@ -257,10 +295,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
             ),
             if (value != null) ...[
-              Text(value, style: const TextStyle(fontSize: 13, color: AppColors.muted)),
+              Text(value, style: TextStyle(fontSize: 13, color: AppColors.muted)),
               const SizedBox(width: 4),
             ],
-            const Icon(Icons.chevron_right, size: 18, color: AppColors.muted),
+            Icon(Icons.chevron_right, size: 18, color: AppColors.muted),
           ],
         ),
       ),
@@ -286,7 +324,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     color: onChanged == null ? AppColors.muted : AppColors.ink,
                   ),
                 ),
-                if (hint != null) Text(hint, style: const TextStyle(fontSize: 11, color: AppColors.muted)),
+                if (hint != null) Text(hint, style: TextStyle(fontSize: 11, color: AppColors.muted)),
               ],
             ),
           ),
@@ -297,12 +335,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _buildDivider() {
-    return const Divider(height: 1, thickness: 0.5, indent: 52, endIndent: 16, color: Color(0xFFF3DCE8));
+    return Divider(height: 1, thickness: 0.5, indent: 52, endIndent: 16, color: AppColors.line);
   }
 
   Widget _buildLogoutButton() {
     return Material(
-      color: const Color(0xFFFFF0F5),
+      color: AppColors.soft(const Color(0xFFFFF0F5)),
       borderRadius: BorderRadius.circular(24),
       child: InkWell(
         onTap: () => ProfileSheets.confirmLogout(context, widget.onLogout),

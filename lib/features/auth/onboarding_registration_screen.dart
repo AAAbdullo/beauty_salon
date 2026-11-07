@@ -125,7 +125,7 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
+            colorScheme: ColorScheme.light(
               primary: AppColors.primary,
               onPrimary: Colors.white,
               onSurface: AppColors.ink,
@@ -193,7 +193,7 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: AppGradients.page,
         ),
         child: SafeArea(
@@ -221,7 +221,7 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: AppColors.ink),
+            icon: Icon(Icons.arrow_back_ios_new, size: 20, color: AppColors.ink),
             onPressed: () {
               if (_currentStep > 1) {
                 setState(() => _currentStep--);
@@ -232,7 +232,7 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
           ),
           Text(
             'Шаг $_currentStep из 3',
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.muted),
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.muted),
           ),
           TextButton(
             onPressed: widget.onBackToLogin,
@@ -283,17 +283,17 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 20),
-        const Text(
+        Text(
           'Регистрация',
           style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: AppColors.ink),
         ),
         const SizedBox(height: 8),
-        const Text(
+        Text(
           'Введите ваш номер телефона для входа в приложение и получения кода подтверждения',
           style: TextStyle(fontSize: 14, color: AppColors.muted),
         ),
         const SizedBox(height: 32),
-        const Text('Номер телефона', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink)),
+        Text('Номер телефона', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink)),
         const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
@@ -318,7 +318,7 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
                     bottomLeft: Radius.circular(28),
                   ),
                 ),
-                child: const Row(
+                child: Row(
                   children: [
                     Text('🇺🇿', style: TextStyle(fontSize: 16)),
                     SizedBox(width: 6),
@@ -334,7 +334,7 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
                   onSubmitted: (_) => _submitPhone(),
                   inputFormatters: const [UzPhoneInputFormatter()],
                   autofillHints: const [AutofillHints.telephoneNumberNational],
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.ink),
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.ink),
                   decoration: const InputDecoration(
                     hintText: '90 123 45 67',
                     border: InputBorder.none,
@@ -355,7 +355,7 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
           onPressed: _submitPhone,
         ),
         const SizedBox(height: 32),
-        const Center(
+        Center(
           child: Text('Или продолжить через', style: TextStyle(fontSize: 12, color: AppColors.muted)),
         ),
         const SizedBox(height: 16),
@@ -405,14 +405,14 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 20),
-        const Text(
+        Text(
           'Код подтверждения',
           style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: AppColors.ink),
         ),
         const SizedBox(height: 8),
         Text(
           'Мы отправили 4-значный SMS-код на номер +998 ${_phoneController.text}',
-          style: const TextStyle(fontSize: 14, color: AppColors.muted),
+          style: TextStyle(fontSize: 14, color: AppColors.muted),
         ),
         const SizedBox(height: 36),
         Row(
@@ -491,7 +491,7 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
           child: _timerSeconds > 0
               ? Text(
                   'Отправить код повторно через $timerText',
-                  style: const TextStyle(fontSize: 13, color: AppColors.muted, fontWeight: FontWeight.w600),
+                  style: TextStyle(fontSize: 13, color: AppColors.muted, fontWeight: FontWeight.w600),
                 )
               : TextButton(
                   onPressed: _startTimer,
@@ -516,12 +516,12 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 16),
-        const Text(
+        Text(
           'Заполните анкету',
           style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: AppColors.ink),
         ),
         const SizedBox(height: 6),
-        const Text(
+        Text(
           'Расскажите немного о себе, чтобы салоны и мастера обращались к вам правильно',
           style: TextStyle(fontSize: 14, color: AppColors.muted),
         ),
@@ -544,7 +544,7 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
         const SizedBox(height: 24),
 
         // Имя
-        const Text('Имя', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink)),
+        Text('Имя', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink)),
         const SizedBox(height: 6),
         AppTextField(
           controller: _firstNameController,
@@ -556,7 +556,7 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
         const SizedBox(height: 14),
 
         // Фамилия
-        const Text('Фамилия', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink)),
+        Text('Фамилия', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink)),
         const SizedBox(height: 6),
         AppTextField(
           controller: _lastNameController,
@@ -568,7 +568,7 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
         const SizedBox(height: 14),
 
         // Дата рождения
-        const Text('Дата рождения', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink)),
+        Text('Дата рождения', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink)),
         const SizedBox(height: 6),
         AppTextField(
           controller: _birthDateController,
@@ -576,12 +576,12 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
           readOnly: true,
           onTap: _selectBirthDate,
           prefixIcon: const Icon(Icons.calendar_today_outlined, color: AppColors.primary),
-          suffixIcon: const Icon(Icons.edit_calendar, color: AppColors.muted, size: 20),
+          suffixIcon: Icon(Icons.edit_calendar, color: AppColors.muted, size: 20),
         ),
         const SizedBox(height: 18),
 
         // Пол
-        const Text('Пол', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink)),
+        Text('Пол', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink)),
         const SizedBox(height: 8),
         Row(
           children: [

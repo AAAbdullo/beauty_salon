@@ -70,12 +70,12 @@ class _CreditsScreenState extends State<CreditsScreen> {
           content: Text(
             'Абонемент заморожен до ${Formatters.fullDate(_appState.frozenUntil ?? DateTime.now())}. '
             'Неиспользованные дни заморозки не добавятся к сроку действия.',
-            style: const TextStyle(fontSize: 13, color: AppColors.muted),
+            style: TextStyle(fontSize: 13, color: AppColors.muted),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Отмена', style: TextStyle(color: AppColors.muted)),
+              child: Text('Отмена', style: TextStyle(color: AppColors.muted)),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
@@ -134,7 +134,7 @@ class _CreditsScreenState extends State<CreditsScreen> {
               const SizedBox(height: 12),
               Text(
                 'Новый срок действия: ${Formatters.fullDate(_appState.subscriptionExpiresAt.add(Duration(days: days)))}',
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primaryText),
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primaryText),
               ),
               const SizedBox(height: 16),
               AppGradientButton(
@@ -205,7 +205,7 @@ class _CreditsScreenState extends State<CreditsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'Кредиты и Абонемент',
           style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.ink),
         ),
@@ -214,7 +214,7 @@ class _CreditsScreenState extends State<CreditsScreen> {
         elevation: 0,
       ),
       body: Container(
-        decoration: const BoxDecoration(gradient: AppGradients.page),
+        decoration: BoxDecoration(gradient: AppGradients.page),
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
           child: Column(
@@ -256,7 +256,7 @@ class _CreditsScreenState extends State<CreditsScreen> {
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text('Текущий тариф', style: TextStyle(fontSize: 11, color: AppColors.muted)),
+                                Text('Текущий тариф', style: TextStyle(fontSize: 11, color: AppColors.muted)),
                                 Text(
                                   _appState.subscriptionPlan,
                                   style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
@@ -286,7 +286,7 @@ class _CreditsScreenState extends State<CreditsScreen> {
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Доступно кредитов', style: TextStyle(fontSize: 12, color: AppColors.muted)),
+                            Text('Доступно кредитов', style: TextStyle(fontSize: 12, color: AppColors.muted)),
                             const SizedBox(height: 2),
                             Text(
                               '${_appState.clientCredits} кр.',
@@ -321,7 +321,7 @@ class _CreditsScreenState extends State<CreditsScreen> {
                     const SizedBox(height: 6),
                     Text(
                       'Использовано ${_appState.usedPlanCredits} из ${_appState.planTotalCredits} кр. · действует до ${_appState.subscriptionExpiry}',
-                      style: const TextStyle(fontSize: 11, color: AppColors.muted),
+                      style: TextStyle(fontSize: 11, color: AppColors.muted),
                     ),
                   ],
                 ),
@@ -330,7 +330,7 @@ class _CreditsScreenState extends State<CreditsScreen> {
               const SizedBox(height: 24),
               const Text('Пакеты кредитов', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
               const SizedBox(height: 4),
-              const Text(
+              Text(
                 'Кредиты действуют во всех салонах-партнерах Go\'zallik',
                 style: TextStyle(fontSize: 12, color: AppColors.muted),
               ),
@@ -383,11 +383,11 @@ class _CreditsScreenState extends State<CreditsScreen> {
                               ),
                               Text(
                                 '${pkg["credits"]} кредитов / месяц',
-                                style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                                style: TextStyle(fontSize: 12, color: AppColors.muted),
                               ),
                               Text(
                                 pkg['costPer'] as String,
-                                style: const TextStyle(fontSize: 10, color: AppColors.muted),
+                                style: TextStyle(fontSize: 10, color: AppColors.muted),
                               ),
                             ],
                           ),

@@ -56,7 +56,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Container(
-        decoration: const BoxDecoration(gradient: AppGradients.page),
+        decoration: BoxDecoration(gradient: AppGradients.page),
         child: SafeArea(
           bottom: false,
           child: SingleChildScrollView(
@@ -89,7 +89,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
       padding: const EdgeInsets.fromLTRB(AppSizes.screenPadding, 8, 8, 0),
       child: Row(
         children: [
-          const Expanded(
+          Expanded(
             child: Text(
               'Профиль',
               style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.ink),
@@ -102,12 +102,12 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
               isLabelVisible: unread > 0,
               backgroundColor: AppColors.primary,
               label: Text('$unread'),
-              child: const Icon(Icons.notifications_none_rounded, color: AppColors.ink, size: 24),
+              child: Icon(Icons.notifications_none_rounded, color: AppColors.ink, size: 24),
             ),
           ),
           IconButton(
             tooltip: 'QR визита',
-            icon: const Icon(Icons.qr_code_2_rounded, color: AppColors.ink, size: 24),
+            icon: Icon(Icons.qr_code_2_rounded, color: AppColors.ink, size: 24),
             onPressed: widget.onOpenQr,
           ),
         ],
@@ -152,15 +152,15 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                   style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 2),
-                Text(_appState.clientPhone, style: const TextStyle(fontSize: 13, color: AppColors.muted)),
+                Text(_appState.clientPhone, style: TextStyle(fontSize: 13, color: AppColors.muted)),
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    const Icon(Icons.workspace_premium, size: 14, color: AppColors.primaryText),
+                    Icon(Icons.workspace_premium, size: 14, color: AppColors.primaryText),
                     const SizedBox(width: 4),
                     Text(
                       'Тариф ${_appState.subscriptionPlan}',
-                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.primaryText),
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.primaryText),
                     ),
                   ],
                 ),
@@ -169,7 +169,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
           ),
           TextButton(
             onPressed: () => ProfileSheets.editProfile(context),
-            child: const Row(
+            child: Row(
               children: [
                 Text('Изменить', style: TextStyle(fontSize: 12, color: AppColors.muted)),
                 Icon(Icons.chevron_right, size: 16, color: AppColors.muted),
@@ -215,7 +215,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                       textAlign: TextAlign.center,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 10, color: AppColors.muted),
+                      style: TextStyle(fontSize: 10, color: AppColors.muted),
                     ),
                   ],
                 ),
@@ -262,7 +262,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Ваш тариф', style: TextStyle(fontSize: 11, color: AppColors.muted)),
+                          Text('Ваш тариф', style: TextStyle(fontSize: 11, color: AppColors.muted)),
                           Text(
                             _appState.subscriptionPlan,
                             style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
@@ -271,20 +271,20 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                       ),
                       const Spacer(),
                       if (_appState.isFrozen) ...[
-                        const AppStatusBadge(
+                        AppStatusBadge(
                           text: 'Заморожен',
-                          backgroundColor: Color(0xFFE3F0FF),
-                          textColor: Color(0xFF1565C0),
+                          backgroundColor: AppColors.soft(const Color(0xFFE3F0FF)),
+                          textColor: AppColors.onSoft(const Color(0xFF1565C0)),
                         ),
                         const SizedBox(width: 4),
                       ],
-                      const Icon(Icons.chevron_right, color: AppColors.muted),
+                      Icon(Icons.chevron_right, color: AppColors.muted),
                     ],
                   ),
                   const SizedBox(height: 8),
                   Text(
                     'Действует до ${_appState.subscriptionExpiry}',
-                    style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                    style: TextStyle(fontSize: 12, color: AppColors.muted),
                   ),
                   const SizedBox(height: 10),
                   ClipRRect(
@@ -299,7 +299,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                   const SizedBox(height: 6),
                   Text(
                     'Использовано $used из $total кредитов · осталось ${_appState.clientCredits}',
-                    style: const TextStyle(fontSize: 11, color: AppColors.muted),
+                    style: TextStyle(fontSize: 11, color: AppColors.muted),
                   ),
                 ],
               ),
@@ -374,7 +374,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
               const Text('Недавние записи', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
               GestureDetector(
                 onTap: () => widget.onOpenBookings(0),
-                child: const Row(
+                child: Row(
                   children: [
                     Text(
                       'Все записи',
@@ -388,7 +388,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
           ),
           const SizedBox(height: 12),
           if (recent.isEmpty)
-            const Padding(
+            Padding(
               padding: EdgeInsets.symmetric(vertical: 16),
               child: Text('Записей пока нет', style: TextStyle(color: AppColors.muted)),
             ),
@@ -425,9 +425,9 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                             '${b.salonName} · ${b.masterName}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                            style: TextStyle(fontSize: 12, color: AppColors.muted),
                           ),
-                          Text('${b.date} · ${b.time}', style: const TextStyle(fontSize: 11, color: AppColors.muted)),
+                          Text('${b.date} · ${b.time}', style: TextStyle(fontSize: 11, color: AppColors.muted)),
                         ],
                       ),
                     ),
@@ -436,7 +436,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                         ? const AppStatusBadge(text: 'Предстоит')
                         : AppStatusBadge(
                             text: 'Завершено',
-                            backgroundColor: Colors.grey.shade200,
+                            backgroundColor: AppColors.line,
                             textColor: AppColors.muted,
                           ),
                   ],

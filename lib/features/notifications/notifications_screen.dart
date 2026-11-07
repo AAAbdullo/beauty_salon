@@ -23,7 +23,7 @@ class NotificationsScreen extends StatelessWidget {
 
         return Scaffold(
           appBar: AppBar(
-            title: const Text(
+            title: Text(
               'Уведомления',
               style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.ink),
             ),
@@ -35,7 +35,7 @@ class NotificationsScreen extends StatelessWidget {
               child: CircleAvatar(
                 backgroundColor: AppColors.surface,
                 child: IconButton(
-                  icon: const Icon(Icons.arrow_back, color: AppColors.ink, size: 20),
+                  icon: Icon(Icons.arrow_back, color: AppColors.ink, size: 20),
                   onPressed: onBack,
                 ),
               ),
@@ -53,7 +53,7 @@ class NotificationsScreen extends StatelessWidget {
             ],
           ),
           body: items.isEmpty
-              ? const Center(
+              ? Center(
                   child: Text('Пока нет уведомлений', style: TextStyle(color: AppColors.muted, fontSize: 14)),
                 )
               : SafeArea(
@@ -66,7 +66,7 @@ class NotificationsScreen extends StatelessWidget {
                       final n = items[index];
                       return AppCard(
                         padding: const EdgeInsets.all(14),
-                        color: n.isRead ? AppColors.surface : const Color(0xFFFFF6FB),
+                        color: n.isRead ? AppColors.surface : AppColors.soft(const Color(0xFFFFF6FB)),
                         border: n.isRead ? null : Border.all(color: AppColors.primary.withValues(alpha: 0.18)),
                         onTap: () {
                           appState.markNotificationRead(n.id);
@@ -78,7 +78,7 @@ class NotificationsScreen extends StatelessWidget {
                             Container(
                               width: 42,
                               height: 42,
-                              decoration: const BoxDecoration(color: AppColors.primaryTint, shape: BoxShape.circle),
+                              decoration: BoxDecoration(color: AppColors.primaryTint, shape: BoxShape.circle),
                               child: Icon(_iconFor(n.type), color: AppColors.primary, size: 22),
                             ),
                             const SizedBox(width: 12),
@@ -112,12 +112,12 @@ class NotificationsScreen extends StatelessWidget {
                                   const SizedBox(height: 4),
                                   Text(
                                     n.body,
-                                    style: const TextStyle(fontSize: 12, color: AppColors.muted, height: 1.35),
+                                    style: TextStyle(fontSize: 12, color: AppColors.muted, height: 1.35),
                                   ),
                                   const SizedBox(height: 6),
                                   Text(
                                     n.timeLabel,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 11,
                                       color: AppColors.muted,
                                       fontWeight: FontWeight.w600,

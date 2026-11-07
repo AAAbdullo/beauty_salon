@@ -159,10 +159,10 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                     margin: const EdgeInsets.only(top: 10),
                     width: 40,
                     height: 4,
-                    decoration: BoxDecoration(color: const Color(0xFFE5DCE2), borderRadius: BorderRadius.circular(2)),
+                    decoration: BoxDecoration(color: AppColors.handle, borderRadius: BorderRadius.circular(2)),
                   ),
                 ),
-                const Padding(
+                Padding(
                   padding: EdgeInsets.fromLTRB(20, 16, 20, 8),
                   child: Text(
                     'Район Ташкента',
@@ -240,21 +240,21 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                   margin: const EdgeInsets.only(top: 10),
                   width: 40,
                   height: 4,
-                  decoration: BoxDecoration(color: const Color(0xFFE5DCE2), borderRadius: BorderRadius.circular(2)),
+                  decoration: BoxDecoration(color: AppColors.handle, borderRadius: BorderRadius.circular(2)),
                 ),
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
                 child: Text(
                   service.name,
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink),
                 ),
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
                 child: Text(
                   'от ${service.price} · ${service.time} · ${Formatters.plural(salons.length, 'салон', 'салона', 'салонов')}',
-                  style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                  style: TextStyle(fontSize: 12, color: AppColors.muted),
                 ),
               ),
               Flexible(
@@ -283,13 +283,13 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                       ),
                       title: Text(
                         s.name,
-                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.ink),
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.ink),
                       ),
                       subtitle: Text(
                         '★ ${s.rating} · ${s.district} · ${s.distance}',
-                        style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                        style: TextStyle(fontSize: 12, color: AppColors.muted),
                       ),
-                      trailing: const Icon(Icons.chevron_right, color: AppColors.muted),
+                      trailing: Icon(Icons.chevron_right, color: AppColors.muted),
                       onTap: () {
                         Navigator.pop(ctx);
                         widget.onSalonTap(s.id);
@@ -332,7 +332,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Container(
-        decoration: const BoxDecoration(gradient: AppGradients.page),
+        decoration: BoxDecoration(gradient: AppGradients.page),
         child: SafeArea(
           bottom: false,
           child: GestureDetector(
@@ -377,7 +377,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
           padding: const EdgeInsets.symmetric(horizontal: AppSizes.screenPadding),
           child: Text(
             'Мастера (${masters.length})',
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink),
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink),
           ),
         ),
         const SizedBox(height: 12),
@@ -407,12 +407,12 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                       children: [
                         Text(
                           m.name,
-                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.ink),
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.ink),
                         ),
                         const SizedBox(height: 2),
                         Text(
                           '${m.specialty} · ${m.salonName}',
-                          style: const TextStyle(fontSize: 11, color: AppColors.muted),
+                          style: TextStyle(fontSize: 11, color: AppColors.muted),
                         ),
                       ],
                     ),
@@ -458,7 +458,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Ташкент', style: TextStyle(color: AppColors.muted, fontSize: 11)),
+                  Text('Ташкент', style: TextStyle(color: AppColors.muted, fontSize: 11)),
                   Row(
                     children: [
                       Flexible(
@@ -466,11 +466,11 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                           _filterParams.district ?? 'Все районы',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(color: AppColors.ink, fontSize: 14, fontWeight: FontWeight.w800),
+                          style: TextStyle(color: AppColors.ink, fontSize: 14, fontWeight: FontWeight.w800),
                         ),
                       ),
                       const SizedBox(width: 2),
-                      const Icon(Icons.keyboard_arrow_down, size: 16, color: AppColors.ink),
+                      Icon(Icons.keyboard_arrow_down, size: 16, color: AppColors.ink),
                     ],
                   ),
                 ],
@@ -554,7 +554,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.search, color: AppColors.muted, size: 22),
+                  Icon(Icons.search, color: AppColors.muted, size: 22),
                   const SizedBox(width: 10),
                   Expanded(
                     child: TextField(
@@ -562,11 +562,11 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                       onChanged: (val) => setState(() => _searchQuery = val.trim()),
                       decoration: InputDecoration(
                         hintText: 'Услуга, салон или мастер',
-                        hintStyle: const TextStyle(color: AppColors.muted, fontSize: 14),
+                        hintStyle: TextStyle(color: AppColors.muted, fontSize: 14),
                         border: InputBorder.none,
                         suffixIcon: _searchQuery.isNotEmpty
                             ? IconButton(
-                                icon: const Icon(Icons.clear, size: 18, color: AppColors.muted),
+                                icon: Icon(Icons.clear, size: 18, color: AppColors.muted),
                                 onPressed: () {
                                   _searchController.clear();
                                   setState(() => _searchQuery = '');
@@ -669,12 +669,12 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
         children: [
           Text(
             label,
-            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.primaryText),
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.primaryText),
           ),
           const SizedBox(width: 4),
           InkWell(
             onTap: onRemove,
-            child: const Icon(Icons.close, size: 14, color: AppColors.primaryText),
+            child: Icon(Icons.close, size: 14, color: AppColors.primaryText),
           ),
         ],
       ),
@@ -751,12 +751,12 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    const Text(
+                    Text(
                       'Все салоны красоты\nв одной подписке',
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink, height: 1.2),
                     ),
                     const SizedBox(height: 6),
-                    const Text(
+                    Text(
                       'От 249 000 сум/мес за 60 кредитов',
                       style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.primaryText),
                     ),
@@ -783,7 +783,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Padding(
+        Padding(
           padding: EdgeInsets.symmetric(horizontal: AppSizes.screenPadding),
           child: Text(
             'Категории',
@@ -862,7 +862,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
             children: [
               Text(
                 'Салоны (${salons.length})',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink),
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink),
               ),
               GestureDetector(
                 onTap: widget.onOpenMap,
@@ -893,7 +893,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
             padding: const EdgeInsets.all(24),
             margin: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(20)),
-            child: const Center(
+            child: Center(
               child: Text(
                 'По выбранным фильтрам ничего не найдено.\nПопробуйте сбросить некоторые условия.',
                 textAlign: TextAlign.center,
@@ -980,14 +980,14 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                         const SizedBox(height: 8),
                         Text(
                           s.name,
-                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.ink),
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.ink),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 2),
                         Text(
                           '${s.district} · ${s.distance}',
-                          style: const TextStyle(fontSize: 11, color: AppColors.muted),
+                          style: TextStyle(fontSize: 11, color: AppColors.muted),
                         ),
                         const Spacer(),
                         Row(
@@ -995,7 +995,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                           children: [
                             Text(
                               s.minPriceLabel,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w800,
                                 color: AppColors.primaryText,
@@ -1019,7 +1019,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Padding(
+        Padding(
           padding: EdgeInsets.symmetric(horizontal: AppSizes.screenPadding),
           child: Text(
             'Популярные услуги',
@@ -1059,11 +1059,11 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      Text(s.time, style: const TextStyle(fontSize: 10, color: AppColors.muted)),
+                      Text(s.time, style: TextStyle(fontSize: 10, color: AppColors.muted)),
                       const Spacer(),
                       Text(
                         'от ${s.price}',
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.primaryText),
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.primaryText),
                       ),
                     ],
                   ),

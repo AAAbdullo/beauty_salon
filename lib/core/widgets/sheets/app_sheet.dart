@@ -12,7 +12,7 @@ class AppSheetHandle extends StatelessWidget {
         margin: const EdgeInsets.only(top: 10),
         width: 40,
         height: 4,
-        decoration: BoxDecoration(color: const Color(0xFFE5DCE2), borderRadius: BorderRadius.circular(2)),
+        decoration: BoxDecoration(color: AppColors.handle, borderRadius: BorderRadius.circular(2)),
       ),
     );
   }
@@ -45,13 +45,13 @@ Future<T?> showAppSheet<T>({
                 padding: EdgeInsets.fromLTRB(20, 16, 20, subtitle == null ? 8 : 2),
                 child: Text(
                   title,
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink),
                 ),
               ),
               if (subtitle != null)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-                  child: Text(subtitle, style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+                  child: Text(subtitle, style: TextStyle(fontSize: 12, color: AppColors.muted)),
                 ),
               Flexible(child: Builder(builder: builder)),
             ],

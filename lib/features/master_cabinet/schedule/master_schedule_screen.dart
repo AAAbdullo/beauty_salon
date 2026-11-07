@@ -185,7 +185,7 @@ class _MasterScheduleScreenState extends State<MasterScheduleScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(gradient: AppGradients.page),
+        decoration: BoxDecoration(gradient: AppGradients.page),
         child: SafeArea(
           bottom: false,
           child: Column(
@@ -252,7 +252,7 @@ class _MasterScheduleScreenState extends State<MasterScheduleScreen> {
             width: AppSizes.backButton,
             height: AppSizes.backButton,
             child: IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new, size: 18, color: AppColors.ink),
+              icon: Icon(Icons.arrow_back_ios_new, size: 18, color: AppColors.ink),
               onPressed: _handleBack,
             ),
           ),
@@ -260,7 +260,7 @@ class _MasterScheduleScreenState extends State<MasterScheduleScreen> {
         const SizedBox(height: 12),
         Row(
           children: [
-            const Expanded(
+            Expanded(
               child: Text('Рабочий график', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: AppColors.ink)),
             ),
             Material(
@@ -269,7 +269,7 @@ class _MasterScheduleScreenState extends State<MasterScheduleScreen> {
               child: InkWell(
                 borderRadius: BorderRadius.circular(14),
                 onTap: _canEdit ? _openTemplates : null,
-                child: const Padding(
+                child: Padding(
                   padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   child: Row(
                     children: [
@@ -284,7 +284,7 @@ class _MasterScheduleScreenState extends State<MasterScheduleScreen> {
           ],
         ),
         const SizedBox(height: 6),
-        const Text(
+        Text(
           'Настройте своё рабочее время и доступные слоты для записи клиентов.',
           style: TextStyle(fontSize: 13, color: AppColors.muted, height: 1.35),
         ),
@@ -296,17 +296,17 @@ class _MasterScheduleScreenState extends State<MasterScheduleScreen> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF4E0),
+        color: AppColors.soft(const Color(0xFFFFF4E0)),
         borderRadius: BorderRadius.circular(14),
       ),
-      child: const Row(
+      child: Row(
         children: [
-          Icon(Icons.lock_outline, size: 18, color: Color(0xFFB7791F)),
+          Icon(Icons.lock_outline, size: 18, color: AppColors.onSoft(const Color(0xFFB7791F))),
           SizedBox(width: 8),
           Expanded(
             child: Text(
               'Салон не разрешил мастерам менять график. Обратитесь к администратору салона.',
-              style: TextStyle(fontSize: 12, color: Color(0xFF8A5A12)),
+              style: TextStyle(fontSize: 12, color: AppColors.onSoft(const Color(0xFF8A5A12))),
             ),
           ),
         ],
@@ -402,18 +402,18 @@ class _MasterScheduleScreenState extends State<MasterScheduleScreen> {
               ),
               Text(
                 _draft.isWorking ? 'Рабочий день' : 'Выходной',
-                style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                style: TextStyle(fontSize: 12, color: AppColors.muted),
               ),
             ],
           ),
           if (!_draft.isWorking) ...[
             const SizedBox(height: 8),
-            const Text(
+            Text(
               'В этот день клиенты не смогут к вам записаться.',
               style: TextStyle(fontSize: 13, color: AppColors.muted),
             ),
           ] else ...[
-            const Divider(height: 20, color: Color(0xFFF3E6EE)),
+            Divider(height: 20, color: AppColors.line),
             const _SectionLabel(icon: Icons.access_time, text: 'Время работы'),
             const SizedBox(height: 8),
             Row(
@@ -440,7 +440,7 @@ class _MasterScheduleScreenState extends State<MasterScheduleScreen> {
             const _SectionLabel(icon: Icons.coffee_outlined, text: 'Перерыв'),
             const SizedBox(height: 8),
             if (_draft.breaks.isEmpty)
-              const Padding(
+              Padding(
                 padding: EdgeInsets.only(bottom: 8),
                 child: Text('Без перерыва', style: TextStyle(fontSize: 13, color: AppColors.muted)),
               ),
@@ -467,7 +467,7 @@ class _MasterScheduleScreenState extends State<MasterScheduleScreen> {
                     SizedBox(
                       width: 40,
                       child: IconButton(
-                        icon: const Icon(Icons.delete_outline, color: AppColors.muted),
+                        icon: Icon(Icons.delete_outline, color: AppColors.muted),
                         tooltip: 'Удалить перерыв',
                         onPressed: () => _removeBreak(i),
                       ),
@@ -500,7 +500,7 @@ class _MasterScheduleScreenState extends State<MasterScheduleScreen> {
               ),
               IconButton(
                 visualDensity: VisualDensity.compact,
-                icon: const Icon(Icons.help_outline, size: 18, color: AppColors.muted),
+                icon: Icon(Icons.help_outline, size: 18, color: AppColors.muted),
                 onPressed: _showSlotsHelp,
               ),
               const Spacer(),
@@ -511,7 +511,7 @@ class _MasterScheduleScreenState extends State<MasterScheduleScreen> {
                   child: InkWell(
                     borderRadius: BorderRadius.circular(14),
                     onTap: _openAddSlot,
-                    child: const Padding(
+                    child: Padding(
                       padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                       child: Row(
                         children: [
@@ -527,10 +527,10 @@ class _MasterScheduleScreenState extends State<MasterScheduleScreen> {
           ),
           const SizedBox(height: 6),
           if (!_draft.isWorking)
-            const Text('Выходной — слотов нет.', style: TextStyle(fontSize: 13, color: AppColors.muted))
+            Text('Выходной — слотов нет.', style: TextStyle(fontSize: 13, color: AppColors.muted))
           else ...[
             if (_draft.slots.isEmpty)
-              const Padding(
+              Padding(
                 padding: EdgeInsets.only(bottom: 8),
                 child: Text('Нет слотов. Расширьте время работы или добавьте слот вручную.',
                     style: TextStyle(fontSize: 13, color: AppColors.muted)),
@@ -556,9 +556,9 @@ class _MasterScheduleScreenState extends State<MasterScheduleScreen> {
       child: Container(
         padding: const EdgeInsets.only(left: 12),
         decoration: BoxDecoration(
-          color: inBreak ? const Color(0xFFF5F3F6) : AppColors.surface,
+          color: inBreak ? AppColors.soft(const Color(0xFFF5F3F6)) : AppColors.surface,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFF1E4EC)),
+          border: Border.all(color: AppColors.line),
         ),
         child: Row(
           children: [
@@ -586,7 +586,7 @@ class _MasterScheduleScreenState extends State<MasterScheduleScreen> {
               onChanged: inBreak ? null : (v) => _toggleSlot(index, v),
             ),
             PopupMenuButton<String>(
-              icon: const Icon(Icons.more_vert, size: 20, color: AppColors.muted),
+              icon: Icon(Icons.more_vert, size: 20, color: AppColors.muted),
               onSelected: (action) {
                 if (action == 'toggle') _toggleSlot(index, !slot.enabled);
                 if (action == 'delete') _removeSlot(index);
@@ -663,7 +663,7 @@ class _MasterScheduleScreenState extends State<MasterScheduleScreen> {
             children: [
               const _SheetTitle('Шаблоны графика'),
               const SizedBox(height: 4),
-              const Text('Шаблон заменит время работы и перерывы выбранного дня.',
+              Text('Шаблон заменит время работы и перерывы выбранного дня.',
                   style: TextStyle(fontSize: 13, color: AppColors.muted)),
               const SizedBox(height: 12),
               for (final t in MasterCabinetRepository.templates)
@@ -700,10 +700,10 @@ class _MasterScheduleScreenState extends State<MasterScheduleScreen> {
               children: [
                 const _SheetTitle('Новый слот'),
                 const SizedBox(height: 4),
-                const Text('Например, дополнительное время после конца рабочего дня.',
+                Text('Например, дополнительное время после конца рабочего дня.',
                     style: TextStyle(fontSize: 13, color: AppColors.muted)),
                 const SizedBox(height: 16),
-                const Text('Начало', style: TextStyle(fontSize: 12, color: AppColors.muted)),
+                Text('Начало', style: TextStyle(fontSize: 12, color: AppColors.muted)),
                 const SizedBox(height: 6),
                 _TimeDropdown(
                   value: start,
@@ -711,7 +711,7 @@ class _MasterScheduleScreenState extends State<MasterScheduleScreen> {
                   onSelected: (v) => setSheet(() => start = v),
                 ),
                 const SizedBox(height: 14),
-                const Text('Длительность', style: TextStyle(fontSize: 12, color: AppColors.muted)),
+                Text('Длительность', style: TextStyle(fontSize: 12, color: AppColors.muted)),
                 const SizedBox(height: 6),
                 Wrap(
                   spacing: 8,
@@ -770,7 +770,7 @@ class _MasterScheduleScreenState extends State<MasterScheduleScreen> {
                 const SizedBox(height: 4),
                 Text(
                   'График дня «${_fullDays[_selectedWeekday - 1]}» заменит график выбранных дней.',
-                  style: const TextStyle(fontSize: 13, color: AppColors.muted),
+                  style: TextStyle(fontSize: 13, color: AppColors.muted),
                 ),
                 const SizedBox(height: 8),
                 for (var w = 1; w <= 7; w++)
@@ -822,7 +822,7 @@ class _MasterScheduleScreenState extends State<MasterScheduleScreen> {
               children: [
                 const _SheetTitle('Выходные дни'),
                 const SizedBox(height: 4),
-                const Text('Отметьте дни, в которые вы не работаете.',
+                Text('Отметьте дни, в которые вы не работаете.',
                     style: TextStyle(fontSize: 13, color: AppColors.muted)),
                 const SizedBox(height: 8),
                 for (var w = 1; w <= 7; w++)
@@ -901,7 +901,7 @@ class _TimeDropdown extends StatelessWidget {
             Expanded(
               child: Text(formatMinutes(value), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
             ),
-            const Icon(Icons.keyboard_arrow_down, size: 20, color: AppColors.ink),
+            Icon(Icons.keyboard_arrow_down, size: 20, color: AppColors.ink),
           ],
         ),
       ),
@@ -913,7 +913,7 @@ class _Dash extends StatelessWidget {
   const _Dash();
 
   @override
-  Widget build(BuildContext context) => const Padding(
+  Widget build(BuildContext context) => Padding(
         padding: EdgeInsets.symmetric(horizontal: 8),
         child: Text('—', style: TextStyle(color: AppColors.muted)),
       );
@@ -930,7 +930,7 @@ class _SectionLabel extends StatelessWidget {
         children: [
           Icon(icon, size: 18, color: AppColors.muted),
           const SizedBox(width: 6),
-          Text(text, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.muted)),
+          Text(text, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.muted)),
         ],
       );
 }
@@ -957,7 +957,7 @@ class _SoftActionButton extends StatelessWidget {
             children: [
               const Icon(Icons.add, size: 18, color: AppColors.primary),
               const SizedBox(width: 6),
-              Text(text, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.primaryText)),
+              Text(text, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.primaryText)),
             ],
           ),
         ),
@@ -995,7 +995,7 @@ class _ActionTile extends StatelessWidget {
               children: [
                 Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
                 const SizedBox(height: 2),
-                Text(subtitle, style: const TextStyle(fontSize: 11, color: AppColors.muted)),
+                Text(subtitle, style: TextStyle(fontSize: 11, color: AppColors.muted)),
               ],
             ),
           ),
@@ -1012,5 +1012,5 @@ class _SheetTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      Text(text, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink));
+      Text(text, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink));
 }

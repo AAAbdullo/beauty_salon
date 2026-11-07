@@ -113,7 +113,7 @@ class _MasterEarningsScreenState extends State<MasterEarningsScreen> {
                     ),
                     Text(
                       '${e.value.$1} виз. · ${Formatters.formatSum(e.value.$2)}',
-                      style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                      style: TextStyle(fontSize: 12, color: AppColors.muted),
                     ),
                   ],
                 ),
@@ -164,19 +164,19 @@ class _MasterEarningsScreenState extends State<MasterEarningsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(icon: const Icon(Icons.arrow_back, color: AppColors.ink), onPressed: widget.onBack),
+        leading: IconButton(icon: Icon(Icons.arrow_back, color: AppColors.ink), onPressed: widget.onBack),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Мастер · ${_appState.masterSalon}', style: const TextStyle(fontSize: 12, color: AppColors.muted)),
-            const Text('Мой доход', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.ink)),
+            Text('Мастер · ${_appState.masterSalon}', style: TextStyle(fontSize: 12, color: AppColors.muted)),
+            Text('Мой доход', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.ink)),
           ],
         ),
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
       body: Container(
-        decoration: const BoxDecoration(gradient: AppGradients.page),
+        decoration: BoxDecoration(gradient: AppGradients.page),
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(AppSizes.screenPadding, 8, AppSizes.screenPadding, 24),
           child: Column(
@@ -241,13 +241,13 @@ class _MasterEarningsScreenState extends State<MasterEarningsScreen> {
             children: [
               Text(
                 _monthOffset == 0 ? 'Начислено за месяц' : 'Начислено за ${_monthName(_monthOffset).toLowerCase()}',
-                style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                style: TextStyle(fontSize: 12, color: AppColors.muted),
               ),
               if (change != null)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: change >= 0 ? AppColors.successBg : const Color(0xFFFFECEF),
+                    color: change >= 0 ? AppColors.successBg : AppColors.soft(const Color(0xFFFFECEF)),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
@@ -273,10 +273,10 @@ class _MasterEarningsScreenState extends State<MasterEarningsScreen> {
           const SizedBox(height: 6),
           Text(
             Formatters.formatSum(_revenue),
-            style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: AppColors.ink),
+            style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: AppColors.ink),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'Расчёт в конце месяца: процент или фиксированная ставка, как задал салон.',
             style: TextStyle(fontSize: 11, color: AppColors.muted),
           ),
@@ -307,7 +307,7 @@ class _MasterEarningsScreenState extends State<MasterEarningsScreen> {
                 children: [
                   Icon(m.$3, size: 18, color: AppColors.primary),
                   const SizedBox(height: 6),
-                  Text(m.$1, maxLines: 2, style: const TextStyle(fontSize: 10, color: AppColors.muted)),
+                  Text(m.$1, maxLines: 2, style: TextStyle(fontSize: 10, color: AppColors.muted)),
                   const SizedBox(height: 4),
                   FittedBox(
                     fit: BoxFit.scaleDown,
@@ -331,7 +331,7 @@ class _MasterEarningsScreenState extends State<MasterEarningsScreen> {
         if (_visits.length > 5)
           GestureDetector(
             onTap: _showAllVisits,
-            child: const Row(
+            child: Row(
               children: [
                 Text(
                   'Все визиты',
@@ -347,7 +347,7 @@ class _MasterEarningsScreenState extends State<MasterEarningsScreen> {
 
   Widget _buildRecentVisitsList() {
     if (_visits.isEmpty) {
-      return const Padding(
+      return Padding(
         padding: EdgeInsets.symmetric(vertical: 12),
         child: Text('Визитов в этом месяце нет', style: TextStyle(color: AppColors.muted)),
       );
@@ -372,7 +372,7 @@ class _MasterEarningsScreenState extends State<MasterEarningsScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(v.serviceName, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
-                      Text(_visitSubtitle(v), style: const TextStyle(fontSize: 11, color: AppColors.muted)),
+                      Text(_visitSubtitle(v), style: TextStyle(fontSize: 11, color: AppColors.muted)),
                     ],
                   ),
                 ),
@@ -381,10 +381,10 @@ class _MasterEarningsScreenState extends State<MasterEarningsScreen> {
                   children: [
                     Text(
                       '+${Formatters.formatSum(v.sum)}',
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.ink),
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.ink),
                     ),
                     const SizedBox(height: 2),
-                    Text(v.paymentMethod, style: const TextStyle(fontSize: 10, color: AppColors.muted)),
+                    Text(v.paymentMethod, style: TextStyle(fontSize: 10, color: AppColors.muted)),
                   ],
                 ),
               ],
@@ -410,11 +410,11 @@ class _MasterEarningsScreenState extends State<MasterEarningsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(title, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
-                    Text(subtitle, style: const TextStyle(fontSize: 9, color: AppColors.muted)),
+                    Text(subtitle, style: TextStyle(fontSize: 9, color: AppColors.muted)),
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right, size: 16, color: AppColors.muted),
+              Icon(Icons.chevron_right, size: 16, color: AppColors.muted),
             ],
           ),
         ),

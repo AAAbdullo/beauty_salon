@@ -82,7 +82,7 @@ class _AuthScreenState extends State<AuthScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: AppGradients.page,
         ),
         child: SafeArea(
@@ -106,7 +106,7 @@ class _AuthScreenState extends State<AuthScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  const Center(
+                  Center(
                     child: Text(
                       "Go'zallik",
                       style: TextStyle(
@@ -116,14 +116,14 @@ class _AuthScreenState extends State<AuthScreen> {
                       ),
                     ),
                   ),
-                  const Center(
+                  Center(
                     child: Text(
                       'Платформа красоты и ухода',
                       style: TextStyle(fontSize: 13, color: AppColors.muted),
                     ),
                   ),
                   const SizedBox(height: 36),
-                  const Text(
+                  Text(
                     'Вход в систему',
                     style: TextStyle(
                       fontSize: 22,
@@ -132,14 +132,14 @@ class _AuthScreenState extends State<AuthScreen> {
                     ),
                   ),
                   const SizedBox(height: 6),
-                  const Text(
+                  Text(
                     'Введите ваш логин и пароль для авторизации',
                     style: TextStyle(fontSize: 13, color: AppColors.muted),
                   ),
                   const SizedBox(height: 24),
 
                   // Поле логина
-                  const Text('Логин', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink)),
+                  Text('Логин', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink)),
                   const SizedBox(height: 6),
                   AppTextField(
                     controller: _loginController,
@@ -151,7 +151,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   const SizedBox(height: 16),
 
                   // Поле пароля
-                  const Text('Пароль', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink)),
+                  Text('Пароль', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink)),
                   const SizedBox(height: 6),
                   AppTextField(
                     controller: _passwordController,
@@ -176,7 +176,7 @@ class _AuthScreenState extends State<AuthScreen> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFFECEF),
+                        color: AppColors.soft(const Color(0xFFFFECEF)),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
                       ),
@@ -207,7 +207,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       child: TextButton(
                         onPressed: widget.onRegisterTap,
                         child: RichText(
-                          text: const TextSpan(
+                          text: TextSpan(
                             text: 'Нет аккаунта? ',
                             style: TextStyle(color: AppColors.muted, fontSize: 13),
                             children: [
@@ -222,7 +222,7 @@ class _AuthScreenState extends State<AuthScreen> {
                     ),
 
                   const SizedBox(height: 20),
-                  const Center(
+                  Center(
                     child: Text(
                       'Быстрый выбор аккаунта:',
                       style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.muted),

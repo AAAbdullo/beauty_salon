@@ -141,7 +141,7 @@ class _ClientQrModalState extends State<ClientQrModal> {
     final b = _booking;
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 12, 24, 16),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
       ),
@@ -153,12 +153,12 @@ class _ClientQrModalState extends State<ClientQrModal> {
             children: [
               const AppSheetHandle(),
               const SizedBox(height: 18),
-              const Text(
+              Text(
                 'Ваш QR-код для визита',
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.ink),
               ),
               const SizedBox(height: 4),
-              const Text(
+              Text(
                 'Покажите этот код администратору или мастеру в салоне',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 12, color: AppColors.muted),
@@ -171,7 +171,7 @@ class _ClientQrModalState extends State<ClientQrModal> {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: const Color(0xFFF3DCE8), width: 1.5),
+                  border: Border.all(color: AppColors.line, width: 1.5),
                   boxShadow: [
                     BoxShadow(
                       color: AppColors.primary.withValues(alpha: 0.08),
@@ -187,8 +187,8 @@ class _ClientQrModalState extends State<ClientQrModal> {
                         data: _token!.value,
                         version: QrVersions.auto,
                         size: 200.0,
-                        eyeStyle: const QrEyeStyle(eyeShape: QrEyeShape.square, color: AppColors.ink),
-                        dataModuleStyle: const QrDataModuleStyle(
+                        eyeStyle: QrEyeStyle(eyeShape: QrEyeShape.square, color: AppColors.ink),
+                        dataModuleStyle: QrDataModuleStyle(
                           dataModuleShape: QrDataModuleShape.square,
                           color: AppColors.ink,
                         ),
@@ -236,17 +236,17 @@ class _ClientQrModalState extends State<ClientQrModal> {
                         children: [
                           Text(
                             '${b.salonName} · ${b.serviceName}',
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.ink),
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.ink),
                           ),
                           Text(
                             '${b.date}, ${b.time} · ${b.masterName}',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
                               color: AppColors.primaryText,
                             ),
                           ),
-                          const Text(
+                          Text(
                             'Скриншот не подойдёт: код действует 60 секунд. '
                             'Подтвердить визит можно за 30 мин до начала и до 60 мин после.',
                             style: TextStyle(fontSize: 11, color: AppColors.muted),

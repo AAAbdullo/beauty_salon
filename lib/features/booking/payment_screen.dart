@@ -83,7 +83,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('Время брони истекло', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-        content: const Text(
+        content: Text(
           'Слот больше не закреплён за вами. Выберите время заново — деньги не списаны.',
           style: TextStyle(fontSize: 13, color: AppColors.muted),
         ),
@@ -103,8 +103,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
   String get _timerLabel =>
       '${(_secondsLeft ~/ 60).toString().padLeft(2, '0')}:${(_secondsLeft % 60).toString().padLeft(2, '0')}';
 
-  static const _providers = [
-    ('Click', Icons.radio_button_checked, Color(0xFF007AFF)),
+  static final _providers = [
+    ('Click', Icons.radio_button_checked, AppColors.onSoft(const Color(0xFF007AFF))),
     ('Payme', Icons.account_balance_wallet, Color(0xFF00C7B5)),
     ('Uzum', Icons.shopping_bag, Color(0xFF7000FF)),
     ('Сохранённая карта ···· 4417', Icons.credit_card, Color(0xFFFF5A00)),
@@ -153,10 +153,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
       child: Scaffold(
         appBar: AppBar(
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back, color: AppColors.ink),
+            icon: Icon(Icons.arrow_back, color: AppColors.ink),
             onPressed: _isProcessing ? null : widget.onBack,
           ),
-          title: const Text(
+          title: Text(
             'Оплата',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink),
           ),
@@ -165,7 +165,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
           elevation: 0,
         ),
         body: Container(
-          decoration: const BoxDecoration(gradient: AppGradients.page),
+          decoration: BoxDecoration(gradient: AppGradients.page),
           child: Column(
             children: [
               Expanded(
@@ -185,7 +185,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                           _isDeposit
                               ? 'Остаток ${Formatters.formatSum(widget.draft.sumPrice - widget.draft.depositSum)} оплатите в салоне.'
                               : 'Услуга будет полностью оплачена.',
-                          style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                          style: TextStyle(fontSize: 12, color: AppColors.muted),
                         ),
                       ),
                       const SizedBox(height: 24),
@@ -200,7 +200,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                         ),
                       ],
                       const SizedBox(height: 16),
-                      const Row(
+                      Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Icon(Icons.info_outline, size: 16, color: AppColors.muted),
@@ -231,7 +231,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: low ? const Color(0xFFFFECEF) : AppColors.primaryTint,
+        color: low ? AppColors.soft(const Color(0xFFFFECEF)) : AppColors.primaryTint,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: low ? AppColors.primary : AppColors.primary.withValues(alpha: 0.3)),
       ),
@@ -242,7 +242,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
           Expanded(
             child: Text(
               'Слот закреплён за вами: $_timerLabel',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.ink),
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.ink),
             ),
           ),
         ],
@@ -268,7 +268,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                     const SizedBox(height: 2),
                     Text(
                       '${d.salonName} · ${d.masterName}',
-                      style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                      style: TextStyle(fontSize: 12, color: AppColors.muted),
                     ),
                   ],
                 ),
@@ -277,7 +277,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
               Text(Formatters.formatSum(d.sumPrice), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
             ],
           ),
-          const Divider(height: 20, color: Color(0xFFF3DCE8)),
+          Divider(height: 20, color: AppColors.line),
           Row(
             children: [
               const Icon(Icons.event_outlined, size: 15, color: AppColors.primary),
@@ -343,7 +343,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
             color: AppColors.surface,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
-              side: BorderSide(color: isSelected ? AppColors.primary : const Color(0xFFF3DCE8), width: 1.5),
+              side: BorderSide(color: isSelected ? AppColors.primary : AppColors.line, width: 1.5),
             ),
             clipBehavior: Clip.antiAlias,
             child: InkWell(

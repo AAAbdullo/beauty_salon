@@ -117,7 +117,7 @@ class _LeaveReviewModalState extends State<LeaveReviewModal> {
     final availableTags = _rating >= 4 ? _positiveTags : _criticalTags;
 
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
@@ -137,7 +137,7 @@ class _LeaveReviewModalState extends State<LeaveReviewModal> {
               child: Container(
                 width: 40,
                 height: 4,
-                decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
+                decoration: BoxDecoration(color: AppColors.handle, borderRadius: BorderRadius.circular(2)),
               ),
             ),
             const SizedBox(height: 16),
@@ -146,7 +146,7 @@ class _LeaveReviewModalState extends State<LeaveReviewModal> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Column(
+                Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
@@ -162,7 +162,7 @@ class _LeaveReviewModalState extends State<LeaveReviewModal> {
                 ),
                 IconButton(
                   onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close, color: AppColors.muted),
+                  icon: Icon(Icons.close, color: AppColors.muted),
                 ),
               ],
             ),
@@ -175,7 +175,7 @@ class _LeaveReviewModalState extends State<LeaveReviewModal> {
               decoration: BoxDecoration(
                 color: AppColors.background,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFF3DCE8)),
+                border: Border.all(color: AppColors.line),
               ),
               child: Row(
                 children: [
@@ -197,12 +197,12 @@ class _LeaveReviewModalState extends State<LeaveReviewModal> {
                         const SizedBox(height: 2),
                         Text(
                           '${widget.booking.salonName} · Мастер: ${widget.booking.masterName}',
-                          style: const TextStyle(color: AppColors.muted, fontSize: 11),
+                          style: TextStyle(color: AppColors.muted, fontSize: 11),
                         ),
                         const SizedBox(height: 2),
                         Text(
                           'Визит: ${widget.booking.date}, ${widget.booking.time}',
-                          style: const TextStyle(color: AppColors.muted, fontSize: 11),
+                          style: TextStyle(color: AppColors.muted, fontSize: 11),
                         ),
                       ],
                     ),
@@ -243,7 +243,7 @@ class _LeaveReviewModalState extends State<LeaveReviewModal> {
                   const SizedBox(height: 8),
                   Text(
                     _getRatingLabel(_rating),
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.ink),
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.ink),
                   ),
                 ],
               ),
@@ -254,7 +254,7 @@ class _LeaveReviewModalState extends State<LeaveReviewModal> {
             // Теги впечатления
             Text(
               _rating >= 4 ? 'Что вам понравилось?' : 'Что салону стоит улучшить?',
-              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: AppColors.ink),
+              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: AppColors.ink),
             ),
             const SizedBox(height: 10),
             Wrap(
@@ -279,7 +279,7 @@ class _LeaveReviewModalState extends State<LeaveReviewModal> {
                       color: isSelected ? AppColors.primaryTint : AppColors.surface,
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
-                        color: isSelected ? AppColors.primary : const Color(0xFFE5E5EA),
+                        color: isSelected ? AppColors.primary : AppColors.handle,
                         width: isSelected ? 1.5 : 1,
                       ),
                     ),
@@ -299,7 +299,7 @@ class _LeaveReviewModalState extends State<LeaveReviewModal> {
             const SizedBox(height: 20),
 
             // Комментарий
-            const Text(
+            Text(
               'Комментарий (по желанию)',
               style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: AppColors.ink),
             ),
@@ -310,17 +310,17 @@ class _LeaveReviewModalState extends State<LeaveReviewModal> {
               style: const TextStyle(fontSize: 13),
               decoration: InputDecoration(
                 hintText: 'Поделитесь впечатлениями о сервисе, мастере или атмосфере салона...',
-                hintStyle: const TextStyle(fontSize: 12, color: AppColors.muted),
+                hintStyle: TextStyle(fontSize: 12, color: AppColors.muted),
                 filled: true,
                 fillColor: AppColors.background,
                 contentPadding: const EdgeInsets.all(12),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
-                  borderSide: const BorderSide(color: Color(0xFFF3DCE8)),
+                  borderSide: BorderSide(color: AppColors.line),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
-                  borderSide: const BorderSide(color: Color(0xFFF3DCE8)),
+                  borderSide: BorderSide(color: AppColors.line),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),

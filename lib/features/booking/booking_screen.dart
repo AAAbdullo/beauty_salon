@@ -397,7 +397,7 @@ class _BookingViewState extends State<_BookingView> with WidgetsBindingObserver 
               ),
             ],
           ),
-          content: const Text(
+          content: Text(
             '10 минут удержания слота истекли, и он снова доступен другим клиентам. Выберите время повторно.',
             style: TextStyle(fontSize: 13, color: AppColors.muted),
           ),
@@ -465,11 +465,11 @@ class _BookingViewState extends State<_BookingView> with WidgetsBindingObserver 
                       ),
                       subtitle: Text(
                         '${s.duration} · ${Formatters.formatSum(s.sumPrice)}',
-                        style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                        style: TextStyle(fontSize: 12, color: AppColors.muted),
                       ),
                       trailing: Text(
                         s.creditsPrice > 0 ? Formatters.formatCredits(s.creditsPrice) : '',
-                        style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.primaryText),
+                        style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.primaryText),
                       ),
                       onTap: () {
                         Navigator.pop(ctx);
@@ -555,17 +555,17 @@ class _BookingViewState extends State<_BookingView> with WidgetsBindingObserver 
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.ink),
+          icon: Icon(Icons.arrow_back, color: AppColors.ink),
           onPressed: widget.onBack,
         ),
       ),
       body: Container(
-        decoration: const BoxDecoration(gradient: AppGradients.page),
+        decoration: BoxDecoration(gradient: AppGradients.page),
         child: Column(
           children: [
             Expanded(
               child: _service == null
-                  ? const Center(
+                  ? Center(
                       child: Text('В этом салоне пока нет услуг для записи', style: TextStyle(color: AppColors.muted)),
                     )
                   : SingleChildScrollView(
@@ -604,7 +604,7 @@ class _BookingViewState extends State<_BookingView> with WidgetsBindingObserver 
       duration: const Duration(milliseconds: 200),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: isLowTime ? const Color(0xFFFFECEF) : AppColors.primaryTint,
+        color: isLowTime ? AppColors.soft(const Color(0xFFFFECEF)) : AppColors.primaryTint,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: isLowTime ? AppColors.primary : AppColors.primary.withValues(alpha: 0.3)),
       ),
@@ -623,7 +623,7 @@ class _BookingViewState extends State<_BookingView> with WidgetsBindingObserver 
                     children: [
                       Row(
                         children: [
-                          const Text(
+                          Text(
                             'Слот закреплён за вами: ',
                             style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.ink),
                           ),
@@ -637,13 +637,13 @@ class _BookingViewState extends State<_BookingView> with WidgetsBindingObserver 
                           ),
                         ],
                       ),
-                      const Text(
+                      Text(
                         'Подтвердите запись, пока таймер не истёк',
                         style: TextStyle(fontSize: 10, color: AppColors.muted),
                       ),
                     ],
                   )
-                : const Text(
+                : Text(
                     'Выберите время — слот закрепится за вами на 10 минут',
                     style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.ink),
                   ),
@@ -681,13 +681,13 @@ class _BookingViewState extends State<_BookingView> with WidgetsBindingObserver 
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(service.name, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
-                Text(_salonName, style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+                Text(_salonName, style: TextStyle(fontSize: 12, color: AppColors.muted)),
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    const Icon(Icons.access_time, size: 13, color: AppColors.muted),
+                    Icon(Icons.access_time, size: 13, color: AppColors.muted),
                     const SizedBox(width: 4),
-                    Text(service.duration, style: const TextStyle(fontSize: 11, color: AppColors.muted)),
+                    Text(service.duration, style: TextStyle(fontSize: 11, color: AppColors.muted)),
                     const SizedBox(width: 8),
                     const Icon(Icons.star, size: 13, color: AppColors.primary),
                     const SizedBox(width: 2),
@@ -777,7 +777,7 @@ class _BookingViewState extends State<_BookingView> with WidgetsBindingObserver 
                             ],
                           )
                         else
-                          const Text('Ближайший свободный', style: TextStyle(fontSize: 10, color: AppColors.muted)),
+                          Text('Ближайший свободный', style: TextStyle(fontSize: 10, color: AppColors.muted)),
                       ],
                     ),
                   ],
@@ -868,7 +868,7 @@ class _BookingViewState extends State<_BookingView> with WidgetsBindingObserver 
             if (_selectedStart != null)
               Text(
                 'Выбрано: ${Formatters.time(_selectedStart!)}',
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primaryText),
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primaryText),
               ),
           ],
         ),
@@ -882,7 +882,7 @@ class _BookingViewState extends State<_BookingView> with WidgetsBindingObserver 
             child: const SizedBox.shrink(),
           )
         else if (slots.isEmpty)
-          const Padding(
+          Padding(
             padding: EdgeInsets.symmetric(vertical: 12),
             child: Text(
               'На этот день свободного времени нет. Выберите другую дату или другого мастера.',
@@ -908,7 +908,7 @@ class _BookingViewState extends State<_BookingView> with WidgetsBindingObserver 
                       decoration: BoxDecoration(
                         color: isSelected ? AppColors.primary : AppColors.surface,
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: isSelected ? AppColors.primary : const Color(0xFFF3DCE8)),
+                        border: Border.all(color: isSelected ? AppColors.primary : AppColors.line),
                         boxShadow: [
                           if (isSelected)
                             BoxShadow(
@@ -947,7 +947,7 @@ class _BookingViewState extends State<_BookingView> with WidgetsBindingObserver 
           ),
         if (_creditsAvailableForSalon) ...[
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'Вечерние слоты с 18:00 стоят на 20% больше кредитов',
             style: TextStyle(fontSize: 11, color: AppColors.muted),
           ),
@@ -1086,7 +1086,7 @@ class _BookingViewState extends State<_BookingView> with WidgetsBindingObserver 
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Text(
                   '${Formatters.dayLabel(start)}, ${Formatters.time(start)} · $_masterLabel',
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.ink),
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.ink),
                 ),
               ),
             AppGradientButton(
@@ -1095,7 +1095,7 @@ class _BookingViewState extends State<_BookingView> with WidgetsBindingObserver 
               onPressed: _hold == null || _holding ? null : _confirm,
             ),
             const SizedBox(height: 6),
-            const Text(
+            Text(
               'Бесплатная отмена и перенос — не позднее чем за 2 часа до визита',
               style: TextStyle(fontSize: 11, color: AppColors.muted),
             ),
@@ -1121,7 +1121,7 @@ class _SelectableTile extends StatelessWidget {
       color: isSelected ? AppColors.primaryTint : AppColors.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: isSelected ? AppColors.primary : const Color(0xFFF3DCE8), width: 1.5),
+        side: BorderSide(color: isSelected ? AppColors.primary : AppColors.line, width: 1.5),
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(

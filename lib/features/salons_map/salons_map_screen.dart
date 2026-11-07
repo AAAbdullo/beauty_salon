@@ -1028,6 +1028,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
           children: [
             // 1. Полноценная карта YandexMap с поддержкой UserLocationLayer
             YandexMap(
+              nightModeEnabled: AppColors.isDark,
               mapObjects: _mapObjects,
               onMapCreated: (YandexMapController controller) async {
                 _mapController = controller;
@@ -1161,12 +1162,12 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                   shadowColor: Colors.black12,
                   elevation: 4,
                 ),
-                icon: const Icon(Icons.arrow_back, color: AppColors.ink),
+                icon: Icon(Icons.arrow_back, color: AppColors.ink),
                 onPressed: widget.onBack,
               ),
               Column(
                 children: [
-                  const Text(
+                  Text(
                     'Салоны рядом',
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink),
                   ),
@@ -1304,7 +1305,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                     children: [
                       Text(
                         salon.name,
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink),
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -1315,12 +1316,12 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                           const SizedBox(width: 4),
                           Text(
                             salon.rating.toString(),
-                            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: AppColors.ink),
+                            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: AppColors.ink),
                           ),
                           const SizedBox(width: 4),
                           Text(
                             '(${Formatters.reviews(salon.reviewsCount)})',
-                            style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                            style: TextStyle(fontSize: 12, color: AppColors.muted),
                           ),
                         ],
                       ),
@@ -1328,7 +1329,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.close, color: AppColors.muted, size: 20),
+                  icon: Icon(Icons.close, color: AppColors.muted, size: 20),
                   onPressed: () {
                     setState(() {
                       _selectedSalon = null;
@@ -1350,7 +1351,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                 Expanded(
                   child: Text(
                     '${salon.district} район · ${salon.address}',
-                    style: const TextStyle(fontSize: 12, color: AppColors.ink),
+                    style: TextStyle(fontSize: 12, color: AppColors.ink),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -1372,25 +1373,25 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                     decoration: BoxDecoration(color: AppColors.primaryTint, borderRadius: BorderRadius.circular(12)),
                     child: Text(
                       '💳 ${salon.minCredits} кр.',
-                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.primaryText),
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.primaryText),
                     ),
                   ),
                 if (salon.onlyWomen)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(color: const Color(0xFFF3E8FF), borderRadius: BorderRadius.circular(12)),
-                    child: const Text(
+                    decoration: BoxDecoration(color: AppColors.soft(const Color(0xFFF3E8FF)), borderRadius: BorderRadius.circular(12)),
+                    child: Text(
                       '🌸 Faqat ayollar',
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF7E22CE)),
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.onSoft(const Color(0xFF7E22CE))),
                     ),
                   ),
                 if (salon.homeVisit)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(color: const Color(0xFFE0F2FE), borderRadius: BorderRadius.circular(12)),
-                    child: const Text(
+                    decoration: BoxDecoration(color: AppColors.soft(const Color(0xFFE0F2FE)), borderRadius: BorderRadius.circular(12)),
+                    child: Text(
                       '🚗 Uyga chiqish',
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF0369A1)),
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.onSoft(const Color(0xFF0369A1))),
                     ),
                   ),
               ],
@@ -1401,7 +1402,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
             // Услуги
             Text(
               salon.services,
-              style: const TextStyle(fontSize: 12, color: AppColors.muted),
+              style: TextStyle(fontSize: 12, color: AppColors.muted),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -1482,7 +1483,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                                   _primaryRouteDuration ?? 'Маршрут построен',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w800,
                                     color: AppColors.ink,
@@ -1495,7 +1496,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                         const SizedBox(width: 8),
                         Text(
                           _primaryRouteDistance ?? salon.distance,
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.muted),
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.muted),
                         ),
                       ],
                     ),
@@ -1512,7 +1513,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                                 '2-й вариант (${_alternativeRouteDuration ?? ""}) · нажмите, чтобы переключить',
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 11,
                                   color: AppColors.primaryText,
                                   fontWeight: FontWeight.w600,
@@ -1676,7 +1677,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                 decoration: BoxDecoration(
                   color: AppColors.background,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFF3DCE8)),
+                  border: Border.all(color: AppColors.line),
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -1689,7 +1690,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                         color: _currentSpeedKmh > 60 ? Colors.redAccent : AppColors.ink,
                       ),
                     ),
-                    const Text(
+                    Text(
                       'км/ч',
                       style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.muted),
                     ),
@@ -1707,25 +1708,25 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                       children: [
                         Text(
                           _primaryRouteDuration ?? 'В пути',
-                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.ink),
+                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.ink),
                         ),
                         const SizedBox(width: 6),
                         Container(
                           width: 4,
                           height: 4,
-                          decoration: const BoxDecoration(color: AppColors.muted, shape: BoxShape.circle),
+                          decoration: BoxDecoration(color: AppColors.muted, shape: BoxShape.circle),
                         ),
                         const SizedBox(width: 6),
                         Text(
                           _primaryRouteDistance ?? '',
-                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.muted),
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.muted),
                         ),
                       ],
                     ),
                     const SizedBox(height: 3),
                     Text(
                       'Цель: ${_selectedSalon?.name ?? "Салон"}',
-                      style: const TextStyle(fontSize: 12, color: AppColors.primaryText, fontWeight: FontWeight.w700),
+                      style: TextStyle(fontSize: 12, color: AppColors.primaryText, fontWeight: FontWeight.w700),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -1810,7 +1811,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
       maxChildSize: 0.82,
       builder: (context, scrollController) {
         return Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: AppColors.surface,
             borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
             boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 15, offset: Offset(0, -3))],
@@ -1868,14 +1869,14 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                         const SizedBox(height: 4),
                         Text(
                           salon.services,
-                          style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                          style: TextStyle(fontSize: 12, color: AppColors.muted),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 4),
                         Text(
                           '${salon.distance} · ${salon.district} район',
-                          style: const TextStyle(fontSize: 12, color: AppColors.ink),
+                          style: TextStyle(fontSize: 12, color: AppColors.ink),
                         ),
                         const SizedBox(height: 10),
                         Row(

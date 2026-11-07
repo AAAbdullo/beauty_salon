@@ -73,7 +73,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 'По правилам сервиса отмена визита разрешена строго не позднее чем за 2 часа до начала записи.',
                 style: TextStyle(fontSize: 13, color: AppColors.ink, height: 1.4),
               ),
@@ -81,7 +81,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFFECEF),
+                  color: AppColors.soft(const Color(0xFFFFECEF)),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: Colors.redAccent.withValues(alpha: 0.2)),
                 ),
@@ -92,7 +92,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
                     Expanded(
                       child: Text(
                         'До вашего приёма осталось: $remainingStr (менее 2 часов). Запись зафиксирована за мастером, списание подтверждено.',
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.primaryText),
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.primaryText),
                       ),
                     ),
                   ],
@@ -133,16 +133,16 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
             PaymentMethods.online => 'Оплата вернётся на карту полностью.',
             _ => 'Оплата не списывалась — запись просто отменится.',
           }}',
-          style: const TextStyle(fontSize: 13, color: AppColors.muted, height: 1.4),
+          style: TextStyle(fontSize: 13, color: AppColors.muted, height: 1.4),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Назад', style: TextStyle(color: AppColors.muted)),
+            child: Text('Назад', style: TextStyle(color: AppColors.muted)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFFECEF),
+              backgroundColor: AppColors.soft(const Color(0xFFFFECEF)),
               elevation: 0,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
@@ -185,7 +185,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'Мои записи',
           style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.ink),
         ),
@@ -218,7 +218,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
         ),
       ),
       body: Container(
-        decoration: const BoxDecoration(gradient: AppGradients.page),
+        decoration: BoxDecoration(gradient: AppGradients.page),
         child: TabBarView(
           controller: _tabController,
           children: [
@@ -241,7 +241,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
             const SizedBox(height: 12),
             const Text('Записей не найдено', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
             const SizedBox(height: 6),
-            const Text('У вас пока нет визитов в этом разделе', style: TextStyle(fontSize: 12, color: AppColors.muted)),
+            Text('У вас пока нет визитов в этом разделе', style: TextStyle(fontSize: 12, color: AppColors.muted)),
             if (isActiveTab) ...[
               const SizedBox(height: 16),
               AppPillButton(
@@ -289,13 +289,13 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
                     else if (b.status == BookingStatus.completed)
                       AppStatusBadge(
                         text: 'Завершено',
-                        backgroundColor: Colors.grey.shade200,
+                        backgroundColor: AppColors.line,
                         textColor: AppColors.muted,
                       )
                     else
-                      const AppStatusBadge(
+                      AppStatusBadge(
                         text: 'Отменено',
-                        backgroundColor: Color(0xFFFFECEF),
+                        backgroundColor: AppColors.soft(const Color(0xFFFFECEF)),
                         textColor: AppColors.primary,
                       ),
                   ],
@@ -303,7 +303,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
                 const SizedBox(height: 4),
                 Text(
                   '${b.serviceName} · ${b.masterName}',
-                  style: const TextStyle(fontSize: 13, color: AppColors.muted),
+                  style: TextStyle(fontSize: 13, color: AppColors.muted),
                 ),
                 const SizedBox(height: 10),
                 Row(
@@ -317,12 +317,12 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
                     const Spacer(),
                     Text(
                       b.priceLabel,
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.primaryText),
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.primaryText),
                     ),
                   ],
                 ),
                 if (isActiveTab) ...[
-                  const Divider(height: 20, color: Color(0xFFF3DCE8)),
+                  Divider(height: 20, color: AppColors.line),
                   Row(
                     children: [
                       Expanded(
@@ -388,14 +388,14 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
                     ),
                   ),
                 ] else if (b.status == BookingStatus.completed) ...[
-                  const Divider(height: 20, color: Color(0xFFF3DCE8)),
+                  Divider(height: 20, color: AppColors.line),
                   if (b.reviewRating != null) ...[
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         color: AppColors.background,
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: const Color(0xFFF3DCE8)),
+                        border: Border.all(color: AppColors.line),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -415,7 +415,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
                               const SizedBox(width: 8),
                               Text(
                                 'Ваша оценка: ${b.reviewRating}.0',
-                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.ink),
+                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.ink),
                               ),
                             ],
                           ),
@@ -431,11 +431,11 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
                                       decoration: BoxDecoration(
                                         color: AppColors.surface,
                                         borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(color: const Color(0xFFF3DCE8)),
+                                        border: Border.all(color: AppColors.line),
                                       ),
                                       child: Text(
                                         tag,
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                           fontSize: 10,
                                           color: AppColors.muted,
                                           fontWeight: FontWeight.w600,
@@ -450,14 +450,14 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
                             const SizedBox(height: 8),
                             Text(
                               '«${b.reviewComment}»',
-                              style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: AppColors.ink),
+                              style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: AppColors.ink),
                             ),
                           ],
                         ],
                       ),
                     ),
                   ] else if (!b.isReviewWindowOpen) ...[
-                    const Row(
+                    Row(
                       children: [
                         Icon(Icons.info_outline, size: 14, color: AppColors.muted),
                         SizedBox(width: 6),
@@ -481,14 +481,14 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
                         },
                         style: OutlinedButton.styleFrom(
                           side: const BorderSide(color: Color(0xFFFFA800)),
-                          backgroundColor: const Color(0xFFFFF9E6),
+                          backgroundColor: AppColors.soft(const Color(0xFFFFF9E6)),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                           padding: const EdgeInsets.symmetric(vertical: 8),
                         ),
                         icon: const Icon(Icons.star_rounded, size: 18, color: Color(0xFFFFA800)),
-                        label: const Text(
+                        label: Text(
                           'Оставить отзыв о визите',
-                          style: TextStyle(color: Color(0xFFD48200), fontSize: 12, fontWeight: FontWeight.w700),
+                          style: TextStyle(color: AppColors.onSoft(const Color(0xFFD48200)), fontSize: 12, fontWeight: FontWeight.w700),
                         ),
                       ),
                     ),

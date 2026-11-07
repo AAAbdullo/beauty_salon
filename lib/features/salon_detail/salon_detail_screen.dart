@@ -167,7 +167,7 @@ class _SalonDetailViewState extends State<_SalonDetailView> with SingleTickerPro
             leading: const Icon(Icons.location_on_outlined, color: AppColors.primary),
             title: Text(_salon.address, style: const TextStyle(fontWeight: FontWeight.w700)),
             subtitle: Text('${_salon.district} район · ${_salon.distance}'),
-            trailing: const Icon(Icons.chevron_right, color: AppColors.muted),
+            trailing: Icon(Icons.chevron_right, color: AppColors.muted),
             onTap: () {
               Navigator.pop(ctx);
               widget.onShowOnMap(_salon.id);
@@ -232,14 +232,15 @@ class _SalonDetailViewState extends State<_SalonDetailView> with SingleTickerPro
     );
   }
 
-  Widget _circleAction({required IconData icon, required VoidCallback onPressed, Color color = AppColors.ink}) {
+  Widget _circleAction({required IconData icon, required VoidCallback onPressed, Color? color}) {
+    final iconColor = color ?? AppColors.ink;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),
       child: Material(
         color: AppColors.surface,
         shape: const CircleBorder(),
         child: IconButton(
-          icon: Icon(icon, color: color, size: 20),
+          icon: Icon(icon, color: iconColor, size: 20),
           onPressed: onPressed,
         ),
       ),
@@ -366,7 +367,7 @@ class _SalonDetailViewState extends State<_SalonDetailView> with SingleTickerPro
           ],
         ),
         const SizedBox(height: 4),
-        Text(_salon.services, style: const TextStyle(fontSize: 13, color: AppColors.muted)),
+        Text(_salon.services, style: TextStyle(fontSize: 13, color: AppColors.muted)),
         const SizedBox(height: 8),
         Row(
           children: [
@@ -386,20 +387,20 @@ class _SalonDetailViewState extends State<_SalonDetailView> with SingleTickerPro
         const SizedBox(height: 8),
         Row(
           children: [
-            const Icon(Icons.location_on_outlined, size: 14, color: AppColors.muted),
+            Icon(Icons.location_on_outlined, size: 14, color: AppColors.muted),
             const SizedBox(width: 4),
             Flexible(
               child: Text(
                 '${_salon.distance} · ${_salon.address}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                style: TextStyle(fontSize: 12, color: AppColors.muted),
               ),
             ),
             const SizedBox(width: 8),
             GestureDetector(
               onTap: () => widget.onShowOnMap(_salon.id),
-              child: const Row(
+              child: Row(
                 children: [
                   Text(
                     'На карте',
@@ -439,7 +440,7 @@ class _SalonDetailViewState extends State<_SalonDetailView> with SingleTickerPro
               const SizedBox(width: 5),
               Text(
                 a.$2,
-                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.ink),
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.ink),
               ),
             ],
           ),
@@ -501,7 +502,7 @@ class _SalonDetailViewState extends State<_SalonDetailView> with SingleTickerPro
                       const SizedBox(height: 2),
                       Text(
                         '${s.duration} · ${Formatters.formatSum(s.sumPrice)}',
-                        style: const TextStyle(fontSize: 11, color: AppColors.muted),
+                        style: TextStyle(fontSize: 11, color: AppColors.muted),
                       ),
                     ],
                   ),
@@ -513,7 +514,7 @@ class _SalonDetailViewState extends State<_SalonDetailView> with SingleTickerPro
                     if (showCredits)
                       Text(
                         Formatters.formatCredits(s.creditsPrice),
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.primaryText),
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.primaryText),
                       ),
                     const SizedBox(height: 4),
                     AppPillButton(
@@ -561,7 +562,7 @@ class _SalonDetailViewState extends State<_SalonDetailView> with SingleTickerPro
                     children: [
                       Text(m.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
                       const SizedBox(height: 2),
-                      Text(m.specialty, style: const TextStyle(fontSize: 11, color: AppColors.muted)),
+                      Text(m.specialty, style: TextStyle(fontSize: 11, color: AppColors.muted)),
                       const SizedBox(height: 4),
                       Row(
                         children: [
@@ -614,7 +615,7 @@ class _SalonDetailViewState extends State<_SalonDetailView> with SingleTickerPro
                     ),
                     Text(
                       'На основе ${Formatters.reviews(_salon.reviewsCount)} после подтверждённых визитов',
-                      style: const TextStyle(fontSize: 11, color: AppColors.muted),
+                      style: TextStyle(fontSize: 11, color: AppColors.muted),
                     ),
                   ],
                 ),
@@ -644,9 +645,9 @@ class _SalonDetailViewState extends State<_SalonDetailView> with SingleTickerPro
                       ),
                     ],
                   ),
-                  Text(r.date, style: const TextStyle(fontSize: 10, color: AppColors.muted)),
+                  Text(r.date, style: TextStyle(fontSize: 10, color: AppColors.muted)),
                   const SizedBox(height: 6),
-                  Text(r.comment, style: const TextStyle(fontSize: 12, color: AppColors.ink, height: 1.35)),
+                  Text(r.comment, style: TextStyle(fontSize: 12, color: AppColors.ink, height: 1.35)),
                 ],
               ),
             ),
@@ -662,12 +663,12 @@ class _SalonDetailViewState extends State<_SalonDetailView> with SingleTickerPro
       return ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 14),
         leading: Icon(icon, color: AppColors.primary),
-        title: Text(title, style: const TextStyle(fontSize: 11, color: AppColors.muted)),
+        title: Text(title, style: TextStyle(fontSize: 11, color: AppColors.muted)),
         subtitle: Text(
           value,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.ink),
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.ink),
         ),
-        trailing: onTap != null ? const Icon(Icons.chevron_right, color: AppColors.muted) : null,
+        trailing: onTap != null ? Icon(Icons.chevron_right, color: AppColors.muted) : null,
         onTap: onTap,
       );
     }
@@ -786,7 +787,7 @@ class _EmptyTab extends StatelessWidget {
             Text(
               text,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 13, color: AppColors.muted),
+              style: TextStyle(fontSize: 13, color: AppColors.muted),
             ),
             if (action != null) ...[const SizedBox(height: 12), action!],
           ],

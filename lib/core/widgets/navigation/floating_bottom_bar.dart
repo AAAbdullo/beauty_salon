@@ -14,12 +14,12 @@ class FloatingBottomBar extends StatelessWidget {
 
   /// Цвет «подложки» бара — совпадает с нижним цветом [AppGradients.page],
   /// чтобы бар визуально продолжал экран, а не лежал поверх контента.
-  static const backgroundColor = Color(0xFFFEFAFD);
+  static Color get backgroundColor => AppColors.barBackground;
 
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
-      decoration: const BoxDecoration(color: backgroundColor),
+      decoration: BoxDecoration(color: backgroundColor),
       child: SafeArea(
         top: false,
         minimum: const EdgeInsets.only(bottom: 8),

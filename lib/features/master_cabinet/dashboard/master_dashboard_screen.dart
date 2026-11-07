@@ -106,7 +106,7 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
       title: 'Мои услуги',
       subtitle: 'Цены и состав услуг настраивает администратор салона',
       builder: (ctx) => services.isEmpty
-          ? const Padding(
+          ? Padding(
               padding: EdgeInsets.all(20),
               child: Text('Услуги пока не добавлены', style: TextStyle(color: AppColors.muted)),
             )
@@ -124,11 +124,11 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
                         children: [
                           Text(
                             Formatters.formatCredits(svc.creditsPrice),
-                            style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.primaryText),
+                            style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.primaryText),
                           ),
                           Text(
                             Formatters.formatSum(svc.sumPrice),
-                            style: const TextStyle(fontSize: 11, color: AppColors.muted),
+                            style: TextStyle(fontSize: 11, color: AppColors.muted),
                           ),
                         ],
                       ),
@@ -143,7 +143,7 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(gradient: AppGradients.page),
+        decoration: BoxDecoration(gradient: AppGradients.page),
         child: SafeArea(
           bottom: false,
           child: SingleChildScrollView(
@@ -179,7 +179,7 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
           Stack(
             children: [
               IconButton(
-                icon: const Icon(Icons.notifications_none_rounded, color: AppColors.ink, size: 24),
+                icon: Icon(Icons.notifications_none_rounded, color: AppColors.ink, size: 24),
                 onPressed: _openNotifications,
               ),
               Positioned(
@@ -197,7 +197,7 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
             ],
           ),
           IconButton(
-            icon: const Icon(Icons.qr_code_scanner, color: AppColors.ink, size: 24),
+            icon: Icon(Icons.qr_code_scanner, color: AppColors.ink, size: 24),
             onPressed: onScanQr,
           ),
         ],
@@ -266,12 +266,12 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
                 SizedBox(height: 2),
                 Text(
                   _profile?.specialty ?? 'Мастер салона',
-                  style: const TextStyle(fontSize: 13, color: AppColors.muted),
+                  style: TextStyle(fontSize: 13, color: AppColors.muted),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   appState.masterSalon,
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primaryText),
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primaryText),
                 ),
               ],
             ),
@@ -327,7 +327,7 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
                       m['label'] as String,
                       textAlign: TextAlign.center,
                       maxLines: 2,
-                      style: const TextStyle(fontSize: 9, color: AppColors.muted),
+                      style: TextStyle(fontSize: 9, color: AppColors.muted),
                     ),
                   ],
                 ),
@@ -353,7 +353,7 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
               if (next != null)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(color: const Color(0xFFFFECEF), borderRadius: BorderRadius.circular(12)),
+                  decoration: BoxDecoration(color: AppColors.soft(const Color(0xFFFFECEF)), borderRadius: BorderRadius.circular(12)),
                   child: Row(
                     children: [
                       const Icon(Icons.access_time, size: 12, color: AppColors.primary),
@@ -369,7 +369,7 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
           ),
           const SizedBox(height: 10),
           if (next == null)
-            const AppCard(
+            AppCard(
               padding: EdgeInsets.all(16),
               child: Row(
                 children: [
@@ -412,25 +412,25 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
                             ),
                             Text(
                               next.appointment.serviceName,
-                              style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                              style: TextStyle(fontSize: 12, color: AppColors.muted),
                             ),
                             const SizedBox(height: 4),
                             Row(
                               children: [
-                                const Icon(Icons.access_time, size: 12, color: AppColors.muted),
+                                Icon(Icons.access_time, size: 12, color: AppColors.muted),
                                 const SizedBox(width: 4),
                                 Text(
                                   next.appointment.time.label,
                                   style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
                                 ),
                                 const SizedBox(width: 8),
-                                const Icon(Icons.location_on_outlined, size: 12, color: AppColors.muted),
+                                Icon(Icons.location_on_outlined, size: 12, color: AppColors.muted),
                                 const SizedBox(width: 2),
                                 Flexible(
                                   child: Text(
                                     AppStateService().masterSalon,
                                     overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(fontSize: 11, color: AppColors.muted),
+                                    style: TextStyle(fontSize: 11, color: AppColors.muted),
                                   ),
                                 ),
                               ],
@@ -495,7 +495,7 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
                         Text(
                           a['sub'] as String,
                           maxLines: 2,
-                          style: const TextStyle(fontSize: 9, color: AppColors.muted),
+                          style: TextStyle(fontSize: 9, color: AppColors.muted),
                         ),
                       ],
                     ),
@@ -531,7 +531,7 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
           ),
           const SizedBox(height: 10),
           if (list.isEmpty)
-            const Padding(
+            Padding(
               padding: EdgeInsets.symmetric(vertical: 12),
               child: Text('Записей нет', style: TextStyle(fontSize: 13, color: AppColors.muted)),
             ),
@@ -544,7 +544,7 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
                   padding: const EdgeInsets.all(12),
                   child: Row(
                     children: [
-                      const CircleAvatar(
+                      CircleAvatar(
                         radius: 20,
                         backgroundColor: AppColors.primaryTint,
                         child: Icon(Icons.person, color: AppColors.primary),
@@ -561,7 +561,7 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(item.clientName, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-                            Text(item.serviceName, style: const TextStyle(fontSize: 11, color: AppColors.muted)),
+                            Text(item.serviceName, style: TextStyle(fontSize: 11, color: AppColors.muted)),
                           ],
                         ),
                       ),
@@ -595,7 +595,7 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
   }
 
   Widget _statusLabel(MasterAppointment item) {
-    final color = item.isCancelled ? const Color(0xFFD64545) : AppColors.successText;
+    final color = item.isCancelled ? AppColors.onSoft(const Color(0xFFD64545)) : AppColors.successText;
     return Text(
       item.status,
       style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color),
@@ -621,15 +621,15 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: CircleAvatar(
-                    backgroundColor: n.isCancellation ? const Color(0xFFFFECEF) : AppColors.successBg,
+                    backgroundColor: n.isCancellation ? AppColors.soft(const Color(0xFFFFECEF)) : AppColors.successBg,
                     child: Icon(
                       n.isCancellation ? Icons.event_busy_outlined : Icons.event_available_outlined,
-                      color: n.isCancellation ? const Color(0xFFD64545) : AppColors.successText,
+                      color: n.isCancellation ? AppColors.onSoft(const Color(0xFFD64545)) : AppColors.successText,
                     ),
                   ),
                   title: Text(n.title, style: const TextStyle(fontWeight: FontWeight.w700)),
                   subtitle: Text(n.body),
-                  trailing: Text(n.timeAgo, style: const TextStyle(fontSize: 11, color: AppColors.muted)),
+                  trailing: Text(n.timeAgo, style: TextStyle(fontSize: 11, color: AppColors.muted)),
                 ),
             ],
           ),

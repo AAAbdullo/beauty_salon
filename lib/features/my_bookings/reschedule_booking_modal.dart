@@ -157,7 +157,7 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
@@ -176,7 +176,7 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
             child: Container(
               width: 40,
               height: 4,
-              decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
+              decoration: BoxDecoration(color: AppColors.handle, borderRadius: BorderRadius.circular(2)),
             ),
           ),
           const SizedBox(height: 16),
@@ -185,7 +185,7 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Column(
+              Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
@@ -198,7 +198,7 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
               ),
               IconButton(
                 onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.close, color: AppColors.muted),
+                icon: Icon(Icons.close, color: AppColors.muted),
               ),
             ],
           ),
@@ -211,7 +211,7 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
             decoration: BoxDecoration(
               color: AppColors.background,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFF3DCE8)),
+              border: Border.all(color: AppColors.line),
             ),
             child: Row(
               children: [
@@ -235,7 +235,7 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
                       const SizedBox(height: 2),
                       Text(
                         '${widget.booking.salonName} · ${widget.booking.masterName}',
-                        style: const TextStyle(color: AppColors.muted, fontSize: 11),
+                        style: TextStyle(color: AppColors.muted, fontSize: 11),
                       ),
                       const SizedBox(height: 2),
                       Text(
@@ -252,7 +252,7 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
           const SizedBox(height: 20),
 
           // Выбор новой даты
-          const Text(
+          Text(
             'Выберите дату',
             style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: AppColors.ink),
           ),
@@ -279,7 +279,7 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
                       color: isSelected ? AppColors.primary : AppColors.surface,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: isSelected ? AppColors.primary : const Color(0xFFE5E5EA),
+                        color: isSelected ? AppColors.primary : AppColors.handle,
                         width: isSelected ? 1.5 : 1,
                       ),
                       boxShadow: isSelected
@@ -323,7 +323,7 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
           const SizedBox(height: 20),
 
           // Выбор времени
-          const Text(
+          Text(
             'Свободное время',
             style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: AppColors.ink),
           ),
@@ -337,7 +337,7 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
               child: const SizedBox.shrink(),
             )
           else if (_slotsForDay(_selectedDayIndex).isEmpty)
-            const Padding(
+            Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
               child: Text(
                 'На этот день свободного времени нет. Выберите другую дату.',
@@ -365,7 +365,7 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
                       color: isSelected ? AppColors.primaryTint : AppColors.surface,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: isSelected ? AppColors.primary : const Color(0xFFE5E5EA),
+                        color: isSelected ? AppColors.primary : AppColors.handle,
                         width: isSelected ? 1.5 : 1,
                       ),
                     ),
@@ -385,7 +385,7 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
             const SizedBox(height: 10),
             Text(
               _priceNote(_selectedStart!)!,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primaryText),
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primaryText),
             ),
           ],
           if (_error != null) ...[
@@ -401,15 +401,15 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
           // Пояснение правила отмены / переноса
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(color: const Color(0xFFF3F8FF), borderRadius: BorderRadius.circular(10)),
-            child: const Row(
+            decoration: BoxDecoration(color: AppColors.soft(const Color(0xFFF3F8FF)), borderRadius: BorderRadius.circular(10)),
+            child: Row(
               children: [
-                Icon(Icons.info_outline, size: 16, color: Color(0xFF007AFF)),
+                Icon(Icons.info_outline, size: 16, color: AppColors.onSoft(const Color(0xFF007AFF))),
                 SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     'Перенос бесплатный, если до визита больше 2 часов. Оплата сохраняется; для кредитов цена пересчитывается по новому времени.',
-                    style: TextStyle(fontSize: 11, color: Color(0xFF0051A8)),
+                    style: TextStyle(fontSize: 11, color: AppColors.onSoft(const Color(0xFF0051A8))),
                   ),
                 ),
               ],

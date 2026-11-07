@@ -148,10 +148,10 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.ink),
+          icon: Icon(Icons.arrow_back, color: AppColors.ink),
           onPressed: widget.onBack,
         ),
-        title: const Text(
+        title: Text(
           'Сканирование QR',
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink),
         ),
@@ -191,13 +191,13 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
         elevation: 0,
       ),
       body: Container(
-        decoration: const BoxDecoration(gradient: AppGradients.page),
+        decoration: BoxDecoration(gradient: AppGradients.page),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSizes.screenPadding),
           child: Column(
             children: [
               const SizedBox(height: 10),
-              const Text(
+              Text(
                 'Отсканируйте живой QR-код клиента для подтверждения визита',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 14, color: AppColors.muted),
@@ -265,8 +265,8 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
               const Spacer(),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(color: const Color(0xFFFFECEF), borderRadius: BorderRadius.circular(16)),
-                child: const Row(
+                decoration: BoxDecoration(color: AppColors.soft(const Color(0xFFFFECEF)), borderRadius: BorderRadius.circular(16)),
+                child: Row(
                   children: [
                     Icon(Icons.access_time, size: 16, color: AppColors.primary),
                     SizedBox(width: 8),
@@ -308,7 +308,7 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
   Widget _buildSuccessView() {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(gradient: AppGradients.page),
+        decoration: BoxDecoration(gradient: AppGradients.page),
         child: SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(AppSizes.screenPadding),
@@ -318,11 +318,11 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
                 Container(
                   width: 90,
                   height: 90,
-                  decoration: const BoxDecoration(color: AppColors.successBg, shape: BoxShape.circle),
+                  decoration: BoxDecoration(color: AppColors.successBg, shape: BoxShape.circle),
                   child: const Icon(Icons.check, size: 50, color: AppColors.success),
                 ),
                 const SizedBox(height: 20),
-                const Text(
+                Text(
                   'Визит подтверждён',
                   style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.ink),
                 ),
@@ -339,7 +339,7 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text('Клиент', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+                          Text('Клиент', style: TextStyle(color: AppColors.muted, fontSize: 13)),
                           Row(
                             children: [
                               ClipOval(
@@ -362,11 +362,11 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
                           ),
                         ],
                       ),
-                      const Divider(height: 20, color: Color(0xFFF3DCE8)),
+                      Divider(height: 20, color: AppColors.line),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text('Услуга', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+                          Text('Услуга', style: TextStyle(color: AppColors.muted, fontSize: 13)),
                           const SizedBox(width: 12),
                           Flexible(
                             child: Text(
@@ -377,11 +377,11 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
                           ),
                         ],
                       ),
-                      const Divider(height: 20, color: Color(0xFFF3DCE8)),
+                      Divider(height: 20, color: AppColors.line),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text('Запись', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+                          Text('Запись', style: TextStyle(color: AppColors.muted, fontSize: 13)),
                           const SizedBox(width: 12),
                           Flexible(
                             child: Text(
@@ -392,11 +392,11 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
                           ),
                         ],
                       ),
-                      const Divider(height: 20, color: Color(0xFFF3DCE8)),
+                      Divider(height: 20, color: AppColors.line),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text('Оплата', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+                          Text('Оплата', style: TextStyle(color: AppColors.muted, fontSize: 13)),
                           const SizedBox(width: 12),
                           Flexible(
                             child: Text(
@@ -411,7 +411,7 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                const Text(
+                Text(
                   'Салону начислена оплата. Клиенту отправлен запрос на отзыв.',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 12, color: AppColors.muted),
@@ -434,7 +434,7 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
   Widget _buildErrorView() {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(gradient: AppGradients.page),
+        decoration: BoxDecoration(gradient: AppGradients.page),
         child: SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(AppSizes.screenPadding),
@@ -444,11 +444,11 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
                 Container(
                   width: 90,
                   height: 90,
-                  decoration: const BoxDecoration(color: Color(0xFFFFECEF), shape: BoxShape.circle),
+                  decoration: BoxDecoration(color: AppColors.soft(const Color(0xFFFFECEF)), shape: BoxShape.circle),
                   child: const Icon(Icons.close, size: 50, color: AppColors.primary),
                 ),
                 const SizedBox(height: 20),
-                const Text(
+                Text(
                   'Код не подошёл',
                   style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.ink),
                 ),
@@ -467,7 +467,7 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
                       Expanded(
                         child: Text(
                           _errorMessage,
-                          style: const TextStyle(fontSize: 12, color: AppColors.ink, height: 1.3),
+                          style: TextStyle(fontSize: 12, color: AppColors.ink, height: 1.3),
                         ),
                       ),
                     ],

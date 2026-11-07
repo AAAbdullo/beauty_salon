@@ -4,24 +4,49 @@ import 'package:google_fonts/google_fonts.dart';
 /// Токены дизайна Go'zallik. Источник: gozallik_design_spec.md.
 /// Цвета светлой темы измерены по присланным экранам; тёмная тема предложена.
 class AppColors {
+  /// Включена ли тёмная палитра. Меняется только через [AppAppearance]; после смены дерево виджетов перестраивается.
+  static bool isDark = false;
+
+  static Color _p(Color light, Color dark) => isDark ? dark : light;
+
   // Бренд
   static const primary = Color(0xFFE4178C);
   static const primaryBright = Color(0xFFED1785);
   static const primaryDeep = Color(0xFFC5238A);
-  static const primaryText = Color(0xFFC61A70);
-  static const primaryTint = Color(0xFFFCEAF4);
+  static Color get primaryText => _p(const Color(0xFFC61A70), const Color(0xFFFF5CB3));
+  static Color get primaryTint => _p(const Color(0xFFFCEAF4), darkPrimaryTint);
 
   // Поверхности и текст
-  static const background = Color(0xFFFBF6FA);
-  static const surface = Color(0xFFFFFFFF);
-  static const ink = Color(0xFF0C0C10);
-  static const muted = Color(0xFF8F8E96);
+  static Color get background => _p(const Color(0xFFFBF6FA), darkBackground);
+  static Color get surface => _p(const Color(0xFFFFFFFF), darkSurface);
+  static Color get ink => _p(const Color(0xFF0C0C10), darkInk);
+  static Color get muted => _p(const Color(0xFF8F8E96), darkMuted);
+
+  /// Разделители и контуры карточек
+  static Color get line => _p(const Color(0xFFF3DCE8), darkLine);
+
+  /// Нейтральные элементы: «ручка» шторки, неактивные точки
+  static Color get handle => _p(const Color(0xFFE5DCE2), const Color(0xFF4A4057));
+
+  /// Подложка нижней панели навигации (совпадает с низом [AppGradients.page])
+  static Color get barBackground => _p(const Color(0xFFFEFAFD), const Color(0xFF191320));
 
   // Статусы
-  static const successBg = Color(0xFFDFF9F2);
-  static const successText = Color(0xFF247659);
+  static Color get successBg => _p(const Color(0xFFDFF9F2), darkSuccessBg);
+  static Color get successText => _p(const Color(0xFF247659), darkSuccessText);
   static const success = Color(0xFF1AAA4C);
   static const gold = Color(0xFFF7BF52);
+
+  /// Светлая подложка акцентного цвета ([light] — цвет из светлой темы); в тёмной — приглушённый оттенок.
+  static Color soft(Color light) =>
+      isDark ? Color.alphaBlend(light.withValues(alpha: 0.20), darkSurface) : light;
+
+  /// Цвет текста/иконки на [soft]-подложке: в тёмной теме осветляется, чтобы читался.
+  static Color onSoft(Color light) {
+    if (!isDark) return light;
+    final hsl = HSLColor.fromColor(light);
+    return hsl.withLightness(hsl.lightness < 0.72 ? 0.72 : hsl.lightness).toColor();
+  }
 
   // Тёмная тема (предложено, не измерено)
   static const darkBackground = Color(0xFF14101A);
@@ -54,10 +79,12 @@ class AppGradients {
   );
 
   /// Фон экрана: мягкий розовый сверху, почти белый внизу.
-  static const page = LinearGradient(
+  static LinearGradient get page => LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
-    colors: [Color(0xFFFBEFF4), Color(0xFFFEFAFD)],
+    colors: AppColors.isDark
+        ? const [Color(0xFF1B1424), Color(0xFF14101A)]
+        : const [Color(0xFFFBEFF4), Color(0xFFFEFAFD)],
   );
 }
 
@@ -87,7 +114,7 @@ TextTheme _textTheme(Color ink, Color muted) {
 }
 
 TextTheme _textThemeBase(Color ink, Color muted) {
-  final base = ThemeData.light().textTheme;
+  final base = ThemeData(brightness: ink == AppColors.darkInk ? Brightness.dark : Brightness.light).textTheme;
   return base.copyWith(
     headlineLarge: base.headlineLarge?.copyWith(fontSize: 26, fontWeight: FontWeight.w800, color: ink),
     headlineMedium: base.headlineMedium?.copyWith(fontSize: 22, fontWeight: FontWeight.w800, color: ink),

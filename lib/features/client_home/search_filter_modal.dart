@@ -93,7 +93,7 @@ class _SearchFilterModalState extends State<SearchFilterModal> {
       constraints: BoxConstraints(
         maxHeight: MediaQuery.of(context).size.height * 0.88,
       ),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
@@ -105,7 +105,7 @@ class _SearchFilterModalState extends State<SearchFilterModal> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
+                Text(
                   'Фильтры',
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.ink),
                 ),
@@ -219,7 +219,7 @@ class _SearchFilterModalState extends State<SearchFilterModal> {
                       const Text('Цена услуги', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
                       Text(
                         '${(_priceRange.start / 1000).toInt()}k – ${(_priceRange.end / 1000).toInt()}k сум',
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.primaryText),
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.primaryText),
                       ),
                     ],
                   ),
@@ -289,7 +289,7 @@ class _SearchFilterModalState extends State<SearchFilterModal> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-                Text(subtitle, style: const TextStyle(fontSize: 11, color: AppColors.muted)),
+                Text(subtitle, style: TextStyle(fontSize: 11, color: AppColors.muted)),
               ],
             ),
           ),

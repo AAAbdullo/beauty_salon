@@ -143,7 +143,7 @@ class _MasterProfileViewState extends State<_MasterProfileView> with SingleTicke
         child: CircleAvatar(
           backgroundColor: AppColors.surface,
           child: IconButton(
-            icon: const Icon(Icons.arrow_back, color: AppColors.ink, size: 20),
+            icon: Icon(Icons.arrow_back, color: AppColors.ink, size: 20),
             onPressed: widget.onBack,
           ),
         ),
@@ -241,12 +241,12 @@ class _MasterProfileViewState extends State<_MasterProfileView> with SingleTicke
                 children: [
                   Text(
                     _master.name,
-                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.ink),
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.ink),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     _master.specialty,
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primaryText),
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primaryText),
                   ),
                 ],
               ),
@@ -260,9 +260,9 @@ class _MasterProfileViewState extends State<_MasterProfileView> with SingleTicke
                   const SizedBox(width: 4),
                   Text(
                     '${_master.rating}',
-                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: AppColors.primaryText),
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: AppColors.primaryText),
                   ),
-                  Text(' (${_master.reviewsCount})', style: const TextStyle(color: AppColors.muted, fontSize: 11)),
+                  Text(' (${_master.reviewsCount})', style: TextStyle(color: AppColors.muted, fontSize: 11)),
                 ],
               ),
             ),
@@ -273,7 +273,7 @@ class _MasterProfileViewState extends State<_MasterProfileView> with SingleTicke
           onTap: widget.onOpenSalon == null ? null : () => widget.onOpenSalon!(_master.salonId),
           child: Row(
             children: [
-              const Icon(Icons.storefront, size: 14, color: AppColors.muted),
+              Icon(Icons.storefront, size: 14, color: AppColors.muted),
               const SizedBox(width: 4),
               Text(
                 'Салон: ${_master.salonName}',
@@ -283,7 +283,7 @@ class _MasterProfileViewState extends State<_MasterProfileView> with SingleTicke
                   fontWeight: widget.onOpenSalon == null ? FontWeight.w500 : FontWeight.w700,
                 ),
               ),
-              if (widget.onOpenSalon != null) const Icon(Icons.chevron_right, size: 16, color: AppColors.primaryText),
+              if (widget.onOpenSalon != null) Icon(Icons.chevron_right, size: 16, color: AppColors.primaryText),
             ],
           ),
         ),
@@ -340,7 +340,7 @@ class _MasterProfileViewState extends State<_MasterProfileView> with SingleTicke
         children: [
           const Text('О мастере', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
           const SizedBox(height: 6),
-          Text(_master.about, style: const TextStyle(fontSize: 13, color: AppColors.muted, height: 1.4)),
+          Text(_master.about, style: TextStyle(fontSize: 13, color: AppColors.muted, height: 1.4)),
         ],
       ),
     );
@@ -412,7 +412,7 @@ class _MasterProfileViewState extends State<_MasterProfileView> with SingleTicke
                     children: [
                       Text(s.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
                       const SizedBox(height: 2),
-                      Text(s.duration, style: const TextStyle(fontSize: 11, color: AppColors.muted)),
+                      Text(s.duration, style: TextStyle(fontSize: 11, color: AppColors.muted)),
                     ],
                   ),
                 ),
@@ -421,11 +421,11 @@ class _MasterProfileViewState extends State<_MasterProfileView> with SingleTicke
                   children: [
                     Text(
                       '${s.creditsPrice} кр.',
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.primaryText),
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.primaryText),
                     ),
                     Text(
                       Formatters.formatSum(s.sumPrice),
-                      style: const TextStyle(fontSize: 11, color: AppColors.muted),
+                      style: TextStyle(fontSize: 11, color: AppColors.muted),
                     ),
                     const SizedBox(height: 4),
                     AppPillButton(text: 'Записаться', onPressed: () => widget.onBookMaster(_master, s)),
@@ -511,9 +511,9 @@ class _MasterProfileViewState extends State<_MasterProfileView> with SingleTicke
                     ),
                   ],
                 ),
-                Text(r.date, style: const TextStyle(fontSize: 10, color: AppColors.muted)),
+                Text(r.date, style: TextStyle(fontSize: 10, color: AppColors.muted)),
                 const SizedBox(height: 6),
-                Text(r.comment, style: const TextStyle(fontSize: 12, color: AppColors.ink, height: 1.3)),
+                Text(r.comment, style: TextStyle(fontSize: 12, color: AppColors.ink, height: 1.3)),
               ],
             ),
           ),

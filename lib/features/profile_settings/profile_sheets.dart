@@ -74,7 +74,7 @@ class ProfileSheets {
                   title: Text(item.$1, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
                   iconColor: AppColors.primary,
                   childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                  children: [Text(item.$2, style: const TextStyle(fontSize: 13, color: AppColors.muted, height: 1.4))],
+                  children: [Text(item.$2, style: TextStyle(fontSize: 13, color: AppColors.muted, height: 1.4))],
                 ),
               ),
             )
@@ -101,12 +101,12 @@ class ProfileSheets {
             .map(
               (c) => ListTile(
                 leading: Icon(c.$1, color: AppColors.primary),
-                title: Text(c.$2, style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+                title: Text(c.$2, style: TextStyle(fontSize: 12, color: AppColors.muted)),
                 subtitle: Text(
                   c.$3,
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.ink),
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.ink),
                 ),
-                trailing: const Icon(Icons.copy_rounded, size: 18, color: AppColors.muted),
+                trailing: Icon(Icons.copy_rounded, size: 18, color: AppColors.muted),
                 onTap: () {
                   Clipboard.setData(ClipboardData(text: c.$3));
                   Navigator.pop(ctx);
@@ -124,7 +124,7 @@ class ProfileSheets {
     showAppSheet<void>(
       context: context,
       title: 'Правовая информация',
-      builder: (ctx) => const SingleChildScrollView(
+      builder: (ctx) => SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(20, 4, 20, 20),
         child: Text(
           'Go\'zallik — платформа записи в салоны красоты Ташкента.\n\n'
@@ -145,14 +145,14 @@ class ProfileSheets {
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('Выйти из аккаунта?', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
-        content: const Text(
+        content: Text(
           'Чтобы войти снова, понадобится номер телефона и код из SMS.',
           style: TextStyle(fontSize: 13, color: AppColors.muted),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Отмена', style: TextStyle(color: AppColors.muted)),
+            child: Text('Отмена', style: TextStyle(color: AppColors.muted)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -179,7 +179,7 @@ class _FieldLabel extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 6),
       child: Text(
         text,
-        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink),
+        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink),
       ),
     );
   }
@@ -283,7 +283,7 @@ class _EditProfileFormState extends State<_EditProfileForm> {
             hintText: '90 123 45 67',
             keyboardType: TextInputType.phone,
             inputFormatters: const [UzPhoneInputFormatter()],
-            prefixIcon: const Padding(
+            prefixIcon: Padding(
               padding: EdgeInsets.only(left: 16, right: 8),
               child: Text(
                 '+998',

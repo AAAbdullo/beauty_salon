@@ -18,14 +18,14 @@ class LoadingScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(icon: const Icon(Icons.arrow_back, color: AppColors.ink), onPressed: onBack),
-        title: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink)),
+        leading: IconButton(icon: Icon(Icons.arrow_back, color: AppColors.ink), onPressed: onBack),
+        title: Text(title, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink)),
         centerTitle: true,
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
       body: Container(
-        decoration: const BoxDecoration(gradient: AppGradients.page),
+        decoration: BoxDecoration(gradient: AppGradients.page),
         child: const Center(child: CircularProgressIndicator(color: AppColors.primary)),
       ),
     );
@@ -51,14 +51,14 @@ class ErrorScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(icon: const Icon(Icons.arrow_back, color: AppColors.ink), onPressed: onBack),
-        title: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink)),
+        leading: IconButton(icon: Icon(Icons.arrow_back, color: AppColors.ink), onPressed: onBack),
+        title: Text(title, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink)),
         centerTitle: true,
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
       body: Container(
-        decoration: const BoxDecoration(gradient: AppGradients.page),
+        decoration: BoxDecoration(gradient: AppGradients.page),
         padding: const EdgeInsets.all(AppSizes.screenPadding * 1.5),
         child: Center(
           child: Column(
@@ -69,7 +69,7 @@ class ErrorScreen extends StatelessWidget {
               Text(
                 message,
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 14, color: AppColors.muted, height: 1.4),
+                style: TextStyle(fontSize: 14, color: AppColors.muted, height: 1.4),
               ),
               const SizedBox(height: 24),
               AppGradientButton(text: 'Повторить', onPressed: onRetry),
@@ -183,7 +183,7 @@ class AsyncSection extends StatelessWidget {
               Text(
                 errorMessageOf(error),
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 13, color: AppColors.muted),
+                style: TextStyle(fontSize: 13, color: AppColors.muted),
               ),
               TextButton(
                 onPressed: onRetry,

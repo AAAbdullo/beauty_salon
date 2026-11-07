@@ -64,13 +64,13 @@ class _MasterAccountScreenState extends State<MasterAccountScreen> {
         return Scaffold(
           backgroundColor: Colors.transparent,
           body: Container(
-            decoration: const BoxDecoration(gradient: AppGradients.page),
+            decoration: BoxDecoration(gradient: AppGradients.page),
             child: SafeArea(
               bottom: false,
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(AppSizes.screenPadding, 8, AppSizes.screenPadding, 24),
                 children: [
-                  const Padding(
+                  Padding(
                     padding: EdgeInsets.symmetric(vertical: 8),
                     child: Text(
                       'Профиль мастера',
@@ -107,7 +107,7 @@ class _MasterAccountScreenState extends State<MasterAccountScreen> {
                             const SizedBox(height: 2),
                             Text(
                               profile?.specialty ?? 'Мастер салона',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 13,
                                 color: AppColors.primaryText,
                                 fontWeight: FontWeight.w600,
@@ -116,11 +116,11 @@ class _MasterAccountScreenState extends State<MasterAccountScreen> {
                             const SizedBox(height: 2),
                             Row(
                               children: [
-                                const Icon(Icons.storefront, size: 14, color: AppColors.muted),
+                                Icon(Icons.storefront, size: 14, color: AppColors.muted),
                                 const SizedBox(width: 4),
                                 Text(
                                   appState.masterSalon,
-                                  style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                                  style: TextStyle(fontSize: 12, color: AppColors.muted),
                                 ),
                               ],
                             ),
@@ -151,7 +151,7 @@ class _MasterAccountScreenState extends State<MasterAccountScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text('Доход за месяц', style: TextStyle(fontSize: 12, color: AppColors.muted)),
+                              Text('Доход за месяц', style: TextStyle(fontSize: 12, color: AppColors.muted)),
                               Text(
                                 Formatters.formatSum(cabinet.revenueForMonth(0)),
                                 style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
@@ -161,9 +161,9 @@ class _MasterAccountScreenState extends State<MasterAccountScreen> {
                         ),
                         Text(
                           'Комиссия салона ${appState.salonCommissionPercent.toStringAsFixed(0)}%',
-                          style: const TextStyle(fontSize: 11, color: AppColors.muted),
+                          style: TextStyle(fontSize: 11, color: AppColors.muted),
                         ),
-                        const Icon(Icons.chevron_right, color: AppColors.muted),
+                        Icon(Icons.chevron_right, color: AppColors.muted),
                       ],
                     ),
                   ),
@@ -186,7 +186,7 @@ class _MasterAccountScreenState extends State<MasterAccountScreen> {
                   ),
                   const SizedBox(height: 20),
                   Material(
-                    color: const Color(0xFFFFF0F5),
+                    color: AppColors.soft(const Color(0xFFFFF0F5)),
                     borderRadius: BorderRadius.circular(24),
                     child: InkWell(
                       borderRadius: BorderRadius.circular(24),
@@ -230,7 +230,7 @@ class _MasterAccountScreenState extends State<MasterAccountScreen> {
               textAlign: TextAlign.center,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 10, color: AppColors.muted),
+              style: TextStyle(fontSize: 10, color: AppColors.muted),
             ),
           ],
         ),
@@ -242,10 +242,10 @@ class _MasterAccountScreenState extends State<MasterAccountScreen> {
     return ListTile(
       leading: Icon(icon, color: AppColors.ink),
       title: Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-      trailing: const Icon(Icons.chevron_right, size: 18, color: AppColors.muted),
+      trailing: Icon(Icons.chevron_right, size: 18, color: AppColors.muted),
       onTap: onTap,
     );
   }
 
-  Widget _divider() => const Divider(height: 1, thickness: 0.5, indent: 56, endIndent: 16, color: Color(0xFFF3DCE8));
+  Widget _divider() => Divider(height: 1, thickness: 0.5, indent: 56, endIndent: 16, color: AppColors.line);
 }

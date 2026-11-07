@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'core/services/app_state_service.dart';
+import 'core/theme/app_appearance.dart';
 import 'core/theme/app_theme.dart';
 import 'core/widgets/navigation/floating_bottom_bar.dart';
 import 'features/auth/auth_screen.dart';
@@ -52,9 +53,36 @@ class GozallikApp extends StatefulWidget {
   State<GozallikApp> createState() => _GozallikAppState();
 }
 
-class _GozallikAppState extends State<GozallikApp> {
+class _GozallikAppState extends State<GozallikApp> with WidgetsBindingObserver {
   // Создаются один раз: пересборка виджета не должна сбрасывать удержания слотов и сессию
   late final AppDependencies _dependencies = widget.dependencies ?? AppDependencies.mock();
+
+  final _appearance = AppAppearance.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _appearance.addListener(_onAppearanceChanged);
+    AppAppearance.applyPalette(_appearance.resolveDark(WidgetsBinding.instance.platformDispatcher.platformBrightness));
+  }
+
+  @override
+  void dispose() {
+    _appearance.removeListener(_onAppearanceChanged);
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangePlatformBrightness() => _onAppearanceChanged();
+
+  void _onAppearanceChanged() {
+    final dark = _appearance.resolveDark(WidgetsBinding.instance.platformDispatcher.platformBrightness);
+    if (!AppAppearance.applyPalette(dark) || !mounted) return;
+    setState(() {});
+    AppAppearance.rebuildAll();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -65,7 +93,8 @@ class _GozallikAppState extends State<GozallikApp> {
         debugShowCheckedModeBanner: false,
         theme: widget.themeOverride ?? lightTheme,
         darkTheme: widget.themeOverride == null ? darkTheme : null,
-        themeMode: ThemeMode.light,
+        themeMode: AppColors.isDark ? ThemeMode.dark : ThemeMode.light,
+        themeAnimationDuration: Duration.zero, // палитра переключается мгновенно и целиком
         home: const RootNavigationContainer(),
       ),
     );
