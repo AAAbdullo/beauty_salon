@@ -124,10 +124,17 @@ class _CreditsScreenState extends State<CreditsScreen> {
 
   void _buyPackage(String name, int credits, int price) {
     final isCurrent = name == _appState.subscriptionPlan;
+    final preview = _appState.previewPurchase(credits);
+    final carryNote = _appState.clientCredits == 0
+        ? 'Остатка нет — будет начислено $credits кр.'
+        : preview.burned > 0
+        ? 'Из текущих ${_appState.clientCredits} кр. перенесётся ${preview.carried} кр. (не больше 20% прежнего пакета), '
+              '${preview.burned} кр. сгорят.'
+        : 'Текущие ${_appState.clientCredits} кр. сохранятся.';
     showAppSheet<void>(
       context: context,
       title: isCurrent ? 'Продлить «$name»' : 'Перейти на «$name»',
-      subtitle: '+$credits кредитов на 30 дней. До 20% неиспользованных кредитов переносятся при продлении.',
+      subtitle: '+$credits кредитов на 30 дней. $carryNote Итого на балансе: ${preview.total} кр.',
       builder: (ctx) => Padding(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
         child: AppGradientButton(
@@ -136,7 +143,11 @@ class _CreditsScreenState extends State<CreditsScreen> {
             // [BACKEND NOTE]: POST /api/v1/subscriptions → Click / Payme / Uzum
             _appState.purchasePackage(name, credits);
             Navigator.pop(ctx);
-            showAppSnack(context, 'Пакет «$name» активирован! Начислено +$credits кр.', success: true);
+            showAppSnack(
+              context,
+              'Пакет «$name» активирован! На балансе ${_appState.clientCredits} кр.',
+              success: true,
+            );
           },
         ),
       ),

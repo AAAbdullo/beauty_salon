@@ -1,15 +1,13 @@
 import 'package:flutter/material.dart';
 import '../../core/services/app_state_service.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/result.dart';
 
 /// Модальное окно оценки и отзыва о прошедшем визите (ТЗ M-13)
 class LeaveReviewModal extends StatefulWidget {
   final BookingItem booking;
 
-  const LeaveReviewModal({
-    super.key,
-    required this.booking,
-  });
+  const LeaveReviewModal({super.key, required this.booking});
 
   static Future<bool?> show(BuildContext context, BookingItem booking) {
     return showModalBottomSheet<bool>(
@@ -26,6 +24,7 @@ class LeaveReviewModal extends StatefulWidget {
 
 class _LeaveReviewModalState extends State<LeaveReviewModal> {
   int _rating = 5;
+  String? _error;
   final Set<String> _selectedTags = {'Профессионализм мастера', 'Чистота и гигиена'};
   final TextEditingController _commentController = TextEditingController();
   final _appState = AppStateService();
@@ -73,14 +72,18 @@ class _LeaveReviewModalState extends State<LeaveReviewModal> {
     //   "tags": _selectedTags.toList(),
     //   "comment": _commentController.text.trim(),
     // }
-    _appState.addReview(
+    final result = _appState.addReview(
       bookingId: widget.booking.id,
       rating: _rating,
       tags: _selectedTags.toList(),
       comment: _commentController.text.trim(),
     );
-
-    Navigator.pop(context, true);
+    switch (result) {
+      case Success():
+        Navigator.pop(context, true);
+      case Failure(:final error):
+        setState(() => _error = error.message);
+    }
   }
 
   @override
@@ -114,10 +117,7 @@ class _LeaveReviewModalState extends State<LeaveReviewModal> {
               child: Container(
                 width: 40,
                 height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(2),
-                ),
+                decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
               ),
             ),
             const SizedBox(height: 16),
@@ -131,11 +131,7 @@ class _LeaveReviewModalState extends State<LeaveReviewModal> {
                   children: [
                     Text(
                       'Оцените визит',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.ink,
-                      ),
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.ink),
                     ),
                     SizedBox(height: 2),
                     Text(
@@ -166,10 +162,7 @@ class _LeaveReviewModalState extends State<LeaveReviewModal> {
                   Container(
                     width: 42,
                     height: 42,
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryTint,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+                    decoration: BoxDecoration(color: AppColors.primaryTint, borderRadius: BorderRadius.circular(12)),
                     child: const Icon(Icons.auto_awesome, color: AppColors.primary, size: 22),
                   ),
                   const SizedBox(width: 12),
@@ -230,11 +223,7 @@ class _LeaveReviewModalState extends State<LeaveReviewModal> {
                   const SizedBox(height: 8),
                   Text(
                     _getRatingLabel(_rating),
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.ink,
-                    ),
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.ink),
                   ),
                 ],
               ),
@@ -320,6 +309,14 @@ class _LeaveReviewModalState extends State<LeaveReviewModal> {
               ),
             ),
 
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _error!,
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primary),
+              ),
+            ],
+
             const SizedBox(height: 24),
 
             // Кнопка отправки
@@ -335,11 +332,7 @@ class _LeaveReviewModalState extends State<LeaveReviewModal> {
                 ),
                 child: const Text(
                   'Отправить отзыв',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                  ),
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white),
                 ),
               ),
             ),

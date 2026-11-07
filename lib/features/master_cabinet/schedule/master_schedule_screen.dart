@@ -804,6 +804,8 @@ class _MasterScheduleScreenState extends State<MasterScheduleScreen> {
     final working = _repo.workingWeekdays;
     // Учитываем несохранённое переключение «Рабочий день» у текущего дня.
     _draft.isWorking ? working.add(_selectedWeekday) : working.remove(_selectedWeekday);
+    // Что было показано в окне — чтобы сохранить только те дни, которые пользователь реально поменял
+    final shown = Set<int>.of(working);
 
     final result = await showModalBottomSheet<Set<int>>(
       context: context,
@@ -846,10 +848,16 @@ class _MasterScheduleScreenState extends State<MasterScheduleScreen> {
     );
     if (result == null) return;
 
-    _repo.setWorkingDays(result);
-    setState(() => _draft = _draft.copyWith(isWorking: result.contains(_selectedWeekday)));
-    // Выходные сохраняются сразу; текущий день тоже сохраняем, чтобы статус совпадал.
-    _repo.saveDay(_selectedWeekday, _draft);
+    // Выходные сохраняются сразу, но только как признак «рабочий день» у изменённых дней.
+    // Остальные несохранённые правки открытого дня (часы, перерывы, слоты) не сохраняются молча.
+    for (var weekday = DateTime.monday; weekday <= DateTime.sunday; weekday++) {
+      if (result.contains(weekday) != shown.contains(weekday)) {
+        _repo.setDayWorking(weekday, result.contains(weekday));
+      }
+    }
+    if (result.contains(_selectedWeekday) != _draft.isWorking) {
+      setState(() => _draft = _draft.copyWith(isWorking: result.contains(_selectedWeekday)));
+    }
     _snack('Выходные дни обновлены');
   }
 

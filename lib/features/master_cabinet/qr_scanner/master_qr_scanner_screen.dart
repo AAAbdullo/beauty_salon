@@ -24,6 +24,7 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
   int _stateView = 0; // 0: Видоискатель, 1: Успех, 2: Ошибка
 
   String _scannedClientName = '';
+  String? _scannedClientAvatar;
   String _scannedServiceName = '';
   String _scannedTime = '';
   String _scannedPaymentMethod = '';
@@ -54,7 +55,9 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
     final booking = result.booking;
     setState(() {
       if (booking != null) {
-        _scannedClientName = appState.clientName.isNotEmpty ? appState.clientName : 'Клиент';
+        // Имя и фото — из самой записи: на телефоне мастера «клиент приложения» — это он сам
+        _scannedClientName = booking.clientName.isNotEmpty ? booking.clientName : 'Клиент';
+        _scannedClientAvatar = booking.clientAvatar;
         _scannedServiceName = booking.serviceName;
         _scannedTime = '${booking.date}, ${booking.time}';
         _scannedPaymentMethod = booking.isPaidWithCredits
@@ -291,13 +294,15 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
                           Row(
                             children: [
                               ClipOval(
-                                child: Image.asset(
-                                  AppStateService().clientAvatar,
-                                  width: 24,
-                                  height: 24,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, _, _) => const Icon(Icons.person, size: 18),
-                                ),
+                                child: _scannedClientAvatar == null
+                                    ? const SizedBox(width: 24, height: 24, child: Icon(Icons.person, size: 18))
+                                    : Image.asset(
+                                        _scannedClientAvatar!,
+                                        width: 24,
+                                        height: 24,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (_, _, _) => const Icon(Icons.person, size: 18),
+                                      ),
                               ),
                               const SizedBox(width: 8),
                               Text(

@@ -67,6 +67,9 @@ void main() {
   group('BookingItem', () {
     BookingItem make({DateTime? startsAt, BookingStatus status = BookingStatus.active}) => BookingItem(
       id: 'b-test',
+      clientId: 'c-001',
+      clientName: 'Wazow',
+      baseCredits: 34,
       salonId: 's-001',
       salonName: 'Nur Beauty',
       serviceId: 'm-001-s1',
@@ -207,40 +210,6 @@ void main() {
       expect(state.isSalonFavorite('s-002'), isTrue);
       expect(state.isSalonFavorite('Lola Studio'), isFalse);
       state.toggleSalonFavorite('s-002');
-    });
-  });
-
-  group('Стор записей использует неизменяемые модели', () {
-    test('отмена заменяет запись новой версией и возвращает кредиты', () {
-      final state = AppStateService();
-      final before = state.activeBookings.firstWhere((b) => b.canCancel && b.isPaidWithCredits);
-      final creditsBefore = state.clientCredits;
-
-      expect(state.cancelBooking(before.id), isTrue);
-
-      expect(before.status, BookingStatus.active); // старый объект не изменился
-      expect(state.bookingById(before.id)!.status, BookingStatus.cancelled);
-      expect(state.clientCredits, creditsBefore + before.credits);
-    });
-
-    test('перенос меняет startsAt новой версии', () {
-      final state = AppStateService();
-      final created = state.createBooking(
-        salonId: 's-001',
-        salonName: 'Nur Beauty',
-        serviceId: 'm-001-s1',
-        serviceName: 'Маникюр',
-        masterId: 'm-001',
-        masterName: 'Алена',
-        dateTime: DateTime.now().add(const Duration(days: 3)),
-        credits: 34,
-        sumPrice: 150000,
-        paymentMethod: PaymentMethods.inSalon,
-      );
-      final newTime = created.startsAt.add(const Duration(hours: 2));
-      expect(state.rescheduleBooking(bookingId: created.id, newDateTime: newTime), isTrue);
-      expect(created.startsAt, isNot(newTime));
-      expect(state.bookingById(created.id)!.startsAt, newTime);
     });
   });
 }

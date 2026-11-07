@@ -43,17 +43,20 @@ class MasterProfileModel {
 class MasterServiceItem {
   final String id;
   final String name;
-  final String duration;
+  final int durationMinutes;
   final int creditsPrice;
   final int sumPrice;
 
   const MasterServiceItem({
     required this.id,
     required this.name,
-    required this.duration,
+    required this.durationMinutes,
     required this.creditsPrice,
     required this.sumPrice,
   });
+
+  /// Подпись длительности для отображения: «60 мин»
+  String get duration => '$durationMinutes мин';
 }
 
 class MasterReviewItem {
@@ -98,28 +101,28 @@ class MastersRepository {
         MasterServiceItem(
           id: 'm-001-s1',
           name: 'Комбинированный маникюр + гель-лак',
-          duration: '60 мин',
+          durationMinutes: 60,
           creditsPrice: 34,
           sumPrice: 150000,
         ),
         MasterServiceItem(
           id: 'm-001-s2',
           name: 'Smart-педикюр с обработкой стопы',
-          duration: '75 мин',
+          durationMinutes: 75,
           creditsPrice: 42,
           sumPrice: 190000,
         ),
         MasterServiceItem(
           id: 'm-001-s3',
           name: 'Снятие + Укрепление ногтей гелем',
-          duration: '45 мин',
+          durationMinutes: 45,
           creditsPrice: 20,
           sumPrice: 90000,
         ),
         MasterServiceItem(
           id: 'm-001-s4',
           name: 'Френч / Кастомный дизайн ногтей',
-          duration: '30 мин',
+          durationMinutes: 30,
           creditsPrice: 15,
           sumPrice: 60000,
         ),
@@ -165,14 +168,14 @@ class MastersRepository {
         MasterServiceItem(
           id: 'm-002-s1',
           name: 'Архитектура бровей + окрашивание',
-          duration: '45 мин',
+          durationMinutes: 45,
           creditsPrice: 24,
           sumPrice: 110000,
         ),
         MasterServiceItem(
           id: 'm-002-s2',
           name: 'Ламинирование ресниц с ботоксом',
-          duration: '60 мин',
+          durationMinutes: 60,
           creditsPrice: 38,
           sumPrice: 170000,
         ),
@@ -202,11 +205,17 @@ class MastersRepository {
         'assets/images/portfolio/portfolio_brows_1.jpg',
       ],
       services: [
-        MasterServiceItem(id: 'm-003-s1', name: 'Женская стрижка + брашинг', duration: '60 мин', creditsPrice: 32, sumPrice: 140000),
+        MasterServiceItem(
+          id: 'm-003-s1',
+          name: 'Женская стрижка + брашинг',
+          durationMinutes: 60,
+          creditsPrice: 32,
+          sumPrice: 140000,
+        ),
         MasterServiceItem(
           id: 'm-003-s2',
           name: 'Сложное окрашивание Balayage',
-          duration: '180 мин',
+          durationMinutes: 180,
           creditsPrice: 85,
           sumPrice: 420000,
         ),
@@ -234,7 +243,13 @@ class MastersRepository {
           'Медицинское образование. Уходовые процедуры, ультразвуковая чистка, безинъекционная мезотерапия и пилинги.',
       portfolioImages: ['assets/images/portfolio/portfolio_brows_1.jpg'],
       services: [
-        MasterServiceItem(id: 'm-004-s1', name: 'Комбинированная чистка лица', duration: '90 мин', creditsPrice: 45, sumPrice: 200000),
+        MasterServiceItem(
+          id: 'm-004-s1',
+          name: 'Комбинированная чистка лица',
+          durationMinutes: 90,
+          creditsPrice: 45,
+          sumPrice: 200000,
+        ),
       ],
       reviews: [
         MasterReviewItem(
@@ -262,11 +277,17 @@ class MastersRepository {
         MasterServiceItem(
           id: 'm-005-s1',
           name: 'Мужская стрижка + мытье + стайлинг',
-          duration: '45 мин',
+          durationMinutes: 45,
           creditsPrice: 26,
           sumPrice: 110000,
         ),
-        MasterServiceItem(id: 'm-005-s2', name: 'Моделирование бороды и усов', duration: '30 мин', creditsPrice: 18, sumPrice: 80000),
+        MasterServiceItem(
+          id: 'm-005-s2',
+          name: 'Моделирование бороды и усов',
+          durationMinutes: 30,
+          creditsPrice: 18,
+          sumPrice: 80000,
+        ),
       ],
       reviews: [
         MasterReviewItem(

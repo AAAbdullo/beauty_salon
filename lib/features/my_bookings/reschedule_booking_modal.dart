@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../core/services/app_state_service.dart';
+import '../../core/services/slot_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/clock.dart';
 import '../../core/utils/formatters.dart';
+import '../../core/utils/result.dart';
+import '../../core/utils/slot_pricing.dart';
 
 /// Модальное окно переноса времени записи (ТЗ M-10)
 class RescheduleBookingModal extends StatefulWidget {
@@ -10,8 +13,9 @@ class RescheduleBookingModal extends StatefulWidget {
 
   const RescheduleBookingModal({super.key, required this.booking});
 
-  static Future<bool?> show(BuildContext context, BookingItem booking) {
-    return showModalBottomSheet<bool>(
+  /// Возвращает обновлённую запись, если перенос выполнен; `null` — закрыли без переноса
+  static Future<BookingItem?> show(BuildContext context, BookingItem booking) {
+    return showModalBottomSheet<BookingItem>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -25,11 +29,12 @@ class RescheduleBookingModal extends StatefulWidget {
 
 class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
   late int _selectedDayIndex;
-  String? _selectedTime;
+  DateTime? _selectedStart;
+  String? _error;
   final _appState = AppStateService();
+  final _slotService = SlotService();
 
   late final List<Map<String, dynamic>> _days;
-  final List<String> _availableSlots = ['09:30', '11:00', '12:30', '14:00', '15:30', '17:00', '18:30', '20:00'];
 
   @override
   void initState() {
@@ -43,36 +48,58 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
       final dayName = i == 0 ? 'Сегодня' : (i == 1 ? 'Завтра' : Formatters.weekDaysShort[d.weekday - 1]);
       return {'day': dayName, 'date': '${d.day}', 'dateObj': d};
     });
-    if (_freeSlots(0).isEmpty) _selectedDayIndex = 1;
+    for (var i = 0; i < _days.length; i++) {
+      if (_slotsForDay(i).isNotEmpty) {
+        _selectedDayIndex = i;
+        break;
+      }
+    }
   }
 
-  DateTime _slotDateTime(int dayIndex, String slot) {
-    final d = _days[dayIndex]['dateObj'] as DateTime;
-    final parts = slot.split(':');
-    return DateTime(d.year, d.month, d.day, int.parse(parts[0]), int.parse(parts[1]));
+  /// Свободные слоты у того же мастера (график, перерывы, чужие записи); сама запись время не занимает
+  List<DateTime> _slotsForDay(int dayIndex) {
+    final b = widget.booking;
+    return _slotService
+        .availableSlots(
+          salonId: b.salonId,
+          masterId: b.masterId,
+          serviceId: b.serviceId,
+          date: _days[dayIndex]['dateObj'] as DateTime,
+          durationMinutes: b.durationMinutes,
+          excludeBookingId: b.id,
+        )
+        .where((slot) => slot != b.startsAt)
+        .toList();
   }
 
-  /// Слот доступен, если начинается не раньше чем через 2 часа (правило переноса)
-  /// и не совпадает с текущим временем записи
-  bool _isSlotAvailable(int dayIndex, String slot) {
-    final dt = _slotDateTime(dayIndex, slot);
-    final minStart = AppClock.now().add(const Duration(minutes: AppStateService.freeCancelMinutes));
-    return dt.isAfter(minStart) && dt != widget.booking.startsAt;
+  /// Как изменится цена при оплате кредитами: ×1.2 для вечерних слотов (k_slot)
+  String? _priceNote(DateTime start) {
+    final b = widget.booking;
+    if (!b.isPaidWithCredits) return null;
+    final newCredits = SlotPricing.credits(b.baseCredits, start);
+    if (newCredits == b.credits) return null;
+    final diff = newCredits - b.credits;
+    return diff > 0
+        ? 'Стоимость слота: $newCredits кр. — будет списана доплата $diff кр.'
+        : 'Стоимость слота: $newCredits кр. — ${diff.abs()} кр. вернутся на баланс.';
   }
-
-  List<String> _freeSlots(int dayIndex) => _availableSlots.where((s) => _isSlotAvailable(dayIndex, s)).toList();
 
   void _confirmReschedule() {
-    final time = _selectedTime;
-    if (time == null) return;
+    final start = _selectedStart;
+    if (start == null) return;
 
     // [BACKEND NOTE]: PATCH /api/v1/bookings/${widget.booking.id}/reschedule  body: { "starts_at": ISO-8601 }
-    final ok = _appState.rescheduleBooking(
-      bookingId: widget.booking.id,
-      newDateTime: _slotDateTime(_selectedDayIndex, time),
-    );
-
-    Navigator.pop(context, ok);
+    final result = _appState.rescheduleBooking(bookingId: widget.booking.id, newDateTime: start);
+    switch (result) {
+      case Success(:final value):
+        Navigator.pop(context, value);
+      case Failure(:final error):
+        // Окно остаётся открытым: показываем причину, список слотов обновляется
+        setState(() {
+          _error = error.message;
+          _selectedStart = null;
+        });
+    }
   }
 
   @override
@@ -190,7 +217,8 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
                 return GestureDetector(
                   onTap: () => setState(() {
                     _selectedDayIndex = index;
-                    if (_selectedTime != null && !_isSlotAvailable(index, _selectedTime!)) _selectedTime = null;
+                    _selectedStart = null;
+                    _error = null;
                   }),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
@@ -248,17 +276,25 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
             style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: AppColors.ink),
           ),
           const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _availableSlots.map((slot) {
-              final isSelected = _selectedTime == slot;
-              final available = _isSlotAvailable(_selectedDayIndex, slot);
-              return GestureDetector(
-                onTap: available ? () => setState(() => _selectedTime = slot) : null,
-                child: AnimatedOpacity(
-                  duration: const Duration(milliseconds: 150),
-                  opacity: available ? 1 : 0.35,
+          if (_slotsForDay(_selectedDayIndex).isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                'На этот день свободного времени нет. Выберите другую дату.',
+                style: TextStyle(fontSize: 13, color: AppColors.muted),
+              ),
+            )
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _slotsForDay(_selectedDayIndex).map((slot) {
+                final isSelected = _selectedStart == slot;
+                return GestureDetector(
+                  onTap: () => setState(() {
+                    _selectedStart = slot;
+                    _error = null;
+                  }),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 180),
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -271,19 +307,31 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
                       ),
                     ),
                     child: Text(
-                      slot,
+                      Formatters.time(slot),
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
                         color: isSelected ? AppColors.primaryText : AppColors.ink,
-                        decoration: available ? null : TextDecoration.lineThrough,
                       ),
                     ),
                   ),
-                ),
-              );
-            }).toList(),
-          ),
+                );
+              }).toList(),
+            ),
+          if (_selectedStart != null && _priceNote(_selectedStart!) != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              _priceNote(_selectedStart!)!,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primaryText),
+            ),
+          ],
+          if (_error != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              _error!,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primary),
+            ),
+          ],
 
           const SizedBox(height: 16),
 
@@ -297,7 +345,7 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
                 SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Перенос бесплатный, если до визита больше 2 часов. Кредиты и оплата сохраняются.',
+                    'Перенос бесплатный, если до визита больше 2 часов. Оплата сохраняется; для кредитов цена пересчитывается по новому времени.',
                     style: TextStyle(fontSize: 11, color: Color(0xFF0051A8)),
                   ),
                 ),
@@ -312,16 +360,16 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
             width: double.infinity,
             height: 48,
             child: ElevatedButton(
-              onPressed: _selectedTime == null ? null : _confirmReschedule,
+              onPressed: _selectedStart == null ? null : _confirmReschedule,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 elevation: 0,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               ),
               child: Text(
-                _selectedTime == null
+                _selectedStart == null
                     ? 'Выберите время'
-                    : 'Перенести на ${_days[_selectedDayIndex]['day']}, $_selectedTime',
+                    : 'Перенести на ${_days[_selectedDayIndex]['day']}, ${Formatters.time(_selectedStart!)}',
                 style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white),
               ),
             ),

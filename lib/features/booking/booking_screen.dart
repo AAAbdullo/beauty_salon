@@ -4,9 +4,11 @@ import '../../core/models/booking_draft.dart';
 import '../../core/services/app_state_service.dart';
 import '../../core/services/masters_repository.dart';
 import '../../core/services/salons_repository.dart';
+import '../../core/services/slot_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/clock.dart';
 import '../../core/utils/formatters.dart';
+import '../../core/utils/slot_pricing.dart';
 import '../../core/widgets/buttons/app_gradient_button.dart';
 import '../../core/widgets/cards/app_card.dart';
 import '../../core/widgets/sheets/app_sheet.dart';
@@ -48,11 +50,11 @@ class BookingScreen extends StatefulWidget {
 class _BookingScreenState extends State<BookingScreen> {
   static const _anyMaster = 'Любой мастер';
   static const _holdDuration = 600; // ТЗ M-08: слот удерживается 10 минут
-  static const _slotHours = [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
 
   final _appState = AppStateService();
   final _salonsRepo = SalonsRepository();
   final _mastersRepo = MastersRepository();
+  final _slotService = SlotService();
 
   late final SalonModel? _salon;
   late final List<MasterServiceItem> _services;
@@ -64,7 +66,7 @@ class _BookingScreenState extends State<BookingScreen> {
   /// Выбранный мастер; `null` — «Любой мастер»
   String? _masterId;
   int _selectedDayIndex = 0;
-  int? _selectedHour;
+  DateTime? _selectedStart;
   String _paymentMethod = PaymentMethods.credits;
 
   Timer? _holdTimer;
@@ -87,8 +89,13 @@ class _BookingScreenState extends State<BookingScreen> {
     _masterId = initialId != null && _salonMasters.any((m) => m.id == initialId) ? initialId : null;
     _ensureMasterOffersService();
 
-    // Если сегодня свободных слотов уже нет — сразу открываем завтрашний день
-    if (_availableHours(0).isEmpty) _selectedDayIndex = 1;
+    // Открываем ближайший день, на который есть свободные слоты
+    for (var i = 0; i < _days.length; i++) {
+      if (_slotsForDay(i).isNotEmpty) {
+        _selectedDayIndex = i;
+        break;
+      }
+    }
 
     if (!_creditsAvailableForSalon) _paymentMethod = PaymentMethods.online;
   }
@@ -132,38 +139,29 @@ class _BookingScreenState extends State<BookingScreen> {
 
   DateTime get _selectedDay => _days[_selectedDayIndex];
 
-  /// Слот «занят» — детерминированный мок занятости (до появления API слотов)
-  bool _isBusy(int dayIndex, int hour) {
-    final seed = '${widget.salonId}|${_masterId ?? 'any'}|${_days[dayIndex].day}|$hour'.hashCode;
-    return seed % 5 == 0;
+  /// Свободные слоты дня — из SlotService: график мастера, перерывы, чужие записи, прошедшее время
+  List<DateTime> _slotsForDay(int dayIndex) {
+    final service = _service;
+    if (service == null) return const [];
+    return _slotService.availableSlots(
+      salonId: widget.salonId,
+      masterId: _masterId,
+      serviceId: service.id,
+      date: _days[dayIndex],
+      durationMinutes: service.durationMinutes,
+    );
   }
-
-  /// Слот в прошлом или начинается меньше чем через 30 минут
-  bool _isPast(int dayIndex, int hour) {
-    final slot = DateTime(_days[dayIndex].year, _days[dayIndex].month, _days[dayIndex].day, hour);
-    return slot.isBefore(AppClock.now().add(const Duration(minutes: 30)));
-  }
-
-  List<int> _availableHours(int dayIndex) =>
-      _slotHours.where((h) => !_isPast(dayIndex, h) && !_isBusy(dayIndex, h)).toList();
 
   /// ТЗ: цена слота = базовая цена × k_slot (вечер после 18:00 — 1.2)
-  int _slotCredits(int hour) {
-    final base = _service?.creditsPrice ?? 0;
-    final k = hour >= 18 ? 1.2 : 1.0;
-    return (base * k).ceil();
-  }
-
-  DateTime? get _selectedDateTime =>
-      _selectedHour == null ? null : DateTime(_selectedDay.year, _selectedDay.month, _selectedDay.day, _selectedHour!);
+  int _slotCredits(DateTime start) => SlotPricing.credits(_service?.creditsPrice ?? 0, start);
 
   String? get _creditsBlockReason {
     if (!_creditsAvailableForSalon) return 'Салон не принимает кредиты';
-    final dateTime = _selectedDateTime ?? _selectedDay;
+    final start = _selectedStart;
     return _appState.creditsBlockReason(
       salonId: widget.salonId,
-      credits: _selectedHour == null ? (_service?.creditsPrice ?? 0) : _slotCredits(_selectedHour!),
-      dateTime: dateTime,
+      credits: start == null ? (_service?.creditsPrice ?? 0) : _slotCredits(start),
+      dateTime: start ?? _selectedDay,
     );
   }
 
@@ -185,7 +183,7 @@ class _BookingScreenState extends State<BookingScreen> {
         timer.cancel();
         setState(() {
           _holdSecondsLeft = 0;
-          _selectedHour = null;
+          _selectedStart = null;
         });
         _showTimeoutDialog();
       }
@@ -194,11 +192,11 @@ class _BookingScreenState extends State<BookingScreen> {
 
   void _clearSlot() {
     _holdTimer?.cancel();
-    _selectedHour = null;
+    _selectedStart = null;
   }
 
-  void _onSlotSelected(int hour) {
-    setState(() => _selectedHour = hour);
+  void _onSlotSelected(DateTime start) {
+    setState(() => _selectedStart = start);
     _startHoldTimer();
   }
 
@@ -296,6 +294,8 @@ class _BookingScreenState extends State<BookingScreen> {
                         setState(() {
                           _service = s;
                           _ensureMasterOffersService();
+                          // Другая услуга — другая длительность: прежний слот мог перестать подходить
+                          _clearSlot();
                           if (!_creditsAvailableForSalon && _paymentMethod == PaymentMethods.credits) {
                             _paymentMethod = PaymentMethods.online;
                           }
@@ -314,7 +314,7 @@ class _BookingScreenState extends State<BookingScreen> {
 
   void _confirm() {
     final service = _service;
-    final dateTime = _selectedDateTime;
+    final dateTime = _selectedStart;
     if (service == null || dateTime == null) return;
     _holdTimer?.cancel();
     widget.onConfirm(
@@ -323,11 +323,11 @@ class _BookingScreenState extends State<BookingScreen> {
         salonName: _salonName,
         serviceId: service.id,
         serviceName: service.name,
-        durationLabel: service.duration,
+        durationMinutes: service.durationMinutes,
         masterId: _masterId,
         masterName: _masterLabel,
         dateTime: dateTime,
-        credits: _slotCredits(dateTime.hour),
+        baseCredits: service.creditsPrice,
         sumPrice: service.sumPrice,
       ),
       _paymentMethod,
@@ -398,7 +398,7 @@ class _BookingScreenState extends State<BookingScreen> {
 
   /// ТЗ M-08: Индикатор удержания слота на 10 минут
   Widget _buildHoldTimerBanner() {
-    final hasSlot = _selectedHour != null;
+    final hasSlot = _selectedStart != null;
     final isLowTime = hasSlot && _holdSecondsLeft < 120;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
@@ -604,7 +604,7 @@ class _BookingScreenState extends State<BookingScreen> {
             itemBuilder: (context, index) {
               final d = _days[index];
               final isSelected = index == _selectedDayIndex;
-              final isFull = _availableHours(index).isEmpty;
+              final isFull = _slotsForDay(index).isEmpty;
               final caption = index == 0 ? 'Сег.' : (index == 1 ? 'Завт.' : Formatters.weekDaysShort[d.weekday - 1]);
               return Opacity(
                 opacity: isFull ? 0.45 : 1,
@@ -656,6 +656,7 @@ class _BookingScreenState extends State<BookingScreen> {
   }
 
   Widget _buildTimeSlots() {
+    final slots = _slotsForDay(_selectedDayIndex);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -663,34 +664,34 @@ class _BookingScreenState extends State<BookingScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             const Text('Доступное время', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-            if (_selectedHour != null)
+            if (_selectedStart != null)
               Text(
-                'Выбрано: ${_selectedHour.toString().padLeft(2, '0')}:00',
+                'Выбрано: ${Formatters.time(_selectedStart!)}',
                 style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primaryText),
               ),
           ],
         ),
         const SizedBox(height: 12),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final width = (constraints.maxWidth - 24) / 4;
-            return Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _slotHours.map((hour) {
-                final isSelected = _selectedHour == hour;
-                final isPast = _isPast(_selectedDayIndex, hour);
-                final isBusy = !isPast && _isBusy(_selectedDayIndex, hour);
-                final enabled = !isPast && !isBusy;
-                final costLabel = isPast
-                    ? 'прошло'
-                    : isBusy
-                    ? 'занято'
-                    : (_creditsAvailableForSalon ? '${_slotCredits(hour)} кр.' : 'свободно');
-                return Opacity(
-                  opacity: enabled ? 1 : 0.4,
-                  child: InkWell(
-                    onTap: enabled ? () => _onSlotSelected(hour) : null,
+        if (slots.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              'На этот день свободного времени нет. Выберите другую дату или другого мастера.',
+              style: TextStyle(fontSize: 13, color: AppColors.muted),
+            ),
+          )
+        else
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final width = (constraints.maxWidth - 24) / 4;
+              return Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: slots.map((start) {
+                  final isSelected = _selectedStart == start;
+                  final costLabel = _creditsAvailableForSalon ? '${_slotCredits(start)} кр.' : 'свободно';
+                  return InkWell(
+                    onTap: () => _onSlotSelected(start),
                     borderRadius: BorderRadius.circular(14),
                     child: Container(
                       width: width,
@@ -711,12 +712,11 @@ class _BookingScreenState extends State<BookingScreen> {
                       child: Column(
                         children: [
                           Text(
-                            '${hour.toString().padLeft(2, '0')}:00',
+                            Formatters.time(start),
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w800,
                               color: isSelected ? Colors.white : AppColors.ink,
-                              decoration: enabled ? null : TextDecoration.lineThrough,
                             ),
                           ),
                           const SizedBox(height: 2),
@@ -731,12 +731,11 @@ class _BookingScreenState extends State<BookingScreen> {
                         ],
                       ),
                     ),
-                  ),
-                );
-              }).toList(),
-            );
-          },
-        ),
+                  );
+                }).toList(),
+              );
+            },
+          ),
         if (_creditsAvailableForSalon) ...[
           const SizedBox(height: 8),
           const Text(
@@ -853,13 +852,13 @@ class _BookingScreenState extends State<BookingScreen> {
       });
     }
 
-    final hour = _selectedHour;
+    final start = _selectedStart;
     final service = _service!;
     final String buttonText;
-    if (hour == null) {
+    if (start == null) {
       buttonText = 'Выберите время';
     } else if (effectiveMethod == PaymentMethods.credits) {
-      buttonText = 'Записаться · ${_slotCredits(hour)} кр.';
+      buttonText = 'Записаться · ${_slotCredits(start)} кр.';
     } else if (effectiveMethod == PaymentMethods.online) {
       buttonText = 'К оплате · ${Formatters.formatSum(service.sumPrice)}';
     } else {
@@ -879,15 +878,15 @@ class _BookingScreenState extends State<BookingScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (hour != null)
+            if (start != null)
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Text(
-                  '${Formatters.dayLabel(_selectedDateTime!)}, ${Formatters.time(_selectedDateTime!)} · $_masterLabel',
+                  '${Formatters.dayLabel(start)}, ${Formatters.time(start)} · $_masterLabel',
                   style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.ink),
                 ),
               ),
-            AppGradientButton(text: buttonText, onPressed: hour == null ? null : _confirm),
+            AppGradientButton(text: buttonText, onPressed: start == null ? null : _confirm),
             const SizedBox(height: 6),
             const Text(
               'Бесплатная отмена и перенос — не позднее чем за 2 часа до визита',

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/services/app_state_service.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/result.dart';
 import '../../core/widgets/badges/app_status_badge.dart';
 import '../../core/widgets/buttons/app_pill_button.dart';
 import '../../core/widgets/cards/app_card.dart';
@@ -140,15 +141,18 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
             onPressed: () {
-              final ok = _appState.cancelBooking(booking.id);
+              final result = _appState.cancelBooking(booking.id);
               Navigator.pop(ctx);
-              if (ok) {
-                showAppSnack(
-                  context,
-                  booking.isPaidWithCredits
-                      ? 'Запись отменена. ${booking.credits} кр. вернулись на баланс.'
-                      : 'Запись отменена.',
-                );
+              switch (result) {
+                case Success(:final value):
+                  showAppSnack(
+                    context,
+                    value.isPaidWithCredits
+                        ? 'Запись отменена. ${value.credits} кр. вернулись на баланс.'
+                        : 'Запись отменена.',
+                  );
+                case Failure(:final error):
+                  showAppSnack(context, error.message);
               }
             },
             child: const Text(
@@ -312,9 +316,9 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
                               showAppSnack(context, 'Перенос недоступен: до визита меньше 2 часов.');
                               return;
                             }
-                            final res = await RescheduleBookingModal.show(context, b);
-                            if (res == true && context.mounted) {
-                              showAppSnack(context, 'Запись перенесена на ${b.date}, ${b.time}');
+                            final moved = await RescheduleBookingModal.show(context, b);
+                            if (moved != null && context.mounted) {
+                              showAppSnack(context, 'Запись перенесена на ${moved.date}, ${moved.time}');
                             }
                           },
                           style: OutlinedButton.styleFrom(

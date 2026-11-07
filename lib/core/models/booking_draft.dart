@@ -1,3 +1,5 @@
+import '../utils/slot_pricing.dart';
+
 /// Черновик записи: всё, что клиент выбрал на экране бронирования (M-08),
 /// до создания записи (оплата кредитами / онлайн / в салоне).
 ///
@@ -7,7 +9,7 @@ class BookingDraft {
   final String salonName;
   final String serviceId;
   final String serviceName;
-  final String durationLabel;
+  final int durationMinutes;
 
   /// `null` — клиент выбрал «Любой мастер»
   final String? masterId;
@@ -16,8 +18,8 @@ class BookingDraft {
   final String masterName;
   final DateTime dateTime;
 
-  /// Цена в кредитах с учётом коэффициента слота (k_slot)
-  final int credits;
+  /// Цена услуги в кредитах без коэффициента слота
+  final int baseCredits;
   final int sumPrice;
 
   const BookingDraft({
@@ -25,13 +27,19 @@ class BookingDraft {
     required this.salonName,
     required this.serviceId,
     required this.serviceName,
-    required this.durationLabel,
+    required this.durationMinutes,
     this.masterId,
     required this.masterName,
     required this.dateTime,
-    required this.credits,
+    required this.baseCredits,
     required this.sumPrice,
   });
+
+  /// Длительность для отображения: «60 мин»
+  String get durationLabel => '$durationMinutes мин';
+
+  /// Цена в кредитах с учётом коэффициента слота (k_slot)
+  int get credits => SlotPricing.credits(baseCredits, dateTime);
 
   /// Депозит при онлайн-оплате — 20% стоимости, округлённо до 1 000 сум
   int get depositSum => ((sumPrice * 0.2) / 1000).round() * 1000;

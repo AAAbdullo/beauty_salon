@@ -23,6 +23,7 @@ import 'features/master_cabinet/qr_scanner/master_qr_scanner_screen.dart';
 import 'features/master_cabinet/earnings/master_earnings_screen.dart';
 import 'features/master_cabinet/profile/master_account_screen.dart';
 import 'core/models/booking_draft.dart';
+import 'core/utils/result.dart';
 import 'core/services/masters_repository.dart';
 import 'core/widgets/sheets/app_sheet.dart';
 
@@ -125,6 +126,20 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
 
   void _onBookingConfirmed(BookingDraft draft, String paymentMethod) {
     if (paymentMethod == PaymentMethods.online) {
+      // До оплаты убеждаемся, что запись вообще возможна — чтобы не взять деньги за невозможную запись
+      final check = AppStateService().validateNewBooking(
+        salonId: draft.salonId,
+        masterId: draft.masterId,
+        serviceId: draft.serviceId,
+        startsAt: draft.dateTime,
+        durationMinutes: draft.durationMinutes,
+        baseCredits: draft.baseCredits,
+        paymentMethod: paymentMethod,
+      );
+      if (check case Failure(:final error)) {
+        showAppSnack(context, error.message);
+        return;
+      }
       _pendingDraft = draft;
       _push('payment');
       return;
@@ -133,7 +148,7 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
   }
 
   void _finalizeBooking(BookingDraft draft, String paymentMethod) {
-    AppStateService().createBooking(
+    final result = AppStateService().createBooking(
       salonId: draft.salonId,
       salonName: draft.salonName,
       serviceId: draft.serviceId,
@@ -141,28 +156,49 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
       masterId: draft.masterId,
       masterName: draft.masterName,
       dateTime: draft.dateTime,
-      credits: draft.credits,
+      durationMinutes: draft.durationMinutes,
+      baseCredits: draft.baseCredits,
       sumPrice: draft.sumPrice,
       paymentMethod: paymentMethod,
-      durationLabel: draft.durationLabel,
     );
-    _pendingDraft = null;
-    _goToClientTab(2); // Переходим сразу во вкладку «Мои записи»
 
-    final message = switch (paymentMethod) {
-      PaymentMethods.credits => 'Запись оформлена! Зарезервировано ${draft.credits} кр.',
-      PaymentMethods.online => 'Оплата прошла, запись оформлена!',
-      _ => 'Запись оформлена! Оплата при визите в салон.',
-    };
-    showAppSnack(context, message, success: true);
+    switch (result) {
+      case Failure(:final error):
+        // Остаёмся на экране записи (с оплаты — возвращаемся на него) и объясняем причину
+        if (_activeSubScreen == 'payment') _pop();
+        showAppSnack(context, error.message);
+      case Success():
+        _pendingDraft = null;
+        _goToClientTab(2); // Переходим сразу во вкладку «Мои записи»
+        final message = switch (paymentMethod) {
+          PaymentMethods.credits => 'Запись оформлена! Зарезервировано ${draft.credits} кр.',
+          PaymentMethods.online => 'Оплата прошла, запись оформлена!',
+          _ => 'Запись оформлена! Оплата при визите в салон.',
+        };
+        showAppSnack(context, message, success: true);
+    }
   }
 
-  void _logout() => setState(() {
-    _isAuthenticated = false;
-    _subStack.clear();
-    _clientTabIndex = 0;
-    _masterTabIndex = 0;
-  });
+  /// Выход: состояние данных и навигации возвращается к начальному,
+  /// чтобы следующий вход (в том числе другой ролью) не видел данные прошлого пользователя
+  void _logout() {
+    AppStateService().resetSession();
+    setState(() {
+      _isAuthenticated = false;
+      _isMasterMode = false;
+      _isRegistering = false;
+      _subStack.clear();
+      _clientTabIndex = 0;
+      _masterTabIndex = 0;
+      _selectedSalonId = '';
+      _selectedMasterId = '';
+      _bookingMasterId = null;
+      _bookingService = null;
+      _pendingDraft = null;
+      _mapFocusSalonId = null;
+      _bookingsInitialTab = 0;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -224,8 +260,7 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
         key: ValueKey('salon_$_selectedSalonId'),
         salonId: _selectedSalonId,
         onBack: _pop,
-        onBook: ({masterId, service}) =>
-            _startBooking(salonId: _selectedSalonId, masterId: masterId, service: service),
+        onBook: ({masterId, service}) => _startBooking(salonId: _selectedSalonId, masterId: masterId, service: service),
         onMasterTap: _openMaster,
         onShowOnMap: _showSalonOnMap,
       );
