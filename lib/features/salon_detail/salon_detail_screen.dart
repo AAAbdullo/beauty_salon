@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import '../../core/l10n/app_text.dart';
 import 'package:flutter/services.dart';
 import '../../core/data/app_scope.dart';
 import '../../core/data/repositories/catalog_repository.dart';
@@ -15,6 +16,7 @@ import '../../core/widgets/sheets/app_sheet.dart';
 import '../../core/widgets/states/async_screen.dart';
 import '../../core/widgets/states/not_found_screen.dart';
 import 'photo_viewer.dart';
+import '../../core/l10n/app_locale.dart';
 
 /// Запись из карточки салона: можно сразу передать мастера и/или услугу
 typedef SalonBookCallback = void Function({String? masterId, MasterServiceItem? service});
@@ -462,11 +464,11 @@ class _SalonDetailViewState extends State<_SalonDetailView> with SingleTickerPro
         unselectedLabelColor: AppColors.muted,
         labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
         labelPadding: EdgeInsets.zero,
-        tabs: const [
-          Tab(text: 'Услуги'),
-          Tab(text: 'Мастера'),
-          Tab(text: 'Отзывы'),
-          Tab(text: 'О салоне'),
+        tabs: [
+          Tab(text: tr('Услуги')),
+          Tab(text: tr('Мастера')),
+          Tab(text: tr('Отзывы')),
+          Tab(text: tr('О салоне')),
         ],
       ),
     );

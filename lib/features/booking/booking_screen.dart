@@ -1,5 +1,6 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import '../../core/l10n/app_text.dart';
 import '../../core/data/app_dependencies.dart';
 import '../../core/data/app_scope.dart';
 import '../../core/data/repositories/catalog_repository.dart';

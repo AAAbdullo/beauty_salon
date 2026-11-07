@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import '../../core/l10n/app_text.dart';
 import '../../core/data/app_scope.dart';
 import '../../core/data/repository_exception.dart';
 import '../../core/services/app_state_service.dart';

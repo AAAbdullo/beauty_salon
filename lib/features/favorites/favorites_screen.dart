@@ -1,5 +1,6 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import '../../core/l10n/app_text.dart';
 import '../../core/data/app_dependencies.dart';
 import '../../core/data/app_scope.dart';
 import '../../core/data/repository_exception.dart';
@@ -12,6 +13,7 @@ import '../../core/widgets/badges/app_status_badge.dart';
 import '../../core/widgets/buttons/app_pill_button.dart';
 import '../../core/widgets/cards/app_card.dart';
 import '../../core/widgets/states/async_screen.dart';
+import '../../core/l10n/app_locale.dart';
 
 /// Экран «Избранное» (ТЗ M-15: Избранные салоны и мастера)
 class FavoritesScreen extends StatefulWidget {
@@ -142,8 +144,8 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                 unselectedLabelColor: AppColors.muted,
                 labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
                 tabs: [
-                  Tab(text: 'Салоны (${favoriteSalons.length})'),
-                  Tab(text: 'Мастера (${favoriteMasters.length})'),
+                  Tab(text: tr('Салоны (${favoriteSalons.length})')),
+                  Tab(text: tr('Мастера (${favoriteMasters.length})')),
                 ],
               ),
             ),
@@ -287,7 +289,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                               content: Text(
                                   '«${s.name}» удален из избранного'),
                               action: SnackBarAction(
-                                label: 'Отменить',
+                                label: tr('Отменить'),
                                 textColor: AppColors.primaryBright,
                                 onPressed: () =>
                                     _appState.toggleSalonFavorite(s.id),
@@ -501,7 +503,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                               content:
                                   Text('Удалено из избранного: ${m.name}'),
                               action: SnackBarAction(
-                                label: 'Отменить',
+                                label: tr('Отменить'),
                                 textColor: AppColors.primaryBright,
                                 onPressed: () =>
                                     _appState.toggleMasterFavorite(m.id),

@@ -1,9 +1,11 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import '../../../core/l10n/app_text.dart';
 import '../../../core/utils/clock.dart';
 import '../../../core/services/master_cabinet_repository.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/buttons/app_gradient_button.dart';
 import '../../../core/widgets/cards/app_card.dart';
+import '../../../core/l10n/app_locale.dart';
 
 /// «Рабочий график» мастера (макет photo_8, вариант Б).
 ///
@@ -468,7 +470,7 @@ class _MasterScheduleScreenState extends State<MasterScheduleScreen> {
                       width: 40,
                       child: IconButton(
                         icon: Icon(Icons.delete_outline, color: AppColors.muted),
-                        tooltip: 'Удалить перерыв',
+                        tooltip: tr('Удалить перерыв'),
                         onPressed: () => _removeBreak(i),
                       ),
                     ),

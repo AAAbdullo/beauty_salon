@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart' show kDebugMode;
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import '../../../core/l10n/app_text.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../../core/utils/clock.dart';
 import '../../../core/data/app_scope.dart';

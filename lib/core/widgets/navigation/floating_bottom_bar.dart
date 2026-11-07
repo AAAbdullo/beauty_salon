@@ -1,5 +1,7 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import '../../l10n/app_text.dart';
 import '../../theme/app_theme.dart';
+import '../../l10n/app_locale.dart';
 
 /// Плавающий BottomNavigationBar ("таблетка") по спецификации:
 /// Радиус ~28, отступы от краев 16, высота 64, активный пункт подсвечен primaryTint.
@@ -48,7 +50,7 @@ class FloatingBottomBar extends StatelessWidget {
                   child: Semantics(
                     button: true,
                     selected: isSelected,
-                    label: item.label,
+                    label: tr(item.label),
                     child: GestureDetector(
                       behavior: HitTestBehavior.opaque,
                       onTap: () => onTap(index),

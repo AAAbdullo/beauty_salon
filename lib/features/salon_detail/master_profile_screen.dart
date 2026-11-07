@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import '../../core/l10n/app_text.dart';
 import '../../core/data/app_scope.dart';
 import '../../core/services/app_state_service.dart';
 import '../../core/services/masters_repository.dart';
@@ -11,6 +12,7 @@ import '../../core/widgets/sheets/app_sheet.dart';
 import '../../core/widgets/states/async_screen.dart';
 import '../../core/widgets/states/not_found_screen.dart';
 import 'photo_viewer.dart';
+import '../../core/l10n/app_locale.dart';
 
 /// Экран отдельного мастера (ТЗ M-07: Usta sahifasi)
 /// Портфолио, услуги, отзывы, рейтинг, прямая запись
@@ -358,10 +360,10 @@ class _MasterProfileViewState extends State<_MasterProfileView> with SingleTicke
         labelColor: Colors.white,
         unselectedLabelColor: AppColors.muted,
         labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
-        tabs: const [
-          Tab(text: 'Услуги'),
-          Tab(text: 'Портфолио'),
-          Tab(text: 'Отзывы'),
+        tabs: [
+          Tab(text: tr('Услуги')),
+          Tab(text: tr('Портфолио')),
+          Tab(text: tr('Отзывы')),
         ],
       ),
     );

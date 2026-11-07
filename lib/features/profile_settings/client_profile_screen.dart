@@ -1,9 +1,11 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import '../../core/l10n/app_text.dart';
 import '../../core/services/app_state_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/badges/app_status_badge.dart';
 import '../../core/widgets/cards/app_card.dart';
 import 'profile_sheets.dart';
+import '../../core/l10n/app_locale.dart';
 
 /// Профиль клиента: данные, статистика, абонемент, быстрые действия, последние записи
 class ClientProfileScreen extends StatefulWidget {
@@ -96,7 +98,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
             ),
           ),
           IconButton(
-            tooltip: 'Уведомления',
+            tooltip: tr('Уведомления'),
             onPressed: widget.onOpenNotifications,
             icon: Badge(
               isLabelVisible: unread > 0,
@@ -106,7 +108,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
             ),
           ),
           IconButton(
-            tooltip: 'QR визита',
+            tooltip: tr('QR визита'),
             icon: Icon(Icons.qr_code_2_rounded, color: AppColors.ink, size: 24),
             onPressed: widget.onOpenQr,
           ),

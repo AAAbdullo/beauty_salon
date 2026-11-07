@@ -1,5 +1,6 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import '../../l10n/app_text.dart';
 import '../../theme/app_theme.dart';
 
 /// Основная брендовая кнопка действия (358 × 48 dp, градиент CTA, скругленные углы 24 dp).

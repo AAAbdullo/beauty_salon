@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import '../../core/l10n/app_text.dart';
 import '../../core/services/app_state_service.dart';
 import '../../core/data/app_scope.dart';
 import '../../core/data/repository_exception.dart';
@@ -12,6 +13,7 @@ import '../../core/widgets/sheets/app_sheet.dart';
 import '../client_qr/client_qr_modal.dart';
 import 'leave_review_modal.dart';
 import 'reschedule_booking_modal.dart';
+import '../../core/l10n/app_locale.dart';
 
 class MyBookingsScreen extends StatefulWidget {
   final VoidCallback onBookNew;
@@ -122,17 +124,18 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
     // двойной тап по «Отменить» не вернёт кредиты дважды.
     final cancelKey = Uuid.v4();
     var submitting = false;
+    final refundNote = switch (booking.paymentMethod) {
+      PaymentMethods.credits => 'На баланс вернутся ${booking.credits} кр.',
+      PaymentMethods.online => 'Оплата вернётся на карту полностью.',
+      _ => 'Оплата не списывалась — запись просто отменится.',
+    };
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('Отменить запись?', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
         content: Text(
-          'До визита осталось $hours ч $minutes мин.\n\n${switch (booking.paymentMethod) {
-            PaymentMethods.credits => 'На баланс вернутся ${booking.credits} кр.',
-            PaymentMethods.online => 'Оплата вернётся на карту полностью.',
-            _ => 'Оплата не списывалась — запись просто отменится.',
-          }}',
+          'До визита осталось $hours ч $minutes мин.\n\n$refundNote',
           style: TextStyle(fontSize: 13, color: AppColors.muted, height: 1.4),
         ),
         actions: [
@@ -208,9 +211,9 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
                 unselectedLabelColor: AppColors.muted,
                 labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
                 tabs: [
-                  Tab(text: 'Активные (${_appState.activeBookings.length})'),
-                  Tab(text: 'Прошедшие (${_appState.completedBookings.length})'),
-                  Tab(text: 'Отмененные (${_appState.cancelledBookings.length})'),
+                  Tab(text: tr('Активные (${_appState.activeBookings.length})')),
+                  Tab(text: tr('Прошедшие (${_appState.completedBookings.length})')),
+                  Tab(text: tr('Отмененные (${_appState.cancelledBookings.length})')),
                 ],
               ),
             ),

@@ -2,7 +2,8 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import '../../core/l10n/app_text.dart';
 import 'package:yandex_mapkit/yandex_mapkit.dart';
 import '../../core/data/app_dependencies.dart';
 import '../../core/data/app_scope.dart';
@@ -22,6 +23,7 @@ import '../../core/widgets/cards/app_card.dart';
 import '../../core/widgets/sheets/app_sheet.dart';
 import '../../core/widgets/ticker_mode_listener.dart';
 import '../client_home/search_filter_modal.dart';
+import '../../core/l10n/app_locale.dart';
 
 /// Генератор стилизованных векторных пинов салонов для карты Yandex MapKit
 class SalonPinHelper {
@@ -1632,7 +1634,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                   _voiceGuidance.isMuted ? Icons.volume_off : Icons.volume_up,
                   color: _voiceGuidance.isMuted ? Colors.white38 : AppColors.gold,
                 ),
-                tooltip: _voiceGuidance.isMuted ? 'Включить озвучку' : 'Отключить озвучку',
+                tooltip: tr(_voiceGuidance.isMuted ? 'Включить озвучку' : 'Отключить озвучку'),
                 onPressed: () {
                   setState(() {
                     _voiceGuidance.toggleMute();

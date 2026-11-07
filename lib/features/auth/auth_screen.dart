@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import '../../core/l10n/app_text.dart';
 import '../../core/data/app_scope.dart';
 import '../../core/data/repositories/auth_repository.dart';
 import '../../core/data/repository_exception.dart';
@@ -6,6 +7,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/utils/result.dart';
 import '../../core/widgets/buttons/app_gradient_button.dart';
 import '../../core/widgets/inputs/app_text_field.dart';
+import '../../core/l10n/app_locale.dart';
 
 class AuthScreen extends StatefulWidget {
   /// Вход выполнен; роль уже прочитана из токена сессии
@@ -208,11 +210,11 @@ class _AuthScreenState extends State<AuthScreen> {
                         onPressed: widget.onRegisterTap,
                         child: RichText(
                           text: TextSpan(
-                            text: 'Нет аккаунта? ',
+                            text: tr('Нет аккаунта? '),
                             style: TextStyle(color: AppColors.muted, fontSize: 13),
                             children: [
                               TextSpan(
-                                text: 'Зарегистрироваться',
+                                text: tr('Зарегистрироваться'),
                                 style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700),
                               ),
                             ],

@@ -1,5 +1,6 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import '../../core/l10n/app_text.dart';
 import '../../core/models/salon_filter_params.dart';
 import '../../core/services/app_state_service.dart';
 import '../../core/data/app_dependencies.dart';
@@ -14,6 +15,7 @@ import '../../core/utils/formatters.dart';
 import '../../core/widgets/badges/app_status_badge.dart';
 import '../../core/widgets/cards/app_card.dart';
 import 'search_filter_modal.dart';
+import '../../core/l10n/app_locale.dart';
 
 class ClientHomeScreen extends StatefulWidget {
   final VoidCallback onOpenMap;
@@ -561,7 +563,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                       controller: _searchController,
                       onChanged: (val) => setState(() => _searchQuery = val.trim()),
                       decoration: InputDecoration(
-                        hintText: 'Услуга, салон или мастер',
+                        hintText: tr('Услуга, салон или мастер'),
                         hintStyle: TextStyle(color: AppColors.muted, fontSize: 14),
                         border: InputBorder.none,
                         suffixIcon: _searchQuery.isNotEmpty

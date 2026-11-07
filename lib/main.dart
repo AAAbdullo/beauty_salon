@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'core/services/app_state_service.dart';
+import 'core/l10n/app_locale.dart';
 import 'core/theme/app_appearance.dart';
 import 'core/theme/app_theme.dart';
 import 'core/widgets/navigation/floating_bottom_bar.dart';
@@ -64,18 +66,27 @@ class _GozallikAppState extends State<GozallikApp> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _appearance.addListener(_onAppearanceChanged);
+    AppLocale.instance.addListener(_onLocaleChanged);
     AppAppearance.applyPalette(_appearance.resolveDark(WidgetsBinding.instance.platformDispatcher.platformBrightness));
   }
 
   @override
   void dispose() {
     _appearance.removeListener(_onAppearanceChanged);
+    AppLocale.instance.removeListener(_onLocaleChanged);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
   @override
   void didChangePlatformBrightness() => _onAppearanceChanged();
+
+  /// Язык сменился: тексты переводятся при построении, поэтому перестраиваем все живые виджеты
+  void _onLocaleChanged() {
+    if (!mounted) return;
+    setState(() {});
+    AppAppearance.rebuildAll();
+  }
 
   void _onAppearanceChanged() {
     final dark = _appearance.resolveDark(WidgetsBinding.instance.platformDispatcher.platformBrightness);
@@ -94,6 +105,9 @@ class _GozallikAppState extends State<GozallikApp> with WidgetsBindingObserver {
         theme: widget.themeOverride ?? lightTheme,
         darkTheme: widget.themeOverride == null ? darkTheme : null,
         themeMode: AppColors.isDark ? ThemeMode.dark : ThemeMode.light,
+        locale: Locale(AppLocale.instance.language.name),
+        supportedLocales: const [Locale('ru'), Locale('uz')],
+        localizationsDelegates: GlobalMaterialLocalizations.delegates,
         themeAnimationDuration: Duration.zero, // палитра переключается мгновенно и целиком
         home: const RootNavigationContainer(),
       ),

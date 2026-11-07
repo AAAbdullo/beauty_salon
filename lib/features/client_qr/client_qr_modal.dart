@@ -1,5 +1,6 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import '../../core/l10n/app_text.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../../core/data/app_dependencies.dart';
 import '../../core/data/app_scope.dart';

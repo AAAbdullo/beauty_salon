@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../theme/app_theme.dart';
+import '../../l10n/app_locale.dart';
 
 /// Поле ввода с закруглением 28 dp, мягким фоном и иконками
 class AppTextField extends StatelessWidget {
@@ -60,7 +61,7 @@ class AppTextField extends StatelessWidget {
         textCapitalization: textCapitalization,
         autofillHints: autofillHints,
         style: TextStyle(color: AppColors.ink, fontSize: 15, fontWeight: FontWeight.w500),
-        decoration: InputDecoration(hintText: hintText, prefixIcon: prefixIcon, suffixIcon: suffixIcon),
+        decoration: InputDecoration(hintText: hintText == null ? null : tr(hintText!), prefixIcon: prefixIcon, suffixIcon: suffixIcon),
       ),
     );
   }

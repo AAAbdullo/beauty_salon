@@ -1,10 +1,12 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import '../../core/l10n/app_text.dart';
 import '../../core/data/app_scope.dart';
 import '../../core/data/repository_exception.dart';
 import '../../core/services/app_state_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/result.dart';
 import '../../core/utils/uuid.dart';
+import '../../core/l10n/app_locale.dart';
 
 /// Модальное окно оценки и отзыва о прошедшем визите (ТЗ M-13)
 class LeaveReviewModal extends StatefulWidget {
@@ -309,7 +311,7 @@ class _LeaveReviewModalState extends State<LeaveReviewModal> {
               maxLines: 3,
               style: const TextStyle(fontSize: 13),
               decoration: InputDecoration(
-                hintText: 'Поделитесь впечатлениями о сервисе, мастере или атмосфере салона...',
+                hintText: tr('Поделитесь впечатлениями о сервисе, мастере или атмосфере салона...'),
                 hintStyle: TextStyle(fontSize: 12, color: AppColors.muted),
                 filled: true,
                 fillColor: AppColors.background,

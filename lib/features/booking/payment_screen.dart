@@ -1,5 +1,6 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import '../../core/l10n/app_text.dart';
 import '../../core/data/app_scope.dart';
 import '../../core/data/repositories/payments_repository.dart';
 import '../../core/data/repository_exception.dart';

@@ -1,5 +1,7 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import '../../core/l10n/app_text.dart';
 import '../../core/services/app_state_service.dart';
+import '../../core/l10n/app_locale.dart';
 import '../../core/theme/app_appearance.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/cards/app_card.dart';
@@ -47,8 +49,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _pickLanguage() {
-    // ТЗ: uz-Latn, uz-Cyrl, ru. Переводы на узбекский подключаются вместе с локализацией.
-    const languages = [("O'zbekcha (lotin)", false), ('Ўзбекча (кирилл)', false), ('Русский', true)];
+    // ТЗ: uz-Latn, uz-Cyrl, ru. Узбекская кириллица пока не готова.
+    const languages = [
+      ("O'zbekcha (lotin)", AppLanguage.uz, true),
+      ('Ўзбекча (кирилл)', null, false),
+      ('Русский', AppLanguage.ru, true),
+    ];
     showAppSheet<void>(
       context: context,
       title: 'Язык приложения',
@@ -58,17 +64,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: languages
             .map(
               (l) => ListTile(
-                enabled: l.$2,
+                enabled: l.$3,
                 title: Text(l.$1, style: const TextStyle(fontWeight: FontWeight.w700)),
-                subtitle: l.$2 ? null : const Text('Перевод готовится'),
-                trailing: l.$2 ? const Icon(Icons.check, color: AppColors.primary) : null,
-                onTap: () => Navigator.pop(ctx),
+                subtitle: l.$3 ? null : const Text('Перевод готовится'),
+                trailing: l.$2 == AppLocale.instance.language ? Icon(Icons.check, color: AppColors.primary) : null,
+                onTap: () {
+                  final language = l.$2;
+                  if (language != null) AppLocale.instance.setLanguage(language);
+                  Navigator.pop(ctx);
+                },
               ),
             )
             .toList(),
       ),
     );
   }
+
+  String get _languageLabel => AppLocale.instance.language == AppLanguage.uz ? "O'zbekcha" : 'Русский';
 
   void _pickTheme() {
     const options = [
@@ -236,7 +248,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       padding: EdgeInsets.zero,
       child: Column(
         children: [
-          _buildListTile(Icons.language, 'Язык приложения', _pickLanguage, value: 'Русский'),
+          _buildListTile(Icons.language, 'Язык приложения', _pickLanguage, value: _languageLabel),
           _buildDivider(),
           _buildListTile(Icons.dark_mode_outlined, 'Тема оформления', _pickTheme, value: _themeLabel),
           _buildDivider(),
