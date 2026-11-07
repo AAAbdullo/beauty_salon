@@ -6,6 +6,7 @@ import '../utils/clock.dart';
 import '../utils/formatters.dart';
 import '../utils/result.dart';
 import '../utils/slot_pricing.dart';
+import '../utils/uuid.dart';
 import 'booking_seed.dart';
 import 'booking_store.dart';
 import 'master_cabinet_repository.dart';
@@ -96,6 +97,9 @@ class AppStateService extends ChangeNotifier {
   // Уведомления клиента
   late List<AppNotification> _notifications;
 
+  /// Использованные nonce QR-кодов (мок серверной защиты от повторного предъявления одного кода)
+  late Set<String> _usedQrNonces;
+
   /// Начальные (мок) данные. Вызывается при создании и при выходе из аккаунта,
   /// чтобы следующий пользователь не видел данные предыдущего.
   void _applySeed() {
@@ -111,6 +115,7 @@ class AppStateService extends ChangeNotifier {
 
     frozenUntil = null;
     lastFreezeStartedAt = null;
+    _usedQrNonces = {};
 
     promoNotificationsEnabled = true;
     newsNotificationsEnabled = true;
@@ -467,8 +472,7 @@ class AppStateService extends ChangeNotifier {
     final credits = SlotPricing.credits(baseCredits, dateTime);
 
     final booking = BookingItem(
-      // [Фаза 3]: id станет uuid вместе с идемпотентностью
-      id: 'b-${DateTime.now().microsecondsSinceEpoch}',
+      id: 'b-${Uuid.v4()}',
       clientId: clientId,
       clientName: clientName,
       clientAvatar: clientAvatar,
@@ -657,15 +661,17 @@ class AppStateService extends ChangeNotifier {
   // QR визита
   // ---------------------------------------------------------------------------
 
-  /// Динамический токен QR визита: `GZL|bookingId|issuedAtMillis`.
+  /// Динамический токен QR визита: `GZL|bookingId|issuedAtMillis|nonce`.
   /// [BACKEND NOTE]: на сервере токен подписывается (HMAC), клиент лишь отображает его.
-  String visitQrToken(BookingItem booking) => 'GZL|${booking.id}|${AppClock.now().millisecondsSinceEpoch}';
+  /// Здесь подписи нет — это мок серверной логики; nonce делает код одноразовым.
+  String visitQrToken(BookingItem booking) =>
+      'GZL|${booking.id}|${AppClock.now().millisecondsSinceEpoch}|${Uuid.v4()}';
 
   /// Проверка QR мастером: формат, срок жизни кода, статус записи, салон, окно −30/+60 мин.
   /// При успехе визит отмечается выполненным и попадает в доход мастера.
   VisitQrResult validateVisitQr(String raw, {bool ignoreTimeWindow = false}) {
     final parts = raw.split('|');
-    if (parts.length != 3 || parts[0] != 'GZL') {
+    if (parts.length != 4 || parts[0] != 'GZL') {
       return const VisitQrResult.failure('Это не QR-код визита Go\'zallik.');
     }
     final issuedAt = int.tryParse(parts[2]);
@@ -673,8 +679,15 @@ class AppStateService extends ChangeNotifier {
       return const VisitQrResult.failure('QR-код повреждён. Попросите клиента открыть его заново.');
     }
     final age = AppClock.now().difference(DateTime.fromMillisecondsSinceEpoch(issuedAt)).inSeconds;
+    if (age < -qrGraceSeconds) {
+      // Код «из будущего» — признак подделки или сбитых часов; принимать его нельзя
+      return const VisitQrResult.failure('QR-код не прошёл проверку времени. Попросите клиента открыть код заново.');
+    }
     if (age > qrLifetimeSeconds + qrGraceSeconds) {
       return const VisitQrResult.failure('QR-код устарел. Попросите клиента показать обновлённый код.');
+    }
+    if (_usedQrNonces.contains(parts[3])) {
+      return const VisitQrResult.failure('Этот QR-код уже использован. Попросите клиента показать обновлённый код.');
     }
 
     final booking = _store.byId(parts[1]);
@@ -700,7 +713,10 @@ class AppStateService extends ChangeNotifier {
     }
 
     return switch (completeVisit(booking.id)) {
-      Success(:final value) => VisitQrResult.success(value),
+      Success(:final value) => () {
+        _usedQrNonces.add(parts[3]);
+        return VisitQrResult.success(value);
+      }(),
       Failure(:final error) => VisitQrResult.failure(error.message),
     };
   }

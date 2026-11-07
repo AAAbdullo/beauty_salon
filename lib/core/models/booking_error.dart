@@ -14,6 +14,7 @@ enum BookingErrorCode {
   reviewClosed,
   alreadyReviewed,
   freezeNotAllowed,
+  holdExpired,
 }
 
 class BookingError {

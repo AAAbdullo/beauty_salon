@@ -142,7 +142,7 @@ void main() {
     expect(state.validateVisitQr('garbage').isSuccess, isFalse);
     expect(state.validateVisitQr('GZL|nope|${DateTime.now().millisecondsSinceEpoch}').isSuccess, isFalse);
     final old = DateTime.now().subtract(const Duration(minutes: 5)).millisecondsSinceEpoch;
-    expect(state.validateVisitQr('GZL|${booking.id}|$old').error, contains('устарел'));
+    expect(state.validateVisitQr('GZL|${booking.id}|$old|nonce-1').error, contains('устарел'));
     expect(state.validateVisitQr(state.visitQrToken(booking), ignoreTimeWindow: true).isSuccess, isTrue);
     // Запись неизменяемая: старый объект не меняется, актуальный статус — в сторе
     expect(booking.status, BookingStatus.active);
