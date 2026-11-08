@@ -95,13 +95,30 @@ class _AuthScreenState extends State<AuthScreen> {
           // Смена языка до входа: узбекский (латиница, кириллица) и русский
           Padding(
             padding: const EdgeInsets.only(right: AppSizes.screenPadding),
-            child: ActionChip(
-              avatar: const Icon(Icons.language, size: 18, color: AppColors.primary),
-              label: Text(
-                languageLabel(AppLocale.instance.language),
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink),
+            // Своя кнопка вместо Chip: у Chip надпись обрезалась в верхней панели
+            child: Material(
+              color: AppColors.surface,
+              shape: StadiumBorder(side: BorderSide(color: AppColors.line)),
+              child: InkWell(
+                customBorder: const StadiumBorder(),
+                onTap: () => showLanguagePicker(context),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.language, size: 18, color: AppColors.primary),
+                      const SizedBox(width: 6),
+                      Text(
+                        languageLabel(AppLocale.instance.language),
+                        maxLines: 1,
+                        softWrap: false,
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              onPressed: () => showLanguagePicker(context),
             ),
           ),
         ],

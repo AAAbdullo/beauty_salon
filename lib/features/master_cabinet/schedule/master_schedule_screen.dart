@@ -274,7 +274,7 @@ class _MasterScheduleScreenState extends State<MasterScheduleScreen> {
               ),
               if (_canEdit)
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(AppSizes.screenPadding, 4, AppSizes.screenPadding, 110),
+                  padding: const EdgeInsets.fromLTRB(AppSizes.screenPadding, 4, AppSizes.screenPadding, 12),
                   child: AppGradientButton(
                     text: _isDirty ? 'Сохранить изменения' : 'Изменения сохранены',
                     width: double.infinity,
@@ -563,6 +563,8 @@ class _MasterScheduleScreenState extends State<MasterScheduleScreen> {
                     child: Padding(
                       padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                       child: Row(
+                        // Только по размеру содержимого: иначе кнопка вытесняет заголовок «Доступные слоты»
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(Icons.add, size: 16, color: AppColors.primary),
                           SizedBox(width: 4),
