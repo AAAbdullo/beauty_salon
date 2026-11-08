@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
@@ -13,13 +14,21 @@ class ProfilePhotoStorage {
   ProfilePhotoStorage._();
 
   // Операции записи идут строго по очереди: два выбора фото подряд или выход с быстрым повторным входом
-  // не должны удалить файл, на который в итоге указывает аватар.
-  static Future<void> _queue = Future<void>.value();
+  // не должны удалить файл, на который в итоге указывает аватар. Это простая блокировка: пока идёт одна операция,
+  // остальные ждут её окончания (по порядку обращения).
+  static Completer<void>? _running;
 
-  static Future<T> _serial<T>(Future<T> Function() operation) {
-    final result = _queue.then((_) => operation());
-    _queue = result.then<void>((_) {}, onError: (_) {});
-    return result;
+  static Future<T> _serial<T>(Future<T> Function() operation) async {
+    while (_running != null) {
+      await _running!.future;
+    }
+    final gate = _running = Completer<void>();
+    try {
+      return await operation();
+    } finally {
+      _running = null;
+      gate.complete();
+    }
   }
 
   static String _key(PhotoOwner owner) => switch (owner) {

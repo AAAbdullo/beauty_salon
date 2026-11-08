@@ -517,6 +517,20 @@ void main() {
       await settle(tester);
     }
 
+    testWidgets('сессия истекла посреди работы: экран входа и пояснение', (tester) async {
+      await pumpScreen(tester, GozallikApp(dependencies: deps, themeOverride: ThemeData(fontFamily: 'Roboto')));
+      await login(tester, 'client', '12345678');
+      expect(find.text('Главная'), findsWidgets);
+
+      await (deps.auth as MockAuthRepository).expireSession(); // сервер ответил «сессия истекла»
+      await settle(tester);
+
+      expect(find.text('Вход в систему'), findsOneWidget);
+      expect(find.text('Сессия истекла. Войдите снова.'), findsOneWidget);
+      expect(deps.auth.currentSession, isNull);
+      await disposeTree(tester);
+    });
+
     testWidgets('вход мастера возвращает сессию с ролью из токена', (tester) async {
       AuthSession? session;
       await pumpScreen(tester, AuthScreen(onLoginSuccess: (s) => session = s));

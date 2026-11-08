@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import '../../services/app_state_service.dart';
 import '../../utils/clock.dart';
@@ -15,6 +16,7 @@ class MockAuthRepository implements AuthRepository {
   final TokenStorage _storage;
   final MockNetwork _network;
   AuthSession? _session;
+  final _expired = StreamController<void>.broadcast();
 
   /// Демо-аккаунты: логин → (пароль, роль, id пользователя)
   static const _accounts = <String, (String, UserRole, String)>{
@@ -26,6 +28,16 @@ class MockAuthRepository implements AuthRepository {
 
   @override
   AuthSession? get currentSession => _session;
+
+  @override
+  Stream<void> get sessionExpired => _expired.stream;
+
+  /// Имитация ответа сервера «сессия истекла» (в тестах и демо): токен стирается, подписчики уведомляются
+  Future<void> expireSession() async {
+    await _storage.clear();
+    _session = null;
+    _expired.add(null);
+  }
 
   static String _b64(Map<String, Object?> json) => base64Url.encode(utf8.encode(jsonEncode(json))).replaceAll('=', '');
 

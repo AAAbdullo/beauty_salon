@@ -50,6 +50,11 @@ abstract interface class AuthRepository {
   /// Сессия, если пользователь уже вошёл (синхронно, из памяти)
   AuthSession? get currentSession;
 
+  /// Событие «сессия истекла посреди работы» (сервер ответил 401 и обновить токен не удалось):
+  /// приложение возвращает пользователя на экран входа.
+  /// [BACKEND NOTE]: Dio-перехватчик на 401 пробует POST /auth/refresh, а при отказе сообщает сюда.
+  Stream<void> get sessionExpired;
+
   /// Восстановить сессию из сохранённого токена (при запуске приложения)
   Future<AuthSession?> restoreSession();
 

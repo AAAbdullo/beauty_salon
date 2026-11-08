@@ -50,7 +50,9 @@ Future<void> main() async {
   if (savedPhoto != null) AppStateService().updateClientAvatar(savedPhoto);
   final savedMasterPhoto = await ProfilePhotoStorage.restore(owner: PhotoOwner.master);
   if (savedMasterPhoto != null) AppStateService().updateMasterAvatar(savedMasterPhoto);
-  runApp(GozallikApp(dependencies: AppDependencies.mock(tokenStorage: SecureTokenStorage())));
+  final tokenStorage = SecureTokenStorage();
+  await tokenStorage.clearIfFreshInstall(); // Keychain переживает переустановку: без этого вход без пароля
+  runApp(GozallikApp(dependencies: AppDependencies.mock(tokenStorage: tokenStorage)));
 }
 
 class GozallikApp extends StatefulWidget {
@@ -146,10 +148,26 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
 
   AppDependencies get _deps => AppScope.read(context);
 
+  StreamSubscription<void>? _sessionExpiredSub;
+
   @override
   void initState() {
     super.initState();
+    _sessionExpiredSub = _deps.auth.sessionExpired.listen((_) => unawaited(_onSessionExpired()));
     unawaited(_restoreSession());
+  }
+
+  @override
+  void dispose() {
+    unawaited(_sessionExpiredSub?.cancel());
+    super.dispose();
+  }
+
+  /// Сервер сообщил, что сессия истекла: возвращаем на экран входа и объясняем почему
+  Future<void> _onSessionExpired() async {
+    if (!_isAuthenticated) return;
+    await _logout();
+    if (mounted) showAppSnack(context, 'Сессия истекла. Войдите снова.');
   }
 
   /// При запуске: если токен сохранён и не истёк, сразу входим (роль — из токена)
