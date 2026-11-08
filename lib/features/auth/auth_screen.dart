@@ -7,6 +7,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/utils/result.dart';
 import '../../core/widgets/buttons/app_gradient_button.dart';
 import '../../core/widgets/inputs/app_text_field.dart';
+import '../../core/widgets/sheets/language_picker.dart';
 import '../../core/l10n/app_locale.dart';
 
 class AuthScreen extends StatefulWidget {
@@ -95,6 +96,19 @@ class _AuthScreenState extends State<AuthScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Смена языка до входа: узбекский (латиница, кириллица) и русский
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: ActionChip(
+                      avatar: const Icon(Icons.language, size: 18, color: AppColors.primary),
+                      label: Text(
+                        languageLabel(AppLocale.instance.language),
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink),
+                      ),
+                      onPressed: () => showLanguagePicker(context),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                   Center(
                     child: Container(
                       width: 80,

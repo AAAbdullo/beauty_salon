@@ -4,6 +4,7 @@ import '../../core/l10n/app_text.dart';
 import '../../core/l10n/app_locale.dart';
 import '../../core/theme/app_appearance.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/sheets/language_picker.dart';
 import '../../core/widgets/avatars/avatar_image.dart';
 import '../../core/widgets/cards/app_card.dart';
 import '../../core/widgets/sheets/app_sheet.dart';
@@ -49,40 +50,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     super.dispose();
   }
 
-  void _pickLanguage() {
-    // ТЗ: uz-Latn, uz-Cyrl, ru
-    const languages = [
-      ("O'zbekcha (lotin)", AppLanguage.uz),
-      ('Ўзбекча (кирилл)', AppLanguage.uzCyrl),
-      ('Русский', AppLanguage.ru),
-    ];
-    showAppSheet<void>(
-      context: context,
-      title: 'Язык приложения',
-      builder: (ctx) => ListView(
-        shrinkWrap: true,
-        padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
-        children: languages
-            .map(
-              (l) => ListTile(
-                title: Text(l.$1, style: const TextStyle(fontWeight: FontWeight.w700)),
-                trailing: l.$2 == AppLocale.instance.language ? Icon(Icons.check, color: AppColors.primary) : null,
-                onTap: () {
-                  AppLocale.instance.setLanguage(l.$2);
-                  Navigator.pop(ctx);
-                },
-              ),
-            )
-            .toList(),
-      ),
-    );
-  }
+  void _pickLanguage() => showLanguagePicker(context);
 
-  String get _languageLabel => switch (AppLocale.instance.language) {
-    AppLanguage.uz => "O'zbekcha",
-    AppLanguage.uzCyrl => 'Ўзбекча',
-    AppLanguage.ru => 'Русский',
-  };
+  String get _languageLabel => languageLabel(AppLocale.instance.language);
 
   void _pickTheme() {
     const options = [(ThemeMode.system, 'Как в системе'), (ThemeMode.light, 'Светлая'), (ThemeMode.dark, 'Тёмная')];
