@@ -118,6 +118,34 @@ void main() {
     await dispose(tester);
   });
 
+  testWidgets('iPhone: переходы между вкладками не пересоздают экраны — несохранённая правка графика остаётся', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    await pumpMaster(tester);
+
+    // «Время»: меняем слот, не сохраняя — кнопка становится «Сохранить изменения»
+    await tester.tap(find.text('Время').last);
+    await settle(tester);
+    expect(find.text('Изменения сохранены'), findsOneWidget);
+    await tester.ensureVisible(find.byType(Switch).at(1));
+    await tester.tap(find.byType(Switch).at(1));
+    await settle(tester);
+    expect(find.text('Сохранить изменения'), findsOneWidget);
+
+    // Уходим на «Сегодня» (корневой экран: полоса жеста выключается) и возвращаемся
+    await tester.tap(find.text('Сегодня').last);
+    await settle(tester);
+    expect(find.text('Ближайший клиент'), findsOneWidget);
+    await tester.tap(find.text('Время').last);
+    await settle(tester);
+
+    // Правка на месте: экран не был пересоздан
+    expect(find.text('Сохранить изменения'), findsOneWidget);
+    await dispose(tester);
+    debugDefaultTargetPlatformOverride = null;
+  });
+
   testWidgets('жест «назад» от левого края (iPhone) возвращает из профиля клиента', (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
     await pumpMaster(tester);

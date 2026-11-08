@@ -24,17 +24,20 @@ class EdgeSwipeBack extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!enabled || defaultTargetPlatform != TargetPlatform.iOS) return child;
+    // Stack возвращаем всегда, а включаем и выключаем только полосу. Если при смене [enabled] менять тип
+    // корневого виджета (child ↔ Stack), Flutter пересоздаёт всё дерево под ним: теряются состояние вкладок,
+    // прокрутка, фильтры и несохранённые правки.
     return Stack(
       children: [
         child,
-        Positioned(
-          left: 0,
-          top: 0,
-          bottom: 0,
-          width: edgeWidth,
-          child: _EdgeStrip(onBack: onBack),
-        ),
+        if (enabled && defaultTargetPlatform == TargetPlatform.iOS)
+          Positioned(
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: edgeWidth,
+            child: _EdgeStrip(onBack: onBack),
+          ),
       ],
     );
   }
