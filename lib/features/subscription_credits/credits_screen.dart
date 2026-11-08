@@ -283,8 +283,11 @@ class _CreditsScreenState extends State<CreditsScreen> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 8,
+                      runSpacing: 8,
                       children: [
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -362,7 +365,9 @@ class _CreditsScreenState extends State<CreditsScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Row(
+                              Wrap(
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                runSpacing: 4,
                                 children: [
                                   Text(
                                     pkg['name'] as String,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart' hide Text;
 import '../../l10n/app_text.dart';
 import '../../theme/app_theme.dart';
+import '../layout/fixed_height_box.dart';
 import '../../l10n/app_locale.dart';
 
 /// Плавающий BottomNavigationBar ("таблетка") по спецификации:
@@ -19,7 +20,10 @@ class FloatingBottomBar extends StatelessWidget {
   static Color get backgroundColor => AppColors.barBackground;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) =>
+      MediaQuery.withClampedTextScaling(maxScaleFactor: fixedHeightMaxTextScale, child: _buildBar(context));
+
+  Widget _buildBar(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(color: backgroundColor),
       child: SafeArea(

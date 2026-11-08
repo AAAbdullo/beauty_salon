@@ -382,8 +382,14 @@ class _SalonDetailViewState extends State<_SalonDetailView> with SingleTickerPro
                 style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
               ),
             ),
-            const Spacer(),
-            AppStatusBadge(text: _salon.workingHours),
+            const SizedBox(width: 8),
+            // Не помещается — бейдж слегка сжимается, а не вылезает за край
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: FittedBox(fit: BoxFit.scaleDown, child: AppStatusBadge(text: _salon.workingHours)),
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 8),

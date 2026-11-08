@@ -8,6 +8,7 @@ import 'package:beauty_salons/core/data/app_dependencies.dart';
 import 'package:beauty_salons/core/data/mock/mock_network.dart';
 import 'package:beauty_salons/core/services/app_state_service.dart';
 import 'package:beauty_salons/core/utils/clock.dart';
+import 'package:beauty_salons/core/widgets/buttons/app_gradient_button.dart';
 import 'package:beauty_salons/main.dart';
 
 /// Крупный системный шрифт: масштаб ограничен до [maxTextScale], а основные экраны при нём не переполняются.
@@ -73,6 +74,24 @@ void main() {
     for (final tab in ['Время', 'Доход', 'Профиль', 'Сегодня']) {
       await visit(tester, tab);
     }
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+  });
+
+  testWidgets('клиент, крупный шрифт (2,0): салон, запись и оплата без переполнений', (tester) async {
+    await pumpApp(tester, scale: 2.0, login: 'client');
+    Future<void> tapVisible(Finder f, {int frames = 12}) async {
+      await tester.ensureVisible(f);
+      await tester.tap(f);
+      await settle(tester, frames: frames);
+      expect(tester.takeException(), isNull);
+    }
+
+    await tapVisible(find.text('Nur Beauty').first);
+    await tapVisible(find.widgetWithText(AppGradientButton, 'Записаться'), frames: 14);
+    await tapVisible(find.text('14:00'));
+    await tapVisible(find.text('Онлайн'), frames: 8);
+    await tapVisible(find.textContaining('К оплате'), frames: 14);
     await tester.pumpWidget(const SizedBox());
     await tester.pump();
   });

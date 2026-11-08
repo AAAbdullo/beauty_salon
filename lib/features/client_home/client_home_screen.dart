@@ -10,6 +10,7 @@ import '../../core/services/salons_repository.dart';
 import '../../core/widgets/sheets/app_sheet.dart';
 import '../../core/widgets/states/async_screen.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/layout/fixed_height_box.dart';
 import '../../core/widgets/avatars/avatar_image.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/badges/app_status_badge.dart';
@@ -698,7 +699,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
         onTap: widget.onOpenCredits,
         child: Container(
           width: double.infinity,
-          height: 160,
+          constraints: const BoxConstraints(minHeight: 160),
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(AppSizes.cardRadius),
@@ -797,7 +798,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
           ),
         ),
         const SizedBox(height: 14),
-        SizedBox(
+        FixedHeightBox(
           height: 90,
           child: ListView.separated(
             padding: const EdgeInsets.symmetric(horizontal: AppSizes.screenPadding),
@@ -908,7 +909,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
             ),
           )
         else
-          SizedBox(
+          FixedHeightBox(
             height: 250,
             child: ListView.separated(
               padding: const EdgeInsets.symmetric(horizontal: AppSizes.screenPadding),
@@ -1041,7 +1042,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
           ),
         ),
         const SizedBox(height: 14),
-        SizedBox(
+        FixedHeightBox(
           height: 160,
           child: ListView.separated(
             padding: const EdgeInsets.symmetric(horizontal: AppSizes.screenPadding),

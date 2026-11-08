@@ -477,7 +477,14 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Ближайший клиент', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+              const Flexible(
+                child: Text(
+                  'Ближайший клиент',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+                ),
+              ),
               if (next != null)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),

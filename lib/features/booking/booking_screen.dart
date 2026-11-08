@@ -12,6 +12,7 @@ import '../../core/services/app_state_service.dart';
 import '../../core/services/masters_repository.dart';
 import '../../core/services/salons_repository.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/layout/fixed_height_box.dart';
 import '../../core/utils/clock.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/utils/result.dart';
@@ -629,7 +630,8 @@ class _BookingViewState extends State<_BookingView> with WidgetsBindingObserver 
                 ? Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           Text(
                             'Слот закреплён за вами: ',
@@ -692,7 +694,8 @@ class _BookingViewState extends State<_BookingView> with WidgetsBindingObserver 
                 Text(service.name, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
                 Text(_salonName, style: TextStyle(fontSize: 12, color: AppColors.muted)),
                 const SizedBox(height: 4),
-                Row(
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     Icon(Icons.access_time, size: 13, color: AppColors.muted),
                     const SizedBox(width: 4),
@@ -734,7 +737,7 @@ class _BookingViewState extends State<_BookingView> with WidgetsBindingObserver 
       children: [
         const Text('Мастер', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
         const SizedBox(height: 12),
-        SizedBox(
+        FixedHeightBox(
           height: 64,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
@@ -805,7 +808,7 @@ class _BookingViewState extends State<_BookingView> with WidgetsBindingObserver 
       children: [
         const Text('Выберите дату', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
         const SizedBox(height: 12),
-        SizedBox(
+        FixedHeightBox(
           height: 66,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
@@ -873,7 +876,14 @@ class _BookingViewState extends State<_BookingView> with WidgetsBindingObserver 
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text('Доступное время', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+            const Flexible(
+              child: Text(
+                'Доступное время',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+              ),
+            ),
             if (_selectedStart != null)
               Text(
                 'Выбрано: ${Formatters.time(_selectedStart!)}',
@@ -1032,7 +1042,7 @@ class _BookingViewState extends State<_BookingView> with WidgetsBindingObserver 
       child: _SelectableTile(
         isSelected: isSelected,
         onTap: enabled ? () => setState(() => _paymentMethod = method) : null,
-        height: 88,
+        height: 96,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.center,
@@ -1139,7 +1149,9 @@ class _SelectableTile extends StatelessWidget {
           height: height,
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           alignment: Alignment.centerLeft,
-          child: child,
+          child: height == null
+              ? child
+              : MediaQuery.withClampedTextScaling(maxScaleFactor: fixedHeightMaxTextScale, child: child),
         ),
       ),
     );

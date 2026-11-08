@@ -6,6 +6,7 @@ import '../../../core/data/repository_exception.dart';
 import '../../../core/utils/clock.dart';
 import '../../../core/services/master_cabinet_store.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/layout/fixed_height_box.dart';
 import '../../../core/widgets/buttons/app_gradient_button.dart';
 import '../../../core/widgets/cards/app_card.dart';
 import '../../../core/widgets/states/async_screen.dart';
@@ -385,7 +386,7 @@ class _MasterScheduleScreenState extends State<MasterScheduleScreen> {
                 onTap: () => _selectDay(weekday),
                 child: Opacity(
                   opacity: isWorking || isSelected ? 1 : 0.45,
-                  child: SizedBox(
+                  child: FixedHeightBox(
                     height: 64,
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -1026,7 +1027,14 @@ class _SoftActionButton extends StatelessWidget {
             children: [
               const Icon(Icons.add, size: 18, color: AppColors.primary),
               const SizedBox(width: 6),
-              Text(text, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.primaryText)),
+              Flexible(
+                child: Text(
+                  text,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.primaryText),
+                ),
+              ),
             ],
           ),
         ),

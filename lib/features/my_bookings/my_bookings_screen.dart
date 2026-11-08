@@ -354,11 +354,15 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
                   children: [
                     const Icon(Icons.access_time, size: 14, color: AppColors.primary),
                     const SizedBox(width: 6),
-                    Text(
-                      '${b.date}, ${b.time} · ${b.durationLabel}',
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                    Expanded(
+                      child: Text(
+                        '${b.date}, ${b.time} · ${b.durationLabel}',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                      ),
                     ),
-                    const Spacer(),
+                    const SizedBox(width: 8),
                     Text(
                       b.priceLabel,
                       style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.primaryText),

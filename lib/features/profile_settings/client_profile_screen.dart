@@ -167,7 +167,8 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                 const SizedBox(height: 2),
                 Text(_appState.clientPhone, style: TextStyle(fontSize: 13, color: AppColors.muted)),
                 const SizedBox(height: 4),
-                Row(
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     Icon(Icons.workspace_premium, size: 14, color: AppColors.primaryText),
                     const SizedBox(width: 4),
@@ -336,11 +337,12 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
         padding: EdgeInsets.zero,
         physics: const NeverScrollableScrollPhysics(),
         itemCount: actions.length,
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 4,
           crossAxisSpacing: 8,
           mainAxisSpacing: 8,
-          childAspectRatio: 0.9,
+          // Ячейка растёт с размером шрифта: подписи пунктов не обрезаются
+          childAspectRatio: 0.9 / MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 2.0),
         ),
         itemBuilder: (context, index) {
           final item = actions[index];
@@ -378,7 +380,14 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Недавние записи', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+              const Flexible(
+                child: Text(
+                  'Недавние записи',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                ),
+              ),
               GestureDetector(
                 onTap: () => widget.onOpenBookings(0),
                 child: Row(

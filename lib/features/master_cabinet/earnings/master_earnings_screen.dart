@@ -384,7 +384,14 @@ class _MasterEarningsScreenState extends State<MasterEarningsScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        const Text('Последние визиты', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+        const Flexible(
+          child: Text(
+            'Последние визиты',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+          ),
+        ),
         if (_visits.length > 5)
           GestureDetector(
             onTap: _showAllVisits,
