@@ -390,6 +390,20 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
     _zoomToPoint(salon.point, zoom: 15.2);
   }
 
+  /// Слой геолокации до первого GPS-фикса отдаёт точку (0, 0) — «позиции ещё нет». Её нельзя
+  /// принимать за положение пользователя: маршрут от (0, 0) Яндекс не строит и отвечает «Network error».
+  bool _isUsablePoint(Point? p) => p != null && (p.latitude.abs() > 0.0001 || p.longitude.abs() > 0.0001);
+
+  /// Свежая позиция пользователя от слоя геолокации или `null`, если GPS-фикса ещё нет
+  Future<Point?> _freshUserPoint() async {
+    try {
+      final target = (await _mapController?.getUserCameraPosition())?.target;
+      return _isUsablePoint(target) ? target : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Центрирование и анимация камеры
   Future<void> _zoomToPoint(Point point, {double zoom = 15.5}) async {
     if (_mapController == null) return;
@@ -437,7 +451,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
       try {
         final userPos = await _mapController?.getUserCameraPosition();
         if (!mounted) return;
-        if (userPos != null) {
+        if (userPos != null && _isUsablePoint(userPos.target)) {
           setState(() {
             _userLocation = userPos.target;
             _isRealGpsActive = true;
@@ -516,6 +530,11 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
       _isBuildingRoute = true;
       _isWalkingRoute = isWalking;
     });
+
+    // Старт маршрута — реальная позиция, если GPS-фикс есть; иначе последняя известная (по умолчанию центр Ташкента)
+    final fresh = await _freshUserPoint();
+    if (isStale()) return;
+    if (fresh != null) _userLocation = fresh;
 
     List<Point> primaryPoints = [];
     List<Point> alternativePoints = [];
@@ -763,7 +782,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
       fix = await controller.getUserCameraPosition();
     } catch (_) {}
     if (!mounted) return;
-    if (fix == null) {
+    if (fix == null || !_isUsablePoint(fix.target)) {
       showAppSnack(context, 'Не удаётся определить ваше местоположение. Включите GPS и выйдите на открытое место.');
       return;
     }
@@ -826,7 +845,9 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
     _trackingBusy = true;
     try {
       final fix = await _mapController?.getUserCameraPosition();
-      if (!mounted || !_isNavigating || fix == null) return; // нет фикса — остаёмся на последней точке
+      if (!mounted || !_isNavigating || fix == null || !_isUsablePoint(fix.target)) {
+        return; // нет фикса — остаёмся на последней точке
+      }
       final point = fix.target;
       final now = DateTime.now();
 
@@ -1082,7 +1103,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                 }
               },
               onUserLocationAdded: (UserLocationView view) async {
-                if (mounted) {
+                if (mounted && _isUsablePoint(view.pin.point)) {
                   setState(() {
                     _userLocation = view.pin.point;
                     _isRealGpsActive = true;
@@ -1727,9 +1748,13 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                   children: [
                     Row(
                       children: [
-                        Text(
-                          _primaryRouteDuration ?? 'В пути',
-                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.ink),
+                        Flexible(
+                          child: Text(
+                            _primaryRouteDuration ?? 'В пути',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.ink),
+                          ),
                         ),
                         const SizedBox(width: 6),
                         Container(
@@ -1740,6 +1765,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                         const SizedBox(width: 6),
                         Text(
                           _primaryRouteDistance ?? '',
+                          maxLines: 1,
                           style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.muted),
                         ),
                       ],
