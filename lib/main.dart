@@ -28,6 +28,7 @@ import 'features/master_cabinet/earnings/master_earnings_screen.dart';
 import 'features/master_cabinet/profile/master_account_screen.dart';
 import 'dart:async';
 import 'core/data/app_dependencies.dart';
+import 'core/data/secure_token_storage.dart';
 import 'core/data/app_scope.dart';
 import 'core/data/repositories/auth_repository.dart';
 import 'core/data/repositories/bookings_repository.dart';
@@ -41,7 +42,7 @@ import 'core/widgets/sheets/app_sheet.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await AppPreferences.restoreAndWatch(); // язык и тема с прошлого запуска
-  runApp(const GozallikApp());
+  runApp(GozallikApp(dependencies: AppDependencies.mock(tokenStorage: SecureTokenStorage())));
 }
 
 class GozallikApp extends StatefulWidget {
