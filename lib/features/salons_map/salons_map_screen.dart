@@ -1330,6 +1330,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                     width: 50,
                     height: 50,
                     fit: BoxFit.cover,
+                    cacheWidth: 200,
                     errorBuilder: (_, _, _) => Container(
                       width: 50,
                       height: 50,

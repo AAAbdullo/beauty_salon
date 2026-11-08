@@ -668,6 +668,7 @@ class _BookingViewState extends State<_BookingView> with WidgetsBindingObserver 
               width: 60,
               height: 60,
               fit: BoxFit.cover,
+              cacheWidth: 200,
               errorBuilder: (_, _, _) => Container(
                 width: 60,
                 height: 60,

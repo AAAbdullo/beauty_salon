@@ -415,6 +415,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                               child: Image.asset(
                                 m.avatarAsset,
                                 fit: BoxFit.cover,
+                                cacheWidth: 200,
                                 errorBuilder: (_, _, _) => const Center(
                                   child: Icon(Icons.person, size: 30, color: Colors.white),
                                 ),

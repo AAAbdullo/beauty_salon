@@ -282,6 +282,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                           width: 52,
                           height: 52,
                           fit: BoxFit.cover,
+                          cacheWidth: 200,
                           errorBuilder: (_, _, _) => Container(
                             width: 52,
                             height: 52,
@@ -933,6 +934,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                                 height: 105,
                                 width: double.infinity,
                                 fit: BoxFit.cover,
+                                cacheWidth: 800,
                                 errorBuilder: (_, _, _) => Container(
                                   height: 105,
                                   color: AppColors.soft(Colors.pink.shade50),

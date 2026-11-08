@@ -280,6 +280,7 @@ class _SalonDetailViewState extends State<_SalonDetailView> with SingleTickerPro
                 child: Image.asset(
                   _photos[index],
                   fit: BoxFit.cover,
+                  cacheWidth: 1200,
                   errorBuilder: (_, _, _) => Container(
                     color: AppColors.primaryTint,
                     child: const Center(child: Icon(Icons.storefront, size: 80, color: AppColors.primary)),
@@ -718,6 +719,7 @@ class _SalonDetailViewState extends State<_SalonDetailView> with SingleTickerPro
                     width: 120,
                     height: 90,
                     fit: BoxFit.cover,
+                    cacheWidth: 400,
                     errorBuilder: (_, _, _) => Container(
                       width: 120,
                       height: 90,
