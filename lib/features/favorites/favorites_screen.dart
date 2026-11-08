@@ -206,8 +206,10 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                         width: 52,
                         height: 52,
                         decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFFFFD1DC), Color(0xFFFFB6C1)],
+                          gradient: LinearGradient(
+                            colors: AppColors.isDark
+                                ? const [Color(0xFF5A3350), Color(0xFF47273F)]
+                                : const [Color(0xFFFFD1DC), Color(0xFFFFB6C1)],
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                           ),
@@ -318,8 +320,8 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                       if (s.homeVisit)
                         AppStatusBadge(
                           text: 'Uyga chiqish',
-                          backgroundColor: Colors.blue.shade50,
-                          textColor: Colors.blue.shade800,
+                          backgroundColor: AppColors.soft(Colors.blue.shade50),
+                          textColor: AppColors.onSoft(Colors.blue.shade800),
                         ),
                       if (s.creditsAccepted)
                         AppStatusBadge(
@@ -400,7 +402,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
                               ),
-                              border: Border.all(color: Colors.white, width: 2),
+                              border: Border.all(color: AppColors.surface, width: 2),
                               boxShadow: const [
                                 BoxShadow(
                                   color: Colors.black12,
@@ -429,7 +431,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                                 color: const Color(0xFF1AAA4C),
                                 shape: BoxShape.circle,
                                 border:
-                                    Border.all(color: Colors.white, width: 2),
+                                    Border.all(color: AppColors.surface, width: 2),
                               ),
                             ),
                           ),

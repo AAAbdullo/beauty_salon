@@ -52,7 +52,7 @@ class AppColors {
   static const darkBackground = Color(0xFF14101A);
   static const darkSurface = Color(0xFF211A2B);
   static const darkLine = Color(0xFF3A3045);
-  static const darkInk = Color(0xFFF1EBF7);
+  static const darkInk = Color(0xFFE6DEEC);
   static const darkMuted = Color(0xFFB3A8C0);
   static const darkPrimaryTint = Color(0xFF3A2A4D);
   static const darkSuccessBg = Color(0xFF123D2E);
@@ -76,6 +76,15 @@ class AppGradients {
   /// Кнопка действия (слева направо).
   static const cta = LinearGradient(
     colors: [AppColors.primary, AppColors.primaryDeep],
+  );
+
+  /// Акцентная карточка (абонемент, кредиты): в тёмной теме — глубокий сливовый вместо светло-розового.
+  static LinearGradient get promo => LinearGradient(
+    colors: AppColors.isDark
+        ? const [Color(0xFF3B2447), Color(0xFF2E1B3C)]
+        : const [Color(0xFFFFE8F5), Color(0xFFFDD5EC)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
   );
 
   /// Фон экрана: мягкий розовый сверху, почти белый внизу.

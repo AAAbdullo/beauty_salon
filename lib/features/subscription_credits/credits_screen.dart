@@ -226,11 +226,7 @@ class _CreditsScreenState extends State<CreditsScreen> {
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(24),
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFFFE8F5), Color(0xFFFDD5EC)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
+                  gradient: AppGradients.promo,
                   boxShadow: [
                     BoxShadow(
                       color: AppColors.primary.withValues(alpha: 0.12),
@@ -301,7 +297,7 @@ class _CreditsScreenState extends State<CreditsScreen> {
                         ),
                         AppPillButton(
                           text: _appState.isFrozen ? 'Разморозить' : 'Заморозить',
-                          backgroundColor: Colors.white,
+                          backgroundColor: AppColors.surface,
                           textColor: AppColors.ink,
                           onPressed: _showFreezeDialog,
                         ),
@@ -315,7 +311,7 @@ class _CreditsScreenState extends State<CreditsScreen> {
                             ? 0
                             : _appState.usedPlanCredits / _appState.planTotalCredits,
                         minHeight: 6,
-                        backgroundColor: Colors.white70,
+                        backgroundColor: AppColors.isDark ? Colors.white24 : Colors.white70,
                         valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
                       ),
                     ),

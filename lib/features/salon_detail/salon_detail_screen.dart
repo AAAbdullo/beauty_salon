@@ -350,7 +350,7 @@ class _SalonDetailViewState extends State<_SalonDetailView> with SingleTickerPro
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFFF7E6),
+                  color: AppColors.soft(const Color(0xFFFFF7E6)),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: AppColors.gold.withValues(alpha: 0.5)),
                 ),
@@ -360,7 +360,7 @@ class _SalonDetailViewState extends State<_SalonDetailView> with SingleTickerPro
                     const SizedBox(width: 4),
                     Text(
                       'У вас ${_appState.clientCredits} кр.',
-                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF8A5D00)),
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.onSoft(const Color(0xFF8A5D00))),
                     ),
                   ],
                 ),

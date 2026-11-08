@@ -693,11 +693,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(AppSizes.cardRadius),
-            gradient: const LinearGradient(
-              colors: [Color(0xFFFFE8F5), Color(0xFFFDD5EC)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
+            gradient: AppGradients.promo,
             boxShadow: [
               BoxShadow(color: AppColors.primary.withValues(alpha: 0.12), blurRadius: 16, offset: const Offset(0, 6)),
             ],
@@ -931,7 +927,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                                 fit: BoxFit.cover,
                                 errorBuilder: (_, _, _) => Container(
                                   height: 105,
-                                  color: Colors.pink.shade50,
+                                  color: AppColors.soft(Colors.pink.shade50),
                                   child: const Center(
                                     child: Icon(Icons.storefront, size: 40, color: AppColors.primary),
                                   ),

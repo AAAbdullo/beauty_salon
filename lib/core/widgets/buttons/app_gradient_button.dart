@@ -60,8 +60,10 @@ class _AppGradientButtonState extends State<AppGradientButton> {
       decoration: BoxDecoration(
         gradient: isEnabled
             ? AppGradients.cta
-            : const LinearGradient(
-                colors: [Color(0xFFE0D8DE), Color(0xFFC7BFC5)],
+            : LinearGradient(
+                colors: AppColors.isDark
+                    ? const [Color(0xFF3A3045), Color(0xFF30283A)]
+                    : const [Color(0xFFE0D8DE), Color(0xFFC7BFC5)],
               ),
         borderRadius: BorderRadius.circular(height / 2),
         boxShadow: isEnabled

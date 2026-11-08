@@ -239,13 +239,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
         borderRadius: BorderRadius.circular(20),
         clipBehavior: Clip.antiAlias,
         child: Ink(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Color(0xFFFFE8F5), Color(0xFFFDD5EC)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
+          decoration: BoxDecoration(gradient: AppGradients.promo),
           child: InkWell(
             onTap: widget.onOpenCredits,
             child: Padding(
@@ -295,7 +289,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                     child: LinearProgressIndicator(
                       value: total == 0 ? 0 : used / total,
                       minHeight: 6,
-                      backgroundColor: Colors.white70,
+                      backgroundColor: AppColors.isDark ? Colors.white24 : Colors.white70,
                       valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
                     ),
                   ),

@@ -191,8 +191,8 @@ class _MasterProfileViewState extends State<_MasterProfileView> with SingleTicke
                       height: 90,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Colors.white,
-                        border: Border.all(color: Colors.white, width: 3),
+                        color: AppColors.surface,
+                        border: Border.all(color: AppColors.surface, width: 3),
                         boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 4))],
                       ),
                       child: ClipOval(
@@ -215,7 +215,7 @@ class _MasterProfileViewState extends State<_MasterProfileView> with SingleTicke
                         decoration: BoxDecoration(
                           color: AppColors.success,
                           shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
+                          border: Border.all(color: AppColors.surface, width: 2),
                         ),
                       ),
                     ),

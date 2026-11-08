@@ -1146,9 +1146,9 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            Colors.white.withValues(alpha: 0.96),
-            Colors.white.withValues(alpha: 0.88),
-            Colors.white.withValues(alpha: 0.0),
+            AppColors.background.withValues(alpha: 0.96),
+            AppColors.background.withValues(alpha: 0.88),
+            AppColors.background.withValues(alpha: 0.0),
           ],
         ),
       ),
@@ -1666,7 +1666,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppColors.surface,
             borderRadius: BorderRadius.circular(24),
             boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 20, offset: Offset(0, 8))],
           ),
