@@ -60,3 +60,10 @@ android {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // Нужна приложению напрямую: MainApplication вызывает MapKitFactory.setApiKey.
+    // Плагин yandex_mapkit подключает библиотеку как implementation, поэтому снаружи она не видна.
+    // Версия и вариант (full) должны совпадать с yandexMapkit.variant в gradle.properties и с версией плагина yandex_mapkit.
+    implementation("com.yandex.android:maps.mobile:4.39.1-full")
+}

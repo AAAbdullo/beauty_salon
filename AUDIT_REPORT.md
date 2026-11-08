@@ -294,7 +294,9 @@
 - **Почему:** «Демо: QR клиента» подтверждает ближайшую активную запись с `ignoreTimeWindow: true`, без клиента. В релизе мастер сможет отмечать визиты выполненными, а по K-07 это окончательно списывает кредиты.
 - **Как исправить:** показывать `Row` с демо-кнопками (и отступ над ним) только при `kDebugMode`. `_simulateClientQr` оставить для симулятора.
 
-#### 35. Android ни разу не собирался
+#### 35. Android ни разу не собирался — ✅ собрано и запущено на эмуляторе (2026-11-08)
+
+> **Результат:** `flutter build apk --debug` проходит (JDK 21; на JDK 25 Gradle 8.14 не работает). Сборка падала из-за `MainApplication.kt`: плагин `yandex_mapkit` подключает MapKit как `implementation`, поэтому в `android/app/build.gradle.kts` добавлена зависимость `com.yandex.android:maps.mobile:4.39.1-full` (вариант `full` — как в `gradle.properties`). На Android API 37 (эмулятор): вход, главная, запрос геолокации (задача 44), карта с GPS — работают. В логе есть безвредное «API key is already set. Ignored». Не проверено: маршрут и голосовые подсказки, сканер, тёмная тема, вход мастера на Android.
 
 - **Файл:** `android/app/src/main/kotlin/com/example/beauty_salons/MainActivity.kt`
 - **Почему:** добавлен канал геолокации `com.beauty_salon/location`, а на машине разработки нет Android SDK. По чтению код корректен (попутно исправлен старый баг `result.notImplemented` без скобок), но не компилировался.
