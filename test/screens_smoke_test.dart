@@ -45,9 +45,9 @@ void main() {
       onOpenCredits: noop,
       onOpenProfile: noop,
     ),
-    // s-001 Nur Beauty (есть мастера), s-005 Zara Beauty Lab (без мастеров и кредитов), s-008 Elite Barber
+    // s-001 Nur Beauty (есть мастера), s-005 Zara Beauty Lab (без мастеров и кредитов), s-003 Mira Hair
     // и несуществующий id — должен показаться экран «не найдено», а не чужой салон
-    for (final salonId in ['s-001', 's-005', 's-008', 's-unknown'])
+    for (final salonId in ['s-001', 's-005', 's-003', 's-unknown'])
       'Salon $salonId': () => SalonDetailScreen(
         salonId: salonId,
         onBack: noop,

@@ -152,13 +152,13 @@ void main() {
 
       await tester.tap(find.text('Повторить'));
       await settle(tester);
-      expect(find.text('Салоны (10)'), findsOneWidget);
+      expect(find.text('Салоны (9)'), findsOneWidget);
 
       // Категория «Брови» — другой список салонов
       await tester.scrollUntilVisible(find.text('Брови'), -300, scrollable: find.byType(Scrollable).first);
       await tester.tap(find.text('Брови'));
       await settle(tester);
-      expect(find.text('Салоны (10)'), findsNothing);
+      expect(find.text('Салоны (9)'), findsNothing);
       expect(find.text('Салоны (2)'), findsOneWidget); // «Брови» есть у двух салонов
       await disposeTree(tester);
     });

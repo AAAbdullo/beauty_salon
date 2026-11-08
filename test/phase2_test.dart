@@ -11,7 +11,7 @@ import 'package:beauty_salons/core/utils/result.dart';
 /// заморозка, перенос кредитов (K-01), сброс сессии, график мастера.
 ///
 /// Время фиксировано: среда 11 ноября 2026, 10:00. Мок-данные считаются от этого момента:
-/// запись клиента b-001 к мастеру Sabina — 11:20 (до неё 80 минут), b-005 (Elite Barber) — завтра 08:00.
+/// запись клиента b-001 к мастеру Sabina — 11:20 (до неё 80 минут), b-005 (Mira Hair, Дилноза) — завтра 08:00.
 void main() {
   final wednesday = DateTime(2026, 11, 11, 10);
   late FixedClock clock;
@@ -130,7 +130,7 @@ void main() {
     });
 
     test('мастер из другого салона и неизвестная услуга дают пустой список', () {
-      expect(slots.availableSlots(salonId: 's-001', masterId: 'm-005', date: wednesday, durationMinutes: 45), isEmpty);
+      expect(slots.availableSlots(salonId: 's-001', masterId: 'm-003', date: wednesday, durationMinutes: 45), isEmpty);
       expect(
         slots.availableSlots(salonId: 's-001', serviceId: 'нет-такой', date: wednesday, durationMinutes: 45),
         isEmpty,
@@ -292,7 +292,7 @@ void main() {
     });
 
     test('перенос пересчитывает кредиты по k_slot: вечером доплата, днём возврат', () {
-      // b-005: Тимур, 26 кр. (база), завтра 08:00
+      // b-005: Дилноза, 26 кр. (база), завтра 08:00
       final evening = state.rescheduleBooking(bookingId: 'b-005', newDateTime: at(1, 18));
       expect(evening.valueOrNull!.credits, 32); // ceil(26 × 1.2)
       expect(state.clientCredits, 86 - 6);
@@ -315,15 +315,15 @@ void main() {
     test('перенос на занятый слот и менее чем за 2 часа отклоняется', () {
       expect(
         book(
-          salonId: 's-008',
-          salonName: 'Elite Barber & Style',
-          masterId: 'm-005',
-          masterName: 'Тимур',
-          serviceId: 'm-005-s2',
-          serviceName: 'Моделирование бороды и усов',
-          duration: 30,
-          base: 18,
-          sum: 80000,
+          salonId: 's-003',
+          salonName: 'Mira Hair',
+          masterId: 'm-003',
+          masterName: 'Дилноза',
+          serviceId: 'm-003-s3',
+          serviceName: 'Женская стрижка',
+          duration: 45,
+          base: 26,
+          sum: 110000,
           when: at(1, 12),
           method: PaymentMethods.inSalon,
         ).isSuccess,

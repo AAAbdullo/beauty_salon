@@ -490,7 +490,7 @@ void main() {
 
       network.failNext();
       await expectLater(deps.catalog.getSalons(), throwsA(isA<RepositoryException>()));
-      expect((await deps.catalog.getSalons()).length, 10);
+      expect((await deps.catalog.getSalons()).length, 9);
     });
   });
 }

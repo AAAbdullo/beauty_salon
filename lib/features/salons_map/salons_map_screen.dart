@@ -74,7 +74,7 @@ class SalonPinHelper {
 
   static IconData getIconForServices(String services) {
     final lower = services.toLowerCase();
-    if (lower.contains('стрижк') || lower.contains('укладк') || lower.contains('бород')) {
+    if (lower.contains('стрижк') || lower.contains('укладк')) {
       return Icons.content_cut;
     } else if (lower.contains('маникюр') || lower.contains('педикюр') || lower.contains('ногт')) {
       return Icons.brush;

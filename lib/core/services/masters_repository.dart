@@ -219,6 +219,13 @@ class MastersRepository {
           creditsPrice: 85,
           sumPrice: 420000,
         ),
+        MasterServiceItem(
+          id: 'm-003-s3',
+          name: 'Женская стрижка',
+          durationMinutes: 45,
+          creditsPrice: 26,
+          sumPrice: 110000,
+        ),
       ],
       reviews: [
         MasterReviewItem(
@@ -257,44 +264,6 @@ class MastersRepository {
           rating: 5.0,
           date: 'Вчера',
           comment: 'Кожа после процедуры сияет! Очень деликатный подход.',
-        ),
-      ],
-    ),
-    'm-005': const MasterProfileModel(
-      id: 'm-005',
-      name: 'Тимур Алиев',
-      salonId: 's-008',
-      salonName: 'Elite Barber & Style',
-      specialty: 'Топ-барбер',
-      rating: 4.8,
-      reviewsCount: 110,
-      experienceYears: 6,
-      avatarAsset: 'assets/images/masters/master_timur.jpg',
-      about:
-          'Классические и трендовые мужские стрижки, королевское бритье опасной бритвой, камуфляж седины и оформление бороды.',
-      portfolioImages: ['assets/images/portfolio/portfolio_hair_1.jpg'],
-      services: [
-        MasterServiceItem(
-          id: 'm-005-s1',
-          name: 'Мужская стрижка + мытье + стайлинг',
-          durationMinutes: 45,
-          creditsPrice: 26,
-          sumPrice: 110000,
-        ),
-        MasterServiceItem(
-          id: 'm-005-s2',
-          name: 'Моделирование бороды и усов',
-          durationMinutes: 30,
-          creditsPrice: 18,
-          sumPrice: 80000,
-        ),
-      ],
-      reviews: [
-        MasterReviewItem(
-          authorName: 'Сардор Б.',
-          rating: 5.0,
-          date: 'Вчера',
-          comment: 'Четкие контуры, стрижка держит форму даже через 3 недели. Отличный барбер.',
         ),
       ],
     ),

@@ -111,7 +111,7 @@ void main() {
       await tester.binding.handlePopRoute(); // с салона на главную
       await settle(tester);
       expect(find.widgetWithText(AppGradientButton, 'Записаться'), findsNothing);
-      expect(find.text('Салоны (10)'), findsOneWidget);
+      expect(find.text('Салоны (9)'), findsOneWidget);
       await disposeTree(tester);
     });
 
@@ -174,7 +174,7 @@ void main() {
       await tester.binding.handlePopRoute();
       await settle(tester);
       expect(find.text('Кредиты и Абонемент'), findsNothing);
-      expect(find.text('Салоны (10)'), findsOneWidget);
+      expect(find.text('Салоны (9)'), findsOneWidget);
       await disposeTree(tester);
     });
 
