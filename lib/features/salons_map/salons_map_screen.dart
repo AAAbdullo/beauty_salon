@@ -236,6 +236,10 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
   static const double _sheetInitialExtent = 0.30;
   final DraggableScrollableController _sheetController = DraggableScrollableController();
   bool _isNavigating = false;
+
+  /// Во время навигации камера следует за пользователем. Как только пользователь сам двинул карту
+  /// (жест), слежение выключается, пока он не нажмёт кнопку возврата в панели навигации.
+  bool _followUser = true;
   int _navStepIndex = 0;
   Timer? _navTrackingTimer;
   double _currentSpeedKmh = 0.0;
@@ -776,6 +780,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
       _userLocation = start;
       _isRealGpsActive = true;
       _isNavigating = true;
+      _followUser = true;
       _navStepIndex = startIndex;
       _currentHeading = heading;
       _currentSpeedKmh = 0.0;
@@ -862,13 +867,15 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
         return;
       }
 
-      // Камера следует за пользователем в 3D
-      unawaited(
-        _mapController?.moveCamera(
-          CameraUpdate.newCameraPosition(CameraPosition(target: point, zoom: 17.8, tilt: 55.0, azimuth: heading)),
-          animation: const MapAnimation(type: MapAnimationType.smooth, duration: 1.0),
-        ),
-      );
+      // Камера следует за пользователем в 3D, пока он сам не сдвинул карту
+      if (_followUser) {
+        unawaited(
+          _mapController?.moveCamera(
+            CameraUpdate.newCameraPosition(CameraPosition(target: point, zoom: 17.8, tilt: 55.0, azimuth: heading)),
+            animation: const MapAnimation(type: MapAnimationType.smooth, duration: 1.0),
+          ),
+        );
+      }
       _updateNextManeuver(_navStepIndex);
       unawaited(_refreshMapObjects());
 
@@ -894,7 +901,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
     setState(() => _navStepIndex = 0);
     _lastTurnAnnouncement = null;
     _updateNextManeuver(0);
-    _recenterNavigationCamera();
+    if (_followUser) _recenterNavigationCamera();
   }
 
   /// Обновление карточки следующего маневра и озвучки поворотов
@@ -946,8 +953,9 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
     }
   }
 
-  /// Центрирование камеры в 3D ракурсе позади пользователя
+  /// Центрирование камеры в 3D ракурсе позади пользователя (и возврат к слежению за ним)
   void _recenterNavigationCamera() {
+    if (!_followUser && mounted) setState(() => _followUser = true);
     _mapController?.moveCamera(
       CameraUpdate.newCameraPosition(
         CameraPosition(target: _userLocation, zoom: 17.8, tilt: 55.0, azimuth: _currentHeading),
@@ -966,6 +974,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
     final lastPoint = _userLocation;
     setState(() {
       _isNavigating = false;
+      _followUser = true;
       _currentSpeedKmh = 0.0;
     });
 
@@ -1049,16 +1058,27 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                   } catch (_) {}
                 }
 
-                // Пришли с «На карте» из карточки салона — сразу показываем этот салон
+                // Пришли с «На карте» из карточки салона — показываем этот салон, а не пользователя.
+                // Решаем по `initialSalonId`, а не по `_selectedSalon`: салоны могут ещё не загрузиться,
+                // и тогда камеру потом всё равно наведёт `_loadSalons`, когда данные придут.
                 final focus = _selectedSalon;
-                await controller.moveCamera(
-                  CameraUpdate.newCameraPosition(
-                    CameraPosition(target: focus?.point ?? _userLocation, zoom: focus != null ? 15.5 : 13.5),
-                  ),
-                );
+                final openedForSalon = widget.initialSalonId != null;
+                if (focus != null || !openedForSalon) {
+                  await controller.moveCamera(
+                    CameraUpdate.newCameraPosition(
+                      CameraPosition(target: focus?.point ?? _userLocation, zoom: focus != null ? 15.5 : 13.5),
+                    ),
+                  );
+                }
 
-                if (useLocation && focus == null) {
+                if (useLocation && !openedForSalon) {
                   _detectAndCenterRealLocation(showFeedback: false);
+                }
+              },
+              onCameraPositionChanged: (position, reason, finished) {
+                // Пользователь сам двигает карту во время навигации — перестаём тянуть камеру к нему
+                if (_isNavigating && _followUser && reason == CameraUpdateReason.gestures && mounted) {
+                  setState(() => _followUser = false);
                 }
               },
               onUserLocationAdded: (UserLocationView view) async {
@@ -1735,12 +1755,15 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                 ),
               ),
               const SizedBox(width: 8),
-              // Кнопка центрирования камеры в 3D
+              // Кнопка возврата камеры к пользователю (в 3D). Если карту двигали вручную — подсвечена
               IconButton.filledTonal(
-                style: IconButton.styleFrom(backgroundColor: AppColors.primaryTint, foregroundColor: AppColors.primary),
+                style: IconButton.styleFrom(
+                  backgroundColor: _followUser ? AppColors.primaryTint : AppColors.primary,
+                  foregroundColor: _followUser ? AppColors.primary : Colors.white,
+                ),
                 onPressed: _recenterNavigationCamera,
-                icon: const Icon(Icons.navigation_outlined, size: 22),
-                tooltip: 'По центру в 3D',
+                icon: Icon(_followUser ? Icons.navigation_outlined : Icons.my_location, size: 22),
+                tooltip: _followUser ? 'По центру в 3D' : 'Вернуться к моему положению',
               ),
             ],
           ),
