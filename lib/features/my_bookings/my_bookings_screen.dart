@@ -4,6 +4,8 @@ import '../../core/services/app_state_service.dart';
 import '../../core/data/app_scope.dart';
 import '../../core/data/repository_exception.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/models/booking_rules.dart';
+import '../../core/utils/formatters.dart';
 import '../../core/utils/result.dart';
 import '../../core/utils/uuid.dart';
 import '../../core/widgets/badges/app_status_badge.dart';
@@ -240,6 +242,36 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
     );
   }
 
+  /// До какого момента можно отменить запись: за 2 часа до начала
+  String _cancelDeadlineLabel(BookingItem b) {
+    final deadline = b.startsAt.subtract(const Duration(minutes: BookingRules.freeCancelMinutes));
+    return '${Formatters.dayLabel(deadline)}, ${Formatters.time(deadline)}';
+  }
+
+  /// Пометка над списком активных записей: правило отмены и переноса
+  Widget _buildCancelRuleNote() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(color: AppColors.primaryTint, borderRadius: BorderRadius.circular(14)),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.info_outline, size: 18, color: AppColors.primary),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Отменить или перенести запись можно не позднее чем за 2 часа до её начала.',
+                style: TextStyle(fontSize: 12, height: 1.35, fontWeight: FontWeight.w600, color: AppColors.ink),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildBookingsList(List<BookingItem> items, {bool isActiveTab = false}) {
     if (items.isEmpty) {
       return Center(
@@ -268,8 +300,11 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
 
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-      itemCount: items.length,
-      itemBuilder: (context, index) {
+      itemCount: items.length + (isActiveTab ? 1 : 0),
+      itemBuilder: (context, rawIndex) {
+        // В «Активных» первой строкой — пометка про срок отмены
+        if (isActiveTab && rawIndex == 0) return _buildCancelRuleNote();
+        final index = isActiveTab ? rawIndex - 1 : rawIndex;
         final b = items[index];
         return Padding(
           padding: const EdgeInsets.only(bottom: 12),
@@ -387,7 +422,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
                         color: b.canCancel ? AppColors.muted : AppColors.primary,
                       ),
                       label: Text(
-                        b.canCancel ? 'Отменить запись (доступно > 2 ч)' : 'Отмена заблокирована (< 2 ч до визита)',
+                        b.canCancel ? 'Отменить запись (до ${_cancelDeadlineLabel(b)})' : 'Отмена заблокирована (< 2 ч до визита)',
                         style: TextStyle(
                           color: b.canCancel ? AppColors.muted : AppColors.primaryText,
                           fontSize: 11,

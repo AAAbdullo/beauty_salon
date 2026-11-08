@@ -299,7 +299,7 @@ class _EditProfileFormState extends State<_EditProfileForm> {
       text: UzPhoneInputFormatter.format(phoneDigits.startsWith('998') ? phoneDigits.substring(3) : phoneDigits),
     );
     _birthController = TextEditingController(text: _appState.clientBirthDate);
-    _gender = _appState.clientGender;
+    _gender = 'Женский'; // пока приложение только для женщин
   }
 
   @override
@@ -433,7 +433,7 @@ class _EditProfileFormState extends State<_EditProfileForm> {
           const SizedBox(height: 14),
           const _FieldLabel('Пол'),
           Row(
-            children: ['Женский', 'Мужской'].map((g) {
+            children: ['Женский'].map((g) {
               final selected = _gender == g;
               return Padding(
                 padding: const EdgeInsets.only(right: 8),

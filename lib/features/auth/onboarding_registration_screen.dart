@@ -584,17 +584,8 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
         // Пол
         Text('Пол', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink)),
         const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: _buildGenderChoice('Женский', Icons.female),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildGenderChoice('Мужской', Icons.male),
-            ),
-          ],
-        ),
+        // Пока приложение только для женщин: единственный вариант
+        _buildGenderChoice('Женский', Icons.female),
 
         if (_profileError != null) ...[
           const SizedBox(height: 12),
