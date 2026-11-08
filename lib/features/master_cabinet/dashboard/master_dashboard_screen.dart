@@ -20,11 +20,15 @@ class MasterDashboardScreen extends StatefulWidget {
   final VoidCallback onOpenEarnings;
   final VoidCallback onScanQr;
 
+  /// Открыть профиль клиента (из уведомлений и списка клиентов месяца)
+  final ValueChanged<String>? onOpenClient;
+
   const MasterDashboardScreen({
     super.key,
     required this.onOpenSchedule,
     required this.onOpenEarnings,
     required this.onScanQr,
+    this.onOpenClient,
   });
 
   @override
@@ -36,6 +40,9 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
   MasterDashboardData? _data;
   Object? _error;
   bool _isLoading = true;
+
+  // Секция «Записи»: к ней прокручивает нажатие на плитки «Записи сегодня / завтра»
+  final _appointmentsKey = GlobalKey();
 
   /// ТЗ, раздел 6: мастер видит брони на сегодня и завтра.
   bool _showTomorrow = false;
@@ -210,7 +217,7 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
                       const SizedBox(height: 20),
                       _buildQuickActions(),
                       const SizedBox(height: 24),
-                      _buildTodayAppointments(),
+                      KeyedSubtree(key: _appointmentsKey, child: _buildTodayAppointments()),
                     ],
                   ),
                 ),
@@ -273,8 +280,8 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
                   border: Border.all(color: AppColors.primary, width: 2),
                 ),
                 child: ClipOval(
-                  child: Image.asset(
-                    appState.masterAvatar,
+                  child: Image(
+                    image: avatarProvider(appState.masterAvatar),
                     width: 72,
                     height: 72,
                     fit: BoxFit.cover,
@@ -341,11 +348,76 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
     );
   }
 
+  /// Нажатие на «Записи сегодня / завтра»: переключает день и прокручивает к списку записей
+  void _showAppointments({required bool tomorrow}) {
+    setState(() => _showTomorrow = tomorrow);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final target = _appointmentsKey.currentContext;
+      if (target == null || !mounted) return;
+      Scrollable.ensureVisible(
+        target,
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOut,
+        alignment: 0.05,
+      );
+    });
+  }
+
+  /// Клиенты текущего месяца: нажатие открывает профиль клиента
+  void _openMonthClients() {
+    final clients = _data?.monthClients ?? const <MasterMonthClient>[];
+    showAppSheet<void>(
+      context: context,
+      title: 'Клиенты в этом месяце',
+      subtitle: clients.isEmpty ? null : 'Нажмите на клиента, чтобы открыть его профиль',
+      builder: (ctx) => clients.isEmpty
+          ? Padding(
+              padding: const EdgeInsets.all(20),
+              child: Text('В этом месяце ещё нет подтверждённых визитов', style: TextStyle(color: AppColors.muted)),
+            )
+          : ListView(
+              shrinkWrap: true,
+              padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
+              children: [
+                for (final c in clients)
+                  ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: AppColors.primaryTint,
+                      child: const Icon(Icons.person, color: AppColors.primary),
+                    ),
+                    title: Text(c.name, style: const TextStyle(fontWeight: FontWeight.w700)),
+                    subtitle: Text(Formatters.plural(c.visits, 'визит', 'визита', 'визитов')),
+                    trailing: Icon(Icons.chevron_right, color: AppColors.muted),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      widget.onOpenClient?.call(c.clientId);
+                    },
+                  ),
+              ],
+            ),
+    );
+  }
+
   Widget _buildMetricsRow() {
     final metrics = [
-      {'val': '${_activeCount(tomorrow: false)}', 'label': 'Записи\nсегодня', 'icon': Icons.calendar_today_outlined},
-      {'val': '${_activeCount(tomorrow: true)}', 'label': 'Записи\nзавтра', 'icon': Icons.event_outlined},
-      {'val': '${_data?.visitsThisMonth ?? 0}', 'label': 'Клиенты\nв этом месяце', 'icon': Icons.people_outline},
+      {
+        'val': '${_activeCount(tomorrow: false)}',
+        'label': 'Записи\nсегодня',
+        'icon': Icons.calendar_today_outlined,
+        'action': () => _showAppointments(tomorrow: false),
+      },
+      {
+        'val': '${_activeCount(tomorrow: true)}',
+        'label': 'Записи\nзавтра',
+        'icon': Icons.event_outlined,
+        'action': () => _showAppointments(tomorrow: true),
+      },
+      {
+        'val': '${_data?.monthClients.length ?? 0}',
+        'label': 'Клиенты\nв этом месяце',
+        'icon': Icons.people_outline,
+        'action': _openMonthClients,
+      },
       {
         'val': Formatters.formatSum(_data?.revenueToday ?? 0).replaceAll(' сум', ''),
         'label': 'Выручка\nсегодня (сум)',
@@ -682,6 +754,13 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
                   title: Text(n.title, style: const TextStyle(fontWeight: FontWeight.w700)),
                   subtitle: Text(n.body),
                   trailing: Text(n.timeAgo, style: TextStyle(fontSize: 11, color: AppColors.muted)),
+                  // Нажатие открывает профиль клиента, который записался (или отменил запись)
+                  onTap: n.clientId == null || widget.onOpenClient == null
+                      ? null
+                      : () {
+                          Navigator.pop(ctx);
+                          widget.onOpenClient!(n.clientId!);
+                        },
                 ),
             ],
           ),

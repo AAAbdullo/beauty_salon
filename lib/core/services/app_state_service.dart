@@ -34,6 +34,9 @@ class VisitQrResult {
 /// правила: кому и когда можно записаться, отменить, перенести, оставить отзыв, купить пакет.
 /// Каждая операция проверяет правила сама (UI-проверки — только подсказка пользователю)
 /// и возвращает [Result] с причиной отказа.
+/// Стандартное фото мастера (Sabina Nur)
+const seedMasterAvatar = 'assets/images/masters/master_sabina.jpg';
+
 class AppStateService extends ChangeNotifier {
   static final AppStateService _instance = AppStateService._internal();
   factory AppStateService() => _instance;
@@ -128,7 +131,7 @@ class AppStateService extends ChangeNotifier {
     masterName = 'Sabina Nur';
     masterSalonId = 's-001';
     masterSalon = 'Nur Beauty';
-    masterAvatar = 'assets/images/masters/master_sabina.jpg';
+    masterAvatar = seedMasterAvatar;
     salonCommissionPercent = 10.0;
 
     // [BACKEND NOTE]: GET /api/v1/notifications, PATCH /api/v1/notifications/:id/read
@@ -272,6 +275,14 @@ class AppStateService extends ChangeNotifier {
 
   /// Вернуть стандартный аватар (фото удалено)
   void resetClientAvatar() => updateClientAvatar(seedClientAvatar);
+
+  /// Фото мастера в его кабинете: путь к файлу или встроенный ресурс
+  void updateMasterAvatar(String path) {
+    masterAvatar = path;
+    notifyListeners();
+  }
+
+  void resetMasterAvatar() => updateMasterAvatar(seedMasterAvatar);
 
   void updateClientProfile({
     required String name,

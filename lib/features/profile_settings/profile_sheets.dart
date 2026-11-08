@@ -32,8 +32,9 @@ class ProfileSheets {
   }
 
   /// Смена фото профиля: галерея, камера или удаление текущего фото
-  static void changePhoto(BuildContext context) {
+  static void changePhoto(BuildContext context, {bool master = false}) {
     final state = AppScope.read(context).appState;
+    final current = master ? state.masterAvatar : state.clientAvatar;
     showAppSheet<void>(
       context: context,
       title: 'Фото профиля',
@@ -47,7 +48,7 @@ class ProfileSheets {
               title: const Text('Выбрать из галереи'),
               onTap: () {
                 Navigator.pop(ctx);
-                _pickPhoto(context, ImageSource.gallery);
+                _pickPhoto(context, ImageSource.gallery, master: master);
               },
             ),
             ListTile(
@@ -55,16 +56,16 @@ class ProfileSheets {
               title: const Text('Сделать фото'),
               onTap: () {
                 Navigator.pop(ctx);
-                _pickPhoto(context, ImageSource.camera);
+                _pickPhoto(context, ImageSource.camera, master: master);
               },
             ),
-            if (isCustomAvatar(state.clientAvatar))
+            if (isCustomAvatar(current))
               ListTile(
                 leading: Icon(Icons.delete_outline, color: AppColors.primaryText),
                 title: const Text('Удалить фото'),
                 onTap: () {
                   Navigator.pop(ctx);
-                  _removePhoto(context);
+                  _removePhoto(context, master: master);
                 },
               ),
           ],
@@ -73,13 +74,14 @@ class ProfileSheets {
     );
   }
 
-  static Future<void> _pickPhoto(BuildContext context, ImageSource source) async {
+  static Future<void> _pickPhoto(BuildContext context, ImageSource source, {required bool master}) async {
     final state = AppScope.read(context).appState;
+    final owner = master ? PhotoOwner.master : PhotoOwner.client;
     try {
       final picked = await ImagePicker().pickImage(source: source, maxWidth: 1024, maxHeight: 1024, imageQuality: 85);
       if (picked == null) return; // пользователь закрыл выбор
-      final path = await ProfilePhotoStorage.save(picked.path);
-      state.updateClientAvatar(path);
+      final path = await ProfilePhotoStorage.save(picked.path, owner: owner);
+      master ? state.updateMasterAvatar(path) : state.updateClientAvatar(path);
       if (context.mounted) showAppSnack(context, 'Фото профиля обновлено');
     } catch (_) {
       if (context.mounted) {
@@ -88,10 +90,10 @@ class ProfileSheets {
     }
   }
 
-  static Future<void> _removePhoto(BuildContext context) async {
+  static Future<void> _removePhoto(BuildContext context, {required bool master}) async {
     final state = AppScope.read(context).appState;
-    await ProfilePhotoStorage.clear();
-    state.resetClientAvatar();
+    await ProfilePhotoStorage.clear(owner: master ? PhotoOwner.master : PhotoOwner.client);
+    master ? state.resetMasterAvatar() : state.resetClientAvatar();
     if (context.mounted) showAppSnack(context, 'Фото удалено');
   }
 

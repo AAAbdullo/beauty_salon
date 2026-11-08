@@ -21,6 +21,7 @@ import 'features/profile_settings/client_profile_screen.dart';
 import 'features/profile_settings/settings_screen.dart';
 import 'features/favorites/favorites_screen.dart';
 import 'features/notifications/notifications_screen.dart';
+import 'features/master_cabinet/clients/master_client_profile_screen.dart';
 import 'features/master_cabinet/dashboard/master_dashboard_screen.dart';
 import 'features/master_cabinet/schedule/master_schedule_screen.dart';
 import 'features/master_cabinet/qr_scanner/master_qr_scanner_screen.dart';
@@ -29,6 +30,7 @@ import 'features/master_cabinet/profile/master_account_screen.dart';
 import 'dart:async';
 import 'core/data/app_dependencies.dart';
 import 'core/data/secure_token_storage.dart';
+import 'core/widgets/gestures/edge_swipe_back.dart';
 import 'core/services/profile_photo_storage.dart';
 import 'core/data/app_scope.dart';
 import 'core/data/repositories/auth_repository.dart';
@@ -43,8 +45,11 @@ import 'core/widgets/sheets/app_sheet.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await AppPreferences.restoreAndWatch(); // язык и тема с прошлого запуска
-  final savedPhoto = await ProfilePhotoStorage.restore(); // фото профиля с прошлого запуска
+  // Фото профиля клиента и мастера с прошлого запуска
+  final savedPhoto = await ProfilePhotoStorage.restore();
   if (savedPhoto != null) AppStateService().updateClientAvatar(savedPhoto);
+  final savedMasterPhoto = await ProfilePhotoStorage.restore(owner: PhotoOwner.master);
+  if (savedMasterPhoto != null) AppStateService().updateMasterAvatar(savedMasterPhoto);
   runApp(GozallikApp(dependencies: AppDependencies.mock(tokenStorage: SecureTokenStorage())));
 }
 
@@ -200,6 +205,7 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
 
   // Вкладка, в которую вернёт «Назад» (4 — профиль, если вкладку открыли из пункта профиля). `null` — обычный переход
   int? _tabReturnTo;
+  int? _masterTabReturnTo; // то же для кабинета мастера
 
   // Вкладка «Мои записи», которую открыть (0 — активные, 1 — прошедшие)
   int _bookingsInitialTab = 0;
@@ -227,7 +233,7 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
     if (_pages.isNotEmpty) {
       _pop();
     } else if (_isMasterMode) {
-      setState(() => _masterTabIndex = 0);
+      _goToMasterTab(_masterTabReturnTo ?? 0);
     } else {
       _goToClientTab(_tabReturnTo ?? 0);
     }
@@ -250,6 +256,9 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
 
   void _openMaster(String masterId) => _push(_Page(_PageKind.master, masterId: masterId));
 
+  /// Профиль клиента глазами мастера (из уведомления о записи)
+  void _openClient(String clientId) => _push(_Page(_PageKind.clientProfile, clientId: clientId));
+
   void _goToClientTab(int index, {int? bookingsTab, int? returnTo}) => setState(() {
     _clearPages();
     _tabReturnTo = returnTo;
@@ -264,8 +273,9 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
     if (bookingsTab != null) _bookingsInitialTab = bookingsTab;
   });
 
-  void _goToMasterTab(int index) => setState(() {
+  void _goToMasterTab(int index, {int? returnTo}) => setState(() {
     _masterTabIndex = index;
+    _masterTabReturnTo = returnTo;
     _masterTabsBuilt.add(index);
   });
 
@@ -382,7 +392,7 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
   void _logout() {
     unawaited(_deps.auth.logout());
     _deps.appState.resetSession();
-    unawaited(ProfilePhotoStorage.clear()); // фото принадлежит вышедшему пользователю
+    unawaited(ProfilePhotoStorage.clearAll()); // фото принадлежат вышедшему пользователю
     setState(() {
       _clearPages(); // экраны записи при этом освобождают удержания слотов
       _isAuthenticated = false;
@@ -398,6 +408,7 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
         ..add(0);
       _mapFocusSalonId = null;
       _tabReturnTo = null;
+      _masterTabReturnTo = null;
       _bookingsInitialTab = 0;
     });
   }
@@ -456,13 +467,18 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _handleBack();
       },
-      child: Scaffold(
-        backgroundColor: FloatingBottomBar.backgroundColor,
-        body: _buildBody(),
-        // Бар отображается только в основных вкладках
-        bottomNavigationBar: _pages.isEmpty
-            ? (_isMasterMode ? _buildMasterBottomBar() : _buildClientBottomBar())
-            : null,
+      // Свайп от левого края (iPhone) = «Назад», когда есть куда вернуться
+      child: EdgeSwipeBack(
+        enabled: !_atRoot,
+        onBack: _handleBack,
+        child: Scaffold(
+          backgroundColor: FloatingBottomBar.backgroundColor,
+          body: _buildBody(),
+          // Бар отображается только в основных вкладках
+          bottomNavigationBar: _pages.isEmpty
+              ? (_isMasterMode ? _buildMasterBottomBar() : _buildClientBottomBar())
+              : null,
+        ),
       ),
     );
   }
@@ -507,6 +523,8 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
               _startBooking(salonId: master.salonId, masterId: master.id, service: service),
           onOpenSalon: _openSalon,
         );
+      case _PageKind.clientProfile:
+        return MasterClientProfileScreen(clientId: page.clientId!, onBack: _pop);
       case _PageKind.booking:
         return BookingScreen(
           salonId: page.salonId!,
@@ -615,18 +633,20 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
         onOpenSchedule: () => _goToMasterTab(1),
         onOpenEarnings: () => _goToMasterTab(3),
         onScanQr: () => _goToMasterTab(2),
+        onOpenClient: _openClient,
       ),
       // График остаётся живым: несохранённые правки не пропадают при переключении вкладок
-      () => MasterScheduleScreen(onBack: () => _goToMasterTab(0)),
+      () => MasterScheduleScreen(onBack: () => _goToMasterTab(_masterTabReturnTo ?? 0)),
       // Камера не должна работать в скрытой вкладке — сканер строится только пока открыт
       () => _masterTabIndex == 2
-          ? MasterQrScannerScreen(onBack: () => _goToMasterTab(0))
+          ? MasterQrScannerScreen(onBack: () => _goToMasterTab(_masterTabReturnTo ?? 0))
           : const SizedBox.shrink(),
-      () => MasterEarningsScreen(onBack: () => _goToMasterTab(0)),
+      () => MasterEarningsScreen(onBack: () => _goToMasterTab(_masterTabReturnTo ?? 0)),
       () => MasterAccountScreen(
-        onOpenSchedule: () => _goToMasterTab(1),
-        onOpenEarnings: () => _goToMasterTab(3),
-        onOpenScanner: () => _goToMasterTab(2),
+        // Пункты профиля открывают вкладки с возвратом в профиль (4)
+        onOpenSchedule: () => _goToMasterTab(1, returnTo: 4),
+        onOpenEarnings: () => _goToMasterTab(3, returnTo: 4),
+        onOpenScanner: () => _goToMasterTab(2, returnTo: 4),
         onOpenSettings: () => _push(_Page(_PageKind.settings)),
         onLogout: _logout,
       ),
@@ -666,15 +686,18 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
   }
 }
 
-enum _PageKind { salon, master, booking, payment, favorites, notifications, settings }
+enum _PageKind { salon, master, booking, payment, favorites, notifications, settings, clientProfile }
 
 /// Страница внутреннего стека со своими параметрами. Ключ уникален: состояние страницы живёт, пока она в стеке.
 class _Page {
-  _Page(this.kind, {this.salonId, this.masterId, this.service, this.draft}) : key = UniqueKey();
+  _Page(this.kind, {this.salonId, this.masterId, this.clientId, this.service, this.draft}) : key = UniqueKey();
 
   final _PageKind kind;
   final String? salonId;
   final String? masterId;
+
+  /// Клиент, чей профиль открыт у мастера
+  final String? clientId;
   final MasterServiceItem? service;
   final BookingDraft? draft;
   final Key key;

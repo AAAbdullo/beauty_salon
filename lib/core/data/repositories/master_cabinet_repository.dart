@@ -1,3 +1,4 @@
+import '../../models/booking_item.dart';
 import '../../services/master_cabinet_store.dart';
 
 /// Данные главного экрана мастера одним ответом
@@ -8,6 +9,9 @@ class MasterDashboardData {
 
   /// Выполненных визитов за текущий месяц
   final int visitsThisMonth;
+
+  /// Клиенты текущего месяца (с подтверждёнными визитами)
+  final List<MasterMonthClient> monthClients;
   final int revenueToday;
 
   const MasterDashboardData({
@@ -15,6 +19,7 @@ class MasterDashboardData {
     required this.tomorrow,
     required this.notifications,
     required this.visitsThisMonth,
+    required this.monthClients,
     required this.revenueToday,
   });
 }
@@ -60,6 +65,49 @@ class MasterWeek {
   Set<int> get workingWeekdays => days.entries.where((e) => e.value.isWorking).map((e) => e.key).toSet();
 }
 
+/// Одна запись клиента к этому мастеру (для профиля клиента)
+class MasterClientBooking {
+  final String bookingId;
+  final String serviceName;
+  final DateTime startsAt;
+  final BookingStatus status;
+  final String priceLabel;
+
+  const MasterClientBooking({
+    required this.bookingId,
+    required this.serviceName,
+    required this.startsAt,
+    required this.status,
+    required this.priceLabel,
+  });
+}
+
+/// Профиль клиента глазами мастера: кто это и как он ходит к этому мастеру
+class MasterClientProfile {
+  final String clientId;
+  final String name;
+
+  /// Фото клиента (ресурс приложения или файл); `null` — показывается значок
+  final String? avatar;
+
+  /// Предстоящие записи к этому мастеру (по возрастанию времени)
+  final List<MasterClientBooking> upcoming;
+
+  /// Прошедшие и отменённые записи (свежие сверху)
+  final List<MasterClientBooking> history;
+
+  const MasterClientProfile({
+    required this.clientId,
+    required this.name,
+    required this.avatar,
+    required this.upcoming,
+    required this.history,
+  });
+
+  int get completedVisits => history.where((b) => b.status == BookingStatus.completed).length;
+  int get cancelledCount => history.where((b) => b.status == BookingStatus.cancelled).length;
+}
+
 /// Кабинет мастера (раздел «Usta» в ТЗ). Брони, визиты и доход — проекции единого хранилища записей.
 /// Все методы асинхронные: с бэкендом это сетевые запросы, экраны проходят состояния loading / error.
 /// [BACKEND NOTE]:
@@ -77,6 +125,10 @@ abstract interface class MasterCabinetRepository {
   Future<MasterAccountStats> accountStats();
 
   Future<MasterWeek> week();
+
+  /// Профиль клиента с его записями к этому мастеру; `null`, если такого клиента у мастера нет
+  /// [BACKEND NOTE]: GET /api/v1/masters/me/clients/:id
+  Future<MasterClientProfile?> clientProfile(String clientId);
 
   Future<void> saveDay(int weekday, DaySchedule schedule);
 

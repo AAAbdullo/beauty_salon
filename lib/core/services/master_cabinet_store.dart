@@ -147,17 +147,30 @@ class MasterAppointment {
   };
 }
 
+/// Клиент мастера в месяце: сколько визитов состоялось
+class MasterMonthClient {
+  final String clientId;
+  final String name;
+  final int visits;
+
+  const MasterMonthClient(this.clientId, this.name, this.visits);
+}
+
 class MasterNotification {
   final String title;
   final String body;
   final String timeAgo;
   final bool isCancellation;
 
+  /// Клиент, о записи или отмене которого уведомление: по нажатию открывается его профиль
+  final String? clientId;
+
   const MasterNotification({
     required this.title,
     required this.body,
     required this.timeAgo,
     this.isCancellation = false,
+    this.clientId,
   });
 }
 
@@ -244,6 +257,29 @@ class MasterCabinetStore {
 
   static bool _sameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
 
+  /// Клиенты, чьи визиты к мастеру подтверждены в месяце ([monthOffset]: 0 — текущий). Больше визитов — выше.
+  List<MasterMonthClient> clientsForMonth(int monthOffset) {
+    final now = AppClock.now();
+    final month = DateTime(now.year, now.month - monthOffset);
+    final byClient = <String, MasterMonthClient>{};
+    for (final b in BookingStore().forMaster(_ownMasterId)) {
+      if (b.status != BookingStatus.completed || b.startsAt.year != month.year || b.startsAt.month != month.month) {
+        continue;
+      }
+      final previous = byClient[b.clientId];
+      byClient[b.clientId] = MasterMonthClient(b.clientId, b.clientName, (previous?.visits ?? 0) + 1);
+    }
+    return byClient.values.toList()
+      ..sort((a, b) {
+        final byVisits = b.visits.compareTo(a.visits);
+        return byVisits != 0 ? byVisits : a.name.compareTo(b.name);
+      });
+  }
+
+  /// Все записи клиента к этому мастеру
+  List<BookingItem> bookingsOfClient(String clientId) =>
+      BookingStore().forMaster(_ownMasterId).where((b) => b.clientId == clientId).toList();
+
   /// Брони мастера на дату (все статусы), по времени
   List<MasterAppointment> appointmentsForDate(DateTime date) {
     final list = BookingStore().forMaster(_ownMasterId).where((b) => _sameDay(b.startsAt, date)).toList()
@@ -288,17 +324,20 @@ class MasterCabinetStore {
       title: 'Новая запись',
       body: 'Дилноза Юсупова · Ламинирование ресниц с ботоксом · завтра 09:00',
       timeAgo: '5 мин назад',
+      clientId: 'c-105',
     ),
     MasterNotification(
       title: 'Отмена записи',
       body: 'Нилуфар Рахимова отменила запись на сегодня 16:00',
       timeAgo: '40 мин назад',
       isCancellation: true,
+      clientId: 'c-104',
     ),
     MasterNotification(
       title: 'Новая запись',
       body: 'Камила Ахмедова · Архитектура бровей + окрашивание · завтра 11:00',
       timeAgo: '2 ч назад',
+      clientId: 'c-106',
     ),
   ];
 

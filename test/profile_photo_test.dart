@@ -49,6 +49,19 @@ void main() {
     expect(state.clientAvatar, seedClientAvatar);
   });
 
+  test('фото мастера хранится отдельно от фото клиента и сбрасывается при выходе', () {
+    state.updateMasterAvatar('/tmp/master.jpg');
+    expect(state.masterAvatar, '/tmp/master.jpg');
+    expect(state.clientAvatar, seedClientAvatar); // фото клиента не затронуто
+
+    state.resetMasterAvatar();
+    expect(state.masterAvatar, seedMasterAvatar);
+
+    state.updateMasterAvatar('/tmp/master.jpg');
+    state.resetSession();
+    expect(state.masterAvatar, seedMasterAvatar);
+  });
+
   testWidgets('форма профиля: фото можно сменить, «Удалить» есть только у своего фото', (tester) async {
     useBigPhone(tester);
     await tester.pumpWidget(

@@ -6,6 +6,7 @@ import '../../../core/data/repositories/master_cabinet_repository.dart';
 import '../../../core/data/repository_exception.dart';
 import '../../../core/services/masters_repository.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/avatars/avatar_image.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/cards/app_card.dart';
 import '../../profile_settings/profile_sheets.dart';
@@ -101,19 +102,32 @@ class _MasterAccountScreenState extends State<MasterAccountScreen> {
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      Container(
-                        width: 74,
-                        height: 74,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: AppColors.primary, width: 2),
-                        ),
-                        child: ClipOval(
-                          child: Image.asset(
-                            appState.masterAvatar,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) => const Icon(Icons.person, size: 44, color: AppColors.primary),
-                          ),
+                      // Нажатие на фото — смена фото профиля (галерея, камера, удаление)
+                      GestureDetector(
+                        onTap: () => ProfileSheets.changePhoto(context, master: true),
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            Container(
+                              width: 74,
+                              height: 74,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(color: AppColors.primary, width: 2),
+                              ),
+                              child: ClipOval(
+                                child: Image(
+                                  image: avatarProvider(appState.masterAvatar),
+                                  width: 74,
+                                  height: 74,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, _, _) =>
+                                      const Icon(Icons.person, size: 44, color: AppColors.primary),
+                                ),
+                              ),
+                            ),
+                            const Positioned(right: -2, bottom: -2, child: PhotoEditBadge()),
+                          ],
                         ),
                       ),
                       const SizedBox(width: 14),
