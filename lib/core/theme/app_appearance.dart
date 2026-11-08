@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'app_theme.dart';
 
-/// Выбранный пользователем режим оформления (хранится в памяти; после подключения бэкенда/хранилища — сохранять).
+/// Выбранный пользователем режим оформления. Между запусками сохраняется в SharedPreferences (см. `AppPreferences`).
 class AppAppearance extends ChangeNotifier {
   AppAppearance._();
   static final AppAppearance instance = AppAppearance._();

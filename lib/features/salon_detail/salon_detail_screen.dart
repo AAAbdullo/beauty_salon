@@ -756,7 +756,7 @@ class _SalonDetailViewState extends State<_SalonDetailView> with SingleTickerPro
                 iconSize: 22,
                 padding: const EdgeInsets.all(13),
                 icon: const Icon(Icons.phone, color: AppColors.primary),
-                tooltip: 'Связаться с салоном',
+                tooltip: tr('Связаться с салоном'),
                 onPressed: _showContacts,
               ),
             ),

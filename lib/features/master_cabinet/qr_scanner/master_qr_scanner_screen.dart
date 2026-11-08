@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart' hide Text;
+import '../../../core/l10n/app_locale.dart';
 import '../../../core/l10n/app_text.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../../core/utils/clock.dart';
@@ -164,7 +165,7 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
               final isOn = state.torchState == TorchState.on;
               return IconButton(
                 icon: Icon(isOn ? Icons.flash_on : Icons.flash_off, color: isOn ? AppColors.gold : AppColors.ink),
-                tooltip: 'Фонарик',
+                tooltip: tr('Фонарик'),
                 onPressed: () async {
                   try {
                     await _scannerController.toggleTorch();
@@ -177,7 +178,7 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.flip_camera_ios, color: AppColors.primary),
-            tooltip: 'Сменить камеру',
+            tooltip: tr('Сменить камеру'),
             onPressed: () async {
               try {
                 await _scannerController.switchCamera();

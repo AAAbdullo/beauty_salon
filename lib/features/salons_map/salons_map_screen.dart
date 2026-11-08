@@ -1685,7 +1685,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
               ),
               IconButton(
                 icon: const Icon(Icons.close, color: Colors.white70),
-                tooltip: 'Завершить маршрут',
+                tooltip: tr('Завершить маршрут'),
                 onPressed: () => _stopNavigationMode(isCompleted: false),
               ),
             ],
@@ -1788,7 +1788,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                 ),
                 onPressed: _recenterNavigationCamera,
                 icon: Icon(_followUser ? Icons.navigation_outlined : Icons.my_location, size: 22),
-                tooltip: _followUser ? 'По центру в 3D' : 'Вернуться к моему положению',
+                tooltip: tr(_followUser ? 'По центру в 3D' : 'Вернуться к моему положению'),
               ),
             ],
           ),

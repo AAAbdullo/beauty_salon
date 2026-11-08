@@ -1,3 +1,4 @@
+import '../../core/l10n/app_locale.dart';
 import 'package:flutter/material.dart' hide Text;
 import '../../core/l10n/app_text.dart';
 
@@ -62,7 +63,7 @@ class _PhotoViewerState extends State<PhotoViewer> {
                 children: [
                   IconButton(
                     icon: const Icon(Icons.close, color: Colors.white),
-                    tooltip: 'Закрыть',
+                    tooltip: tr('Закрыть'),
                     onPressed: () => Navigator.of(context).pop(),
                   ),
                   const Spacer(),

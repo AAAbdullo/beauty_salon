@@ -733,6 +733,7 @@ const Map<String, String> uzExact = {
   'Не удалось получить фото. Проверьте доступ к камере и фото в настройках телефона.': 'Rasmni olib bo\'lmadi. Telefon sozlamalarida kamera va rasmlarga ruxsatni tekshiring.',
   'Отменить или перенести запись можно не позднее чем за 2 часа до её начала.': 'Yozuvni bekor qilish yoki ko\'chirish boshlanishiga kamida 2 soat qolganda mumkin.',
   'Сессия истекла. Войдите снова.': 'Seans tugadi. Qaytadan kiring.',
+  'Вернуться к моему положению': 'Joylashuvimga qaytish',
 };
 
 const Map<String, String> uzTemplates = {
@@ -1609,6 +1610,7 @@ const Map<String, String> uzCyrlExact = {
   'Не удалось получить фото. Проверьте доступ к камере и фото в настройках телефона.': 'Расмни олиб бўлмади. Телефон созламаларида камера ва расмларга рухсатни текширинг.',
   'Отменить или перенести запись можно не позднее чем за 2 часа до её начала.': 'Ёзувни бекор қилиш ёки кўчириш бошланишига камида 2 соат қолганда мумкин.',
   'Сессия истекла. Войдите снова.': 'Сеанс тугади. Қайтадан киринг.',
+  'Вернуться к моему положению': 'Жойлашувимга қайтиш',
 };
 
 const Map<String, String> uzCyrlTemplates = {
