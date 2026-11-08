@@ -14,16 +14,16 @@ class AppColors {
   static const primaryBright = Color(0xFFED1785);
   static const primaryDeep = Color(0xFFC5238A);
   static Color get primaryText => _p(const Color(0xFFC61A70), const Color(0xFFFF5CB3));
-  static Color get primaryTint => _p(const Color(0xFFFCEAF4), darkPrimaryTint);
+  static Color get primaryTint => _p(lightPrimaryTint, darkPrimaryTint);
 
   // Поверхности и текст
-  static Color get background => _p(const Color(0xFFFBF6FA), darkBackground);
-  static Color get surface => _p(const Color(0xFFFFFFFF), darkSurface);
-  static Color get ink => _p(const Color(0xFF0C0C10), darkInk);
-  static Color get muted => _p(const Color(0xFF8F8E96), darkMuted);
+  static Color get background => _p(lightBackground, darkBackground);
+  static Color get surface => _p(lightSurface, darkSurface);
+  static Color get ink => _p(lightInk, darkInk);
+  static Color get muted => _p(lightMuted, darkMuted);
 
   /// Разделители и контуры карточек
-  static Color get line => _p(const Color(0xFFF3DCE8), darkLine);
+  static Color get line => _p(lightLine, darkLine);
 
   /// Нейтральные элементы: «ручка» шторки, неактивные точки
   static Color get handle => _p(const Color(0xFFE5DCE2), const Color(0xFF4A4057));
@@ -47,6 +47,15 @@ class AppColors {
     final hsl = HSLColor.fromColor(light);
     return hsl.withLightness(hsl.lightness < 0.72 ? 0.72 : hsl.lightness).toColor();
   }
+
+  // Светлая палитра. Это константы, а не геттеры: `lightTheme` собирается один раз и не должен зависеть от
+  // того, в какой теме запущено приложение (иначе после старта в тёмной теме «светлая» получала тёмные цвета).
+  static const lightBackground = Color(0xFFFBF6FA);
+  static const lightSurface = Color(0xFFFFFFFF);
+  static const lightInk = Color(0xFF0C0C10);
+  static const lightMuted = Color(0xFF8F8E96);
+  static const lightPrimaryTint = Color(0xFFFCEAF4);
+  static const lightLine = Color(0xFFF3DCE8);
 
   // Тёмная тема (предложено, не измерено)
   static const darkBackground = Color(0xFF14101A);
@@ -227,12 +236,12 @@ ThemeData _build({
 
 final ThemeData lightTheme = _build(
   brightness: Brightness.light,
-  background: AppColors.background,
-  surface: AppColors.surface,
-  ink: AppColors.ink,
-  muted: AppColors.muted,
-  tint: AppColors.primaryTint,
-  line: const Color(0xFFF3DCE8), // оценка, не измерено
+  background: AppColors.lightBackground,
+  surface: AppColors.lightSurface,
+  ink: AppColors.lightInk,
+  muted: AppColors.lightMuted,
+  tint: AppColors.lightPrimaryTint,
+  line: AppColors.lightLine,
 );
 
 final ThemeData darkTheme = _build(
