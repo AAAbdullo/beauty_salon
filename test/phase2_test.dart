@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:beauty_salons/core/services/app_state_service.dart';
 import 'package:beauty_salons/core/services/booking_store.dart';
-import 'package:beauty_salons/core/services/master_cabinet_repository.dart';
+import 'package:beauty_salons/core/services/master_cabinet_store.dart';
 import 'package:beauty_salons/core/services/slot_service.dart';
 import 'package:beauty_salons/core/utils/clock.dart';
 import 'package:beauty_salons/core/utils/result.dart';
@@ -89,7 +89,7 @@ void main() {
     });
 
     test('изменения графика мастера сразу влияют на запись клиента: выключенный слот и перерыв', () {
-      final cabinet = MasterCabinetRepository();
+      final cabinet = MasterCabinetStore();
       final thursday = DateTime(2026, 11, 12);
       var day = cabinet.getDay(DateTime.thursday);
 
@@ -366,7 +366,7 @@ void main() {
   group('Единый стор записей (задача 1)', () {
     test('запись клиента сразу видна мастеру, отмена отражается статусом', () {
       final created = book(when: at(0, 15)).valueOrNull!;
-      final cabinet = MasterCabinetRepository();
+      final cabinet = MasterCabinetStore();
 
       var today = cabinet.appointmentsForDate(wednesday);
       expect(today.map((a) => a.clientName), [
@@ -385,7 +385,7 @@ void main() {
     });
 
     test('визит, подтверждённый по QR, попадает в доход мастера', () {
-      final cabinet = MasterCabinetRepository();
+      final cabinet = MasterCabinetStore();
       expect(cabinet.revenueForDay(wednesday), 0);
 
       final b001 = state.bookingById('b-001')!;
@@ -401,7 +401,7 @@ void main() {
     });
 
     test('доход по месяцам считается из завершённых визитов', () {
-      final cabinet = MasterCabinetRepository();
+      final cabinet = MasterCabinetStore();
       // 6 визитов других клиентов + завершённый визит самого клиента b-002 (он тоже был у Sabina)
       expect(cabinet.visitsForMonth(0).length, 7);
       expect(cabinet.revenueForMonth(0), 840000 + 110000);
@@ -467,7 +467,7 @@ void main() {
       state.toggleSalonFavorite('s-009');
       state.cancelBooking('b-005');
       book(when: at(1, 15));
-      MasterCabinetRepository().setDayWorking(DateTime.monday, false);
+      MasterCabinetStore().setDayWorking(DateTime.monday, false);
       state.updateClientProfile(name: 'Другой', phone: '+998 1', birthDate: '01.01.2000', gender: 'Мужской');
 
       state.resetSession();
@@ -477,7 +477,7 @@ void main() {
       expect(state.isSalonFavorite('s-009'), isFalse);
       expect(state.bookingById('b-005')!.status, BookingStatus.active);
       expect(state.bookings.length, 4);
-      expect(MasterCabinetRepository().getDay(DateTime.monday).isWorking, isTrue);
+      expect(MasterCabinetStore().getDay(DateTime.monday).isWorking, isTrue);
     });
   });
 
@@ -502,7 +502,7 @@ void main() {
     });
 
     test('setDayWorking меняет только признак рабочего дня', () {
-      final cabinet = MasterCabinetRepository();
+      final cabinet = MasterCabinetStore();
       final before = cabinet.getDay(DateTime.tuesday);
       cabinet.setDayWorking(DateTime.tuesday, false);
       final after = cabinet.getDay(DateTime.tuesday);

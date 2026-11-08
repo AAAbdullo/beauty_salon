@@ -161,10 +161,10 @@ class MasterNotification {
   });
 }
 
-class MasterCabinetRepository {
-  static final MasterCabinetRepository _instance = MasterCabinetRepository._internal();
-  factory MasterCabinetRepository() => _instance;
-  MasterCabinetRepository._internal() {
+class MasterCabinetStore {
+  static final MasterCabinetStore _instance = MasterCabinetStore._internal();
+  factory MasterCabinetStore() => _instance;
+  MasterCabinetStore._internal() {
     _seedWeek();
   }
 

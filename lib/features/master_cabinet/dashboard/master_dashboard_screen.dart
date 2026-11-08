@@ -3,8 +3,10 @@ import 'package:flutter/material.dart' hide Text;
 import '../../../core/l10n/app_text.dart';
 import '../../../core/data/app_scope.dart';
 import '../../../core/data/repository_exception.dart';
+import '../../../core/data/repositories/master_cabinet_repository.dart';
+import '../../../core/widgets/states/async_screen.dart';
 import '../../../core/services/app_state_service.dart';
-import '../../../core/services/master_cabinet_repository.dart';
+import '../../../core/services/master_cabinet_store.dart';
 import '../../../core/services/masters_repository.dart';
 import '../../../core/utils/clock.dart';
 import '../../../core/utils/formatters.dart';
@@ -30,7 +32,10 @@ class MasterDashboardScreen extends StatefulWidget {
 }
 
 class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
-  final _repo = MasterCabinetRepository();
+  // Данные кабинета приходят асинхронно: пока грузятся — индикатор, при сбое — «Повторить»
+  MasterDashboardData? _data;
+  Object? _error;
+  bool _isLoading = true;
 
   /// ТЗ, раздел 6: мастер видит брони на сегодня и завтра.
   bool _showTomorrow = false;
@@ -44,10 +49,45 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
     super.initState();
     _appState.addListener(_onStateChanged);
     unawaited(_loadProfile());
+    unawaited(_load());
   }
 
+  Future<void> _load({bool silent = false}) async {
+    if (!silent) {
+      setState(() {
+        _isLoading = true;
+        _error = null;
+      });
+    }
+    try {
+      final data = await AppScope.read(context).masterCabinet.dashboard();
+      if (mounted) {
+        setState(() {
+          _data = data;
+          _error = null;
+          _isLoading = false;
+        });
+      }
+    } on RepositoryException catch (e) {
+      // Тихое обновление не затирает уже показанные данные ошибкой
+      if (mounted && !silent) {
+        setState(() {
+          _error = e;
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  // Записи изменились (новая запись клиента, отмена, визит по QR) — перечитываем данные
   void _onStateChanged() {
-    if (mounted) setState(() {});
+    if (mounted) unawaited(_load(silent: true));
+  }
+
+  List<MasterAppointment> _appointments({required bool tomorrow}) {
+    final data = _data;
+    if (data == null) return const [];
+    return tomorrow ? data.tomorrow : data.today;
   }
 
   @override
@@ -61,7 +101,7 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
   VoidCallback get onScanQr => widget.onScanQr;
 
   int _activeCount({required bool tomorrow}) =>
-      _repo.getAppointments(tomorrow: tomorrow).where((a) => !a.isCancelled).length;
+      _appointments(tomorrow: tomorrow).where((a) => !a.isCancelled).length;
 
   // Профиль мастера (специализация, услуги) приходит из каталога
   MasterProfileModel? _profile;
@@ -82,10 +122,10 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
 
   /// Ближайшая неотменённая бронь: ещё не закончившаяся сегодня, иначе первая завтрашняя
   ({MasterAppointment appointment, bool tomorrow})? get _nextAppointment {
-    final today = _repo.getAppointments(tomorrow: false).where((a) => a.isActive && a.time.end > _nowMinutes).toList()
+    final today = _appointments(tomorrow: false).where((a) => a.isActive && a.time.end > _nowMinutes).toList()
       ..sort((a, b) => a.time.start.compareTo(b.time.start));
     if (today.isNotEmpty) return (appointment: today.first, tomorrow: false);
-    final tomorrow = _repo.getAppointments(tomorrow: true).where((a) => a.isActive).toList()
+    final tomorrow = _appointments(tomorrow: true).where((a) => a.isActive).toList()
       ..sort((a, b) => a.time.start.compareTo(b.time.start));
     if (tomorrow.isNotEmpty) return (appointment: tomorrow.first, tomorrow: true);
     return null;
@@ -156,13 +196,24 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
                 const SizedBox(height: 16),
                 _buildMasterHeader(),
                 const SizedBox(height: 16),
-                _buildMetricsRow(),
-                const SizedBox(height: 20),
-                _buildNextClientCard(),
-                const SizedBox(height: 20),
-                _buildQuickActions(),
-                const SizedBox(height: 24),
-                _buildTodayAppointments(),
+                AsyncSection(
+                  isLoading: _isLoading && _data == null,
+                  error: _data == null ? _error : null,
+                  onRetry: _load,
+                  minHeight: 240,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildMetricsRow(),
+                      const SizedBox(height: 20),
+                      _buildNextClientCard(),
+                      const SizedBox(height: 20),
+                      _buildQuickActions(),
+                      const SizedBox(height: 24),
+                      _buildTodayAppointments(),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
@@ -190,7 +241,7 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
                   padding: const EdgeInsets.all(4),
                   decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle),
                   child: Text(
-                    '${_repo.notifications.length}',
+                    '${_data?.notifications.length ?? 0}',
                     style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
                   ),
                 ),
@@ -294,9 +345,9 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
     final metrics = [
       {'val': '${_activeCount(tomorrow: false)}', 'label': 'Записи\nсегодня', 'icon': Icons.calendar_today_outlined},
       {'val': '${_activeCount(tomorrow: true)}', 'label': 'Записи\nзавтра', 'icon': Icons.event_outlined},
-      {'val': '${_repo.visitsForMonth(0).length}', 'label': 'Клиенты\nв этом месяце', 'icon': Icons.people_outline},
+      {'val': '${_data?.visitsThisMonth ?? 0}', 'label': 'Клиенты\nв этом месяце', 'icon': Icons.people_outline},
       {
-        'val': Formatters.formatSum(_repo.revenueForDay(AppClock.now())).replaceAll(' сум', ''),
+        'val': Formatters.formatSum(_data?.revenueToday ?? 0).replaceAll(' сум', ''),
         'label': 'Выручка\nсегодня (сум)',
         'icon': Icons.bar_chart_outlined,
         'action': onOpenEarnings,
@@ -511,7 +562,7 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
   }
 
   Widget _buildTodayAppointments() {
-    final list = _repo.getAppointments(tomorrow: _showTomorrow);
+    final list = _appointments(tomorrow: _showTomorrow);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSizes.screenPadding),
@@ -618,7 +669,7 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
             children: [
               const Text('Уведомления', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
               const SizedBox(height: 8),
-              for (final n in _repo.notifications)
+              for (final n in _data?.notifications ?? const <MasterNotification>[])
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: CircleAvatar(

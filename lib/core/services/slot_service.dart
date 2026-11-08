@@ -1,7 +1,7 @@
 import '../models/booking_rules.dart';
 import '../utils/clock.dart';
 import 'booking_store.dart';
-import 'master_cabinet_repository.dart';
+import 'master_cabinet_store.dart';
 import 'masters_repository.dart';
 
 /// Свободные слоты для записи. Единственное место, где решается «можно ли записаться на это время».
@@ -22,7 +22,7 @@ class SlotService {
   SlotService._internal();
 
   final _masters = MastersRepository();
-  final _cabinet = MasterCabinetRepository();
+  final _cabinet = MasterCabinetStore();
   final _store = BookingStore();
 
   /// Мастера, чьё время учитывается: конкретный мастер, объединение подходящих мастеров
@@ -139,7 +139,7 @@ class SlotService {
     String? excludeBookingId,
   }) {
     final day = DateTime(date.year, date.month, date.day);
-    final schedule = masterId == null ? MasterCabinetRepository.defaultDay : _cabinet.dayFor(masterId, day.weekday);
+    final schedule = masterId == null ? MasterCabinetStore.defaultDay : _cabinet.dayFor(masterId, day.weekday);
     if (!schedule.isWorking) return const [];
 
     final earliest = AppClock.now().add(const Duration(minutes: BookingRules.minLeadMinutes));

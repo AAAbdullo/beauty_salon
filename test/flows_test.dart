@@ -433,6 +433,7 @@ void main() {
         ),
         subscription: deps.subscription,
         visitQr: deps.visitQr,
+        masterCabinet: deps.masterCabinet,
       );
 
       await pumpScreen(

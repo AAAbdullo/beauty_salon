@@ -9,7 +9,7 @@ import '../utils/slot_pricing.dart';
 import '../utils/uuid.dart';
 import 'booking_seed.dart';
 import 'booking_store.dart';
-import 'master_cabinet_repository.dart';
+import 'master_cabinet_store.dart';
 import 'masters_repository.dart';
 import 'slot_service.dart';
 
@@ -170,7 +170,7 @@ class AppStateService extends ChangeNotifier {
   void resetSession() {
     _applySeed();
     _store.reset();
-    MasterCabinetRepository().reset();
+    MasterCabinetStore().reset();
     notifyListeners();
   }
 

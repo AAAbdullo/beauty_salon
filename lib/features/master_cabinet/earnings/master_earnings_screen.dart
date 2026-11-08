@@ -1,13 +1,18 @@
+import 'dart:async';
 import 'package:flutter/material.dart' hide Text;
 import '../../../core/l10n/app_text.dart';
+import '../../../core/data/app_scope.dart';
+import '../../../core/data/repositories/master_cabinet_repository.dart';
+import '../../../core/data/repository_exception.dart';
 import '../../../core/utils/clock.dart';
 import '../../../core/services/app_state_service.dart';
-import '../../../core/services/master_cabinet_repository.dart';
+import '../../../core/services/master_cabinet_store.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/badges/app_status_badge.dart';
 import '../../../core/widgets/cards/app_card.dart';
 import '../../../core/widgets/sheets/app_sheet.dart';
+import '../../../core/widgets/states/async_screen.dart';
 
 /// Доход мастера (ТЗ S-05): начисления за месяц, визиты, комиссия салона, выплаты
 class MasterEarningsScreen extends StatefulWidget {
@@ -20,7 +25,10 @@ class MasterEarningsScreen extends StatefulWidget {
 }
 
 class _MasterEarningsScreenState extends State<MasterEarningsScreen> {
-  final _repo = MasterCabinetRepository();
+  // Данные месяца приходят асинхронно: пока грузятся — индикатор, при сбое — «Повторить»
+  MasterEarningsData? _data;
+  Object? _error;
+  bool _isLoading = true;
   final _appState = AppStateService();
 
   // Вкладка остаётся живой: доход пересчитывается, когда меняются записи
@@ -28,10 +36,40 @@ class _MasterEarningsScreenState extends State<MasterEarningsScreen> {
   void initState() {
     super.initState();
     _appState.addListener(_onStateChanged);
+    unawaited(_load());
   }
 
+  Future<void> _load({bool silent = false}) async {
+    if (!silent) {
+      setState(() {
+        _isLoading = true;
+        _error = null;
+      });
+    }
+    final offset = _monthOffset;
+    try {
+      final data = await AppScope.read(context).masterCabinet.earnings(offset);
+      // Пока шёл запрос, пользователь мог переключить месяц — устаревший ответ не показываем
+      if (mounted && offset == _monthOffset) {
+        setState(() {
+          _data = data;
+          _error = null;
+          _isLoading = false;
+        });
+      }
+    } on RepositoryException catch (e) {
+      if (mounted && offset == _monthOffset && !silent) {
+        setState(() {
+          _error = e;
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  // Доход пересчитывается, когда меняются записи
   void _onStateChanged() {
-    if (mounted) setState(() {});
+    if (mounted) unawaited(_load(silent: true));
   }
 
   @override
@@ -53,8 +91,8 @@ class _MasterEarningsScreenState extends State<MasterEarningsScreen> {
     return names[month.month - 1];
   }
 
-  List<MasterVisitIncome> get _visits => _repo.visitsForMonth(_monthOffset);
-  int get _revenue => _repo.revenueForMonth(_monthOffset);
+  List<MasterVisitIncome> get _visits => _data?.visits ?? const [];
+  int get _revenue => _data?.revenue ?? 0;
   double get _commission => _appState.salonCommissionPercent;
   int get _payout => (_revenue * (1 - _commission / 100)).round();
 
@@ -144,7 +182,7 @@ class _MasterEarningsScreenState extends State<MasterEarningsScreen> {
       builder: (ctx) => ListView(
         shrinkWrap: true,
         padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
-        children: _repo.payouts
+        children: (_data?.payouts ?? const <MasterPayout>[])
             .map(
               (p) => ListTile(
                 leading: const Icon(Icons.account_balance_outlined, color: AppColors.primary),
@@ -185,15 +223,26 @@ class _MasterEarningsScreenState extends State<MasterEarningsScreen> {
             children: [
               _buildMonthToggle(),
               const SizedBox(height: 16),
-              _buildIncomeSummaryCard(),
-              const SizedBox(height: 16),
-              _buildMetricsGrid(),
-              const SizedBox(height: 24),
-              _buildRecentVisitsHeader(),
-              const SizedBox(height: 12),
-              _buildRecentVisitsList(),
-              const SizedBox(height: 20),
-              _buildBottomActionCards(),
+              AsyncSection(
+                isLoading: _isLoading,
+                error: _error,
+                onRetry: _load,
+                minHeight: 240,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildIncomeSummaryCard(),
+                    const SizedBox(height: 16),
+                    _buildMetricsGrid(),
+                    const SizedBox(height: 24),
+                    _buildRecentVisitsHeader(),
+                    const SizedBox(height: 12),
+                    _buildRecentVisitsList(),
+                    const SizedBox(height: 20),
+                    _buildBottomActionCards(),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
@@ -209,7 +258,11 @@ class _MasterEarningsScreenState extends State<MasterEarningsScreen> {
         borderRadius: BorderRadius.circular(20),
         child: InkWell(
           borderRadius: BorderRadius.circular(20),
-          onTap: () => setState(() => _monthOffset = offset),
+          onTap: () {
+            if (_monthOffset == offset) return;
+            setState(() => _monthOffset = offset);
+            unawaited(_load());
+          },
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
             child: Text(
@@ -229,7 +282,7 @@ class _MasterEarningsScreenState extends State<MasterEarningsScreen> {
   }
 
   Widget _buildIncomeSummaryCard() {
-    final previous = _repo.revenueForMonth(_monthOffset + 1);
+    final previous = _data?.previousRevenue ?? 0;
     final change = previous == 0 ? null : ((_revenue - previous) / previous * 100).round();
 
     return AppCard(

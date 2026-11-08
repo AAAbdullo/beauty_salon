@@ -2,9 +2,9 @@ import 'dart:async';
 import 'package:flutter/material.dart' hide Text;
 import '../../../core/l10n/app_text.dart';
 import '../../../core/data/app_scope.dart';
+import '../../../core/data/repositories/master_cabinet_repository.dart';
 import '../../../core/data/repository_exception.dart';
 import '../../../core/services/app_state_service.dart';
-import '../../../core/services/master_cabinet_repository.dart';
 import '../../../core/services/masters_repository.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/formatters.dart';
@@ -37,10 +37,31 @@ class _MasterAccountScreenState extends State<MasterAccountScreen> {
   // Профиль мастера (специализация, рейтинг) приходит из каталога; пока он грузится — нейтральные подписи
   MasterProfileModel? _profileData;
 
+  // Показатели месяца: пока грузятся или при сбое — прочерк
+  MasterAccountStats? _stats;
+  final _appState = AppStateService();
+
   @override
   void initState() {
     super.initState();
+    _appState.addListener(_loadStats);
     unawaited(_loadProfile());
+    unawaited(_loadStats());
+  }
+
+  @override
+  void dispose() {
+    _appState.removeListener(_loadStats);
+    super.dispose();
+  }
+
+  Future<void> _loadStats() async {
+    try {
+      final stats = await AppScope.read(context).masterCabinet.accountStats();
+      if (mounted) setState(() => _stats = stats);
+    } on RepositoryException {
+      // Остаёмся с прочерками; данные подтянутся при следующем изменении записей
+    }
   }
 
   Future<void> _loadProfile() async {
@@ -55,13 +76,13 @@ class _MasterAccountScreenState extends State<MasterAccountScreen> {
   @override
   Widget build(BuildContext context) {
     final appState = AppStateService();
-    final cabinet = MasterCabinetRepository();
+    final stats = _stats;
     final profile = _profileData;
 
     return ListenableBuilder(
       listenable: appState,
       builder: (context, _) {
-        final workingDays = cabinet.workingWeekdays.length;
+        final workingDays = stats?.workingDays;
         return Scaffold(
           backgroundColor: Colors.transparent,
           body: Container(
@@ -135,9 +156,9 @@ class _MasterAccountScreenState extends State<MasterAccountScreen> {
                     children: [
                       _stat('${profile?.rating ?? '—'}', 'Рейтинг', Icons.star_border_rounded),
                       const SizedBox(width: 8),
-                      _stat('${cabinet.visitsForMonth(0).length}', 'Визитов за месяц', Icons.check_circle_outline),
+                      _stat('${stats?.visitsThisMonth ?? '—'}', 'Визитов за месяц', Icons.check_circle_outline),
                       const SizedBox(width: 8),
-                      _stat('$workingDays', 'Рабочих дней', Icons.event_available_outlined),
+                      _stat('${workingDays ?? '—'}', 'Рабочих дней', Icons.event_available_outlined),
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -154,7 +175,7 @@ class _MasterAccountScreenState extends State<MasterAccountScreen> {
                             children: [
                               Text('Доход за месяц', style: TextStyle(fontSize: 12, color: AppColors.muted)),
                               Text(
-                                Formatters.formatSum(cabinet.revenueForMonth(0)),
+                                stats == null ? '—' : Formatters.formatSum(stats.revenueThisMonth),
                                 style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
                               ),
                             ],

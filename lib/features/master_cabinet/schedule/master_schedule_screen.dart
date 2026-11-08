@@ -1,10 +1,14 @@
+import 'dart:async';
 import 'package:flutter/material.dart' hide Text;
 import '../../../core/l10n/app_text.dart';
+import '../../../core/data/app_scope.dart';
+import '../../../core/data/repository_exception.dart';
 import '../../../core/utils/clock.dart';
-import '../../../core/services/master_cabinet_repository.dart';
+import '../../../core/services/master_cabinet_store.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/buttons/app_gradient_button.dart';
 import '../../../core/widgets/cards/app_card.dart';
+import '../../../core/widgets/states/async_screen.dart';
 import '../../../core/l10n/app_locale.dart';
 
 /// «Рабочий график» мастера (макет photo_8, вариант Б).
@@ -37,15 +41,23 @@ class _MasterScheduleScreenState extends State<MasterScheduleScreen> {
   static const _dayMax = 1380;
   static const _step = 30;
 
-  final _repo = MasterCabinetRepository();
+  // Недельный график с «сервера»; пока он не пришёл — загрузка, при сбое — «Повторить»
+  Map<int, DaySchedule>? _days;
+  bool _canEditSalon = true;
+  Object? _loadError;
 
   late final DateTime _today;
   late final DateTime _weekStart;
   late int _selectedWeekday;
-  late DaySchedule _draft;
+  DaySchedule _draft = DaySchedule(
+    isWorking: false,
+    workHours: const TimeRange(0, 0),
+    breaks: const [],
+    slots: const [],
+  );
   bool _isDirty = false;
 
-  bool get _canEdit => _repo.salonAllowsScheduleEditing;
+  bool get _canEdit => _canEditSalon;
 
   @override
   void initState() {
@@ -54,7 +66,22 @@ class _MasterScheduleScreenState extends State<MasterScheduleScreen> {
     _today = DateTime(now.year, now.month, now.day);
     _weekStart = _today.subtract(Duration(days: _today.weekday - 1));
     _selectedWeekday = _today.weekday;
-    _draft = _repo.getDay(_selectedWeekday).copyWith();
+    unawaited(_load());
+  }
+
+  Future<void> _load() async {
+    setState(() => _loadError = null);
+    try {
+      final week = await AppScope.read(context).masterCabinet.week();
+      if (!mounted) return;
+      setState(() {
+        _days = Map.of(week.days);
+        _canEditSalon = week.canEdit;
+        _draft = week.days[_selectedWeekday]!.copyWith();
+      });
+    } on RepositoryException catch (e) {
+      if (mounted) setState(() => _loadError = e);
+    }
   }
 
   DateTime _dateOf(int weekday) => _weekStart.add(Duration(days: weekday - 1));
@@ -64,10 +91,23 @@ class _MasterScheduleScreenState extends State<MasterScheduleScreen> {
         _isDirty = true;
       });
 
-  void _save() {
-    _repo.saveDay(_selectedWeekday, _draft);
-    setState(() => _isDirty = false);
-    _snack('График на ${_fullDays[_selectedWeekday - 1].toLowerCase()} сохранён');
+  /// Сохраняет день на сервере. При сбое остаёмся с несохранёнными правками. Возвращает, получилось ли.
+  Future<bool> _save() async {
+    final weekday = _selectedWeekday;
+    final draft = _draft;
+    try {
+      await AppScope.read(context).masterCabinet.saveDay(weekday, draft);
+    } on RepositoryException catch (e) {
+      if (mounted) _snack(errorMessageOf(e));
+      return false;
+    }
+    if (!mounted) return true;
+    setState(() {
+      _days![weekday] = draft.copyWith();
+      if (weekday == _selectedWeekday) _isDirty = false;
+    });
+    _snack('График на ${_fullDays[weekday - 1].toLowerCase()} сохранён');
+    return true;
   }
 
   void _snack(String text) {
@@ -91,10 +131,7 @@ class _MasterScheduleScreenState extends State<MasterScheduleScreen> {
         ],
       ),
     );
-    if (result == 'save') {
-      _save();
-      return true;
-    }
+    if (result == 'save') return _save();
     if (result == 'discard') {
       setState(() => _isDirty = false);
       return true;
@@ -107,7 +144,7 @@ class _MasterScheduleScreenState extends State<MasterScheduleScreen> {
     if (!await _resolveUnsaved()) return;
     setState(() {
       _selectedWeekday = weekday;
-      _draft = _repo.getDay(weekday).copyWith();
+      _draft = _days![weekday]!.copyWith();
       _isDirty = false;
     });
   }
@@ -185,6 +222,16 @@ class _MasterScheduleScreenState extends State<MasterScheduleScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_days == null) {
+      return _loadError == null
+          ? LoadingScreen(title: 'Рабочий график', onBack: widget.onBack)
+          : ErrorScreen(
+              title: 'Рабочий график',
+              message: errorMessageOf(_loadError),
+              onRetry: _load,
+              onBack: widget.onBack,
+            );
+    }
     return Scaffold(
       body: Container(
         decoration: BoxDecoration(gradient: AppGradients.page),
@@ -324,7 +371,7 @@ class _MasterScheduleScreenState extends State<MasterScheduleScreen> {
         final isSelected = weekday == _selectedWeekday;
         final isToday = date == _today;
         final isWeekend = weekday >= DateTime.saturday;
-        final isWorking = weekday == _selectedWeekday ? _draft.isWorking : _repo.getDay(weekday).isWorking;
+        final isWorking = weekday == _selectedWeekday ? _draft.isWorking : _days![weekday]!.isWorking;
         final baseColor = isWeekend ? AppColors.primary : AppColors.ink;
 
         return Expanded(
@@ -668,7 +715,7 @@ class _MasterScheduleScreenState extends State<MasterScheduleScreen> {
               Text('Шаблон заменит время работы и перерывы выбранного дня.',
                   style: TextStyle(fontSize: 13, color: AppColors.muted)),
               const SizedBox(height: 12),
-              for (final t in MasterCabinetRepository.templates)
+              for (final t in MasterCabinetStore.templates)
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.schedule, color: AppColors.primary),
@@ -796,15 +843,26 @@ class _MasterScheduleScreenState extends State<MasterScheduleScreen> {
         ),
       ),
     );
-    if (targets == null || targets.isEmpty) return;
+    if (targets == null || targets.isEmpty || !mounted) return;
 
-    _repo.copyDayTo(_draft, targets);
-    _save();
-    _snack('График скопирован на ${targets.length} ${_daysWord(targets.length)}');
+    try {
+      await AppScope.read(context).masterCabinet.copyDayTo(_draft, targets);
+    } on RepositoryException catch (e) {
+      if (mounted) _snack(errorMessageOf(e));
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      for (final w in targets) {
+        _days![w] = _draft.copyWith();
+      }
+    });
+    if (!await _save()) return;
+    if (mounted) _snack('График скопирован на ${targets.length} ${_daysWord(targets.length)}');
   }
 
   Future<void> _openDaysOff() async {
-    final working = _repo.workingWeekdays;
+    final working = _days!.entries.where((e) => e.value.isWorking).map((e) => e.key).toSet();
     // Учитываем несохранённое переключение «Рабочий день» у текущего дня.
     _draft.isWorking ? working.add(_selectedWeekday) : working.remove(_selectedWeekday);
     // Что было показано в окне — чтобы сохранить только те дни, которые пользователь реально поменял
@@ -849,13 +907,20 @@ class _MasterScheduleScreenState extends State<MasterScheduleScreen> {
         ),
       ),
     );
-    if (result == null) return;
+    if (result == null || !mounted) return;
 
     // Выходные сохраняются сразу, но только как признак «рабочий день» у изменённых дней.
     // Остальные несохранённые правки открытого дня (часы, перерывы, слоты) не сохраняются молча.
     for (var weekday = DateTime.monday; weekday <= DateTime.sunday; weekday++) {
       if (result.contains(weekday) != shown.contains(weekday)) {
-        _repo.setDayWorking(weekday, result.contains(weekday));
+        try {
+          await AppScope.read(context).masterCabinet.setDayWorking(weekday, result.contains(weekday));
+        } on RepositoryException catch (e) {
+          if (mounted) _snack(errorMessageOf(e));
+          return;
+        }
+        if (!mounted) return;
+        _days![weekday] = _days![weekday]!.copyWith(isWorking: result.contains(weekday));
       }
     }
     if (result.contains(_selectedWeekday) != _draft.isWorking) {

@@ -1,6 +1,7 @@
 import 'mock/mock_auth_repository.dart';
 import 'mock/mock_bookings_repository.dart';
 import 'mock/mock_catalog_repository.dart';
+import 'mock/mock_master_cabinet_repository.dart';
 import 'mock/mock_network.dart';
 import 'mock/mock_payments_repository.dart';
 import 'mock/mock_slots_repository.dart';
@@ -9,6 +10,7 @@ import 'mock/mock_visit_qr_repository.dart';
 import 'repositories/auth_repository.dart';
 import 'repositories/bookings_repository.dart';
 import 'repositories/catalog_repository.dart';
+import 'repositories/master_cabinet_repository.dart';
 import 'repositories/payments_repository.dart';
 import 'repositories/slots_repository.dart';
 import 'repositories/subscription_repository.dart';
@@ -25,6 +27,7 @@ class AppDependencies {
   final PaymentsRepository payments;
   final SubscriptionRepository subscription;
   final VisitQrRepository visitQr;
+  final MasterCabinetRepository masterCabinet;
 
   const AppDependencies({
     required this.auth,
@@ -34,6 +37,7 @@ class AppDependencies {
     required this.payments,
     required this.subscription,
     required this.visitQr,
+    required this.masterCabinet,
   });
 
   /// Мок-реализации. [network] управляет задержкой и сбоями (в тестах — без задержки).
@@ -48,6 +52,7 @@ class AppDependencies {
       payments: MockPaymentsRepository(slots: slots, network: net),
       subscription: MockSubscriptionRepository(network: net),
       visitQr: MockVisitQrRepository(network: net),
+      masterCabinet: MockMasterCabinetRepository(network: net),
     );
   }
 }
