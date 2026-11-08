@@ -269,8 +269,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _appState.useLocationEnabled,
             (v) => _appState.updateSettings(location: v),
           ),
-          _buildDivider(),
-          _buildSwitchTile(Icons.dark_mode_outlined, 'Тёмная тема', false, null, hint: 'Скоро'),
         ],
       ),
     );
