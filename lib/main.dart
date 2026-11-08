@@ -389,10 +389,22 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
 
   /// Выход: состояние данных и навигации возвращается к начальному,
   /// чтобы следующий вход (в том числе другой ролью) не видел данные прошлого пользователя
-  void _logout() {
-    unawaited(_deps.auth.logout());
+  bool _loggingOut = false;
+
+  Future<void> _logout() async {
+    if (_loggingOut) return;
+    _loggingOut = true;
+    try {
+      // Сначала дожидаемся очистки токена и фото: быстрый повторный вход не должен столкнуться
+      // с недочищенным состоянием (и стереть уже новое фото). Сбой очистки не держит пользователя в аккаунте.
+      await Future.wait([_deps.auth.logout(), ProfilePhotoStorage.clearAll()]).timeout(const Duration(seconds: 5));
+    } catch (_) {
+      // продолжаем выход
+    } finally {
+      _loggingOut = false;
+    }
+    if (!mounted) return;
     _deps.appState.resetSession();
-    unawaited(ProfilePhotoStorage.clearAll()); // фото принадлежат вышедшему пользователю
     setState(() {
       _clearPages(); // экраны записи при этом освобождают удержания слотов
       _isAuthenticated = false;

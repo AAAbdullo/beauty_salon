@@ -12,6 +12,16 @@ enum PhotoOwner { client, master }
 class ProfilePhotoStorage {
   ProfilePhotoStorage._();
 
+  // Операции записи идут строго по очереди: два выбора фото подряд или выход с быстрым повторным входом
+  // не должны удалить файл, на который в итоге указывает аватар.
+  static Future<void> _queue = Future<void>.value();
+
+  static Future<T> _serial<T>(Future<T> Function() operation) {
+    final result = _queue.then((_) => operation());
+    _queue = result.then<void>((_) {}, onError: (_) {});
+    return result;
+  }
+
   static String _key(PhotoOwner owner) => switch (owner) {
     PhotoOwner.client => 'client_avatar_path',
     PhotoOwner.master => 'master_avatar_path',
@@ -19,8 +29,9 @@ class ProfilePhotoStorage {
 
   /// Копирует [sourcePath] в папку приложения под новым именем (новое имя — чтобы Flutter не показывал
   /// старую картинку из кэша), запоминает путь и удаляет прежнее фото. Возвращает новый путь.
-  static Future<String> save(String sourcePath, {PhotoOwner owner = PhotoOwner.client}) async {
-    final dir = await getApplicationDocumentsDirectory();
+  static Future<String> save(String sourcePath, {PhotoOwner owner = PhotoOwner.client}) => _serial(() async {
+    // Application Support, а не Documents: фото не видно пользователю в «Файлах» и не лежит среди его документов
+    final dir = await getApplicationSupportDirectory();
     final target = '${dir.path}/${owner.name}_photo_${DateTime.now().millisecondsSinceEpoch}.jpg';
     await File(sourcePath).copy(target);
 
@@ -31,7 +42,7 @@ class ProfilePhotoStorage {
     } catch (_) {}
     if (previous != null && previous != target) await _delete(previous);
     return target;
-  }
+  });
 
   /// Сохранённое фото, если файл ещё на месте
   static Future<String?> restore({PhotoOwner owner = PhotoOwner.client}) async {
@@ -44,7 +55,9 @@ class ProfilePhotoStorage {
   }
 
   /// Удаляет сохранённое фото и запись о нём
-  static Future<void> clear({PhotoOwner owner = PhotoOwner.client}) async {
+  static Future<void> clear({PhotoOwner owner = PhotoOwner.client}) => _serial(() => _clearNow(owner));
+
+  static Future<void> _clearNow(PhotoOwner owner) async {
     final previous = await restore(owner: owner);
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -53,12 +66,12 @@ class ProfilePhotoStorage {
     if (previous != null) await _delete(previous);
   }
 
-  /// Выход из аккаунта: фото принадлежат вышедшему пользователю
-  static Future<void> clearAll() async {
+  /// Выход из аккаунта: фото принадлежат вышедшему пользователю. Вызывающий дожидается завершения.
+  static Future<void> clearAll() => _serial(() async {
     for (final owner in PhotoOwner.values) {
-      await clear(owner: owner);
+      await _clearNow(owner);
     }
-  }
+  });
 
   static Future<void> _delete(String path) async {
     try {

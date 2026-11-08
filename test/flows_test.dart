@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'helpers/test_fonts.dart';
 
@@ -33,6 +34,8 @@ void main() {
   late AppStateService state;
 
   setUp(() {
+    // Выход из аккаунта ждёт очистку фото профиля, а она читает SharedPreferences
+    SharedPreferences.setMockInitialValues({});
     clock = FixedClock(DateTime(2026, 11, 11, 10));
     AppClock.current = clock;
     state = AppStateService()..resetSession();
