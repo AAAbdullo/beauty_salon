@@ -364,11 +364,14 @@ void main() {
     testWidgets('форма личных данных сохраняет изменения и закрывается', (tester) async {
       useBigPhone(tester);
       await tester.pumpWidget(
-        MaterialApp(
-          theme: ThemeData(fontFamily: 'Roboto'),
-          home: Builder(
-            builder: (context) => Scaffold(
-              body: ElevatedButton(onPressed: () => ProfileSheets.editProfile(context), child: const Text('Изменить')),
+        AppScope(
+          dependencies: deps,
+          child: MaterialApp(
+            theme: ThemeData(fontFamily: 'Roboto'),
+            home: Builder(
+              builder: (context) => Scaffold(
+                body: ElevatedButton(onPressed: () => ProfileSheets.editProfile(context), child: const Text('Изменить')),
+              ),
             ),
           ),
         ),
@@ -434,6 +437,7 @@ void main() {
         subscription: deps.subscription,
         visitQr: deps.visitQr,
         masterCabinet: deps.masterCabinet,
+        appState: deps.appState,
       );
 
       await pumpScreen(

@@ -1,3 +1,4 @@
+import '../services/app_state_service.dart';
 import 'mock/mock_auth_repository.dart';
 import 'mock/mock_bookings_repository.dart';
 import 'mock/mock_catalog_repository.dart';
@@ -29,6 +30,10 @@ class AppDependencies {
   final VisitQrRepository visitQr;
   final MasterCabinetRepository masterCabinet;
 
+  /// Локальный реактивный кэш данных пользователя (профиль, абонемент, избранное, записи).
+  /// Экраны читают его только отсюда. С бэкендом его заполняют репозитории, а не мок-синглтон.
+  final AppStateService appState;
+
   const AppDependencies({
     required this.auth,
     required this.catalog,
@@ -38,6 +43,7 @@ class AppDependencies {
     required this.subscription,
     required this.visitQr,
     required this.masterCabinet,
+    required this.appState,
   });
 
   /// Мок-реализации. [network] управляет задержкой и сбоями (в тестах — без задержки).
@@ -53,6 +59,7 @@ class AppDependencies {
       subscription: MockSubscriptionRepository(network: net),
       visitQr: MockVisitQrRepository(network: net),
       masterCabinet: MockMasterCabinetRepository(network: net),
+      appState: AppStateService(),
     );
   }
 }

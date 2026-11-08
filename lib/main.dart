@@ -368,7 +368,7 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
   /// чтобы следующий вход (в том числе другой ролью) не видел данные прошлого пользователя
   void _logout() {
     unawaited(_deps.auth.logout());
-    AppStateService().resetSession();
+    _deps.appState.resetSession();
     setState(() {
       _clearPages(); // экраны записи при этом освобождают удержания слотов
       _isAuthenticated = false;
@@ -399,7 +399,7 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
         return OnboardingRegistrationScreen(
           onCompleted: () async {
             try {
-              final session = await _deps.auth.completeRegistration(phone: AppStateService().clientPhone);
+              final session = await _deps.auth.completeRegistration(phone: _deps.appState.clientPhone);
               if (!mounted) return;
               setState(() {
                 _isRegistering = false;

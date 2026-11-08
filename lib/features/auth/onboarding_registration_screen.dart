@@ -1,8 +1,8 @@
+import '../../core/data/app_scope.dart';
 import 'dart:async';
 import 'package:flutter/material.dart' hide Text;
 import '../../core/l10n/app_text.dart';
 import 'package:flutter/services.dart';
-import '../../core/services/app_state_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/buttons/app_gradient_button.dart';
@@ -180,7 +180,7 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
     final phone = '+998 ${_phoneController.text.trim()}';
 
     // Обновляем синглтон состояния
-    AppStateService().updateClientProfile(
+    AppScope.read(context).appState.updateClientProfile(
       name: fullName,
       phone: phone,
       birthDate: _birthDateController.text,

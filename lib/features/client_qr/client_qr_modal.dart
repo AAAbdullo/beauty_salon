@@ -30,7 +30,7 @@ class ClientQrModal extends StatefulWidget {
 
   /// QR ближайшего активного визита; если записей нет — подсказка записаться
   static void showForNearestBooking(BuildContext context, {VoidCallback? onBookNew}) {
-    final booking = AppStateService().nearestActiveBooking;
+    final booking = AppScope.read(context).appState.nearestActiveBooking;
     if (booking != null) {
       show(context, booking: booking);
       return;
@@ -58,7 +58,7 @@ class ClientQrModal extends StatefulWidget {
 
 class _ClientQrModalState extends State<ClientQrModal> {
   late final AppDependencies _deps;
-  final _appState = AppStateService();
+  late final _appState = AppScope.read(context).appState;
   Timer? _timer;
 
   /// Актуальная версия записи из стора (перенос меняет время, отмена и подтверждение — статус)

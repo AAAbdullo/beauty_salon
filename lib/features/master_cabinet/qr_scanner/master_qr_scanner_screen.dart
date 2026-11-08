@@ -5,7 +5,6 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../../core/utils/clock.dart';
 import '../../../core/data/app_scope.dart';
 import '../../../core/data/repository_exception.dart';
-import '../../../core/services/app_state_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/buttons/app_gradient_button.dart';
 
@@ -108,7 +107,7 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
   /// Демо для симулятора (камеры нет): «клиент» показывает QR ближайшей записи в этот салон
   Future<void> _simulateClientQr() async {
     if (_isProcessing) return;
-    final appState = AppStateService();
+    final appState = AppScope.read(context).appState;
     final candidates = appState.activeBookings.where((b) => b.salonId == appState.masterSalonId);
     if (candidates.isEmpty) {
       setState(() {

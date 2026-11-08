@@ -5,7 +5,6 @@ import '../../../core/data/app_scope.dart';
 import '../../../core/data/repositories/master_cabinet_repository.dart';
 import '../../../core/data/repository_exception.dart';
 import '../../../core/utils/clock.dart';
-import '../../../core/services/app_state_service.dart';
 import '../../../core/services/master_cabinet_store.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/formatters.dart';
@@ -29,7 +28,7 @@ class _MasterEarningsScreenState extends State<MasterEarningsScreen> {
   MasterEarningsData? _data;
   Object? _error;
   bool _isLoading = true;
-  final _appState = AppStateService();
+  late final _appState = AppScope.read(context).appState;
 
   // Вкладка остаётся живой: доход пересчитывается, когда меняются записи
   @override

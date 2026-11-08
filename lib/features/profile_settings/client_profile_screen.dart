@@ -1,3 +1,4 @@
+import '../../core/data/app_scope.dart';
 import 'package:flutter/material.dart' hide Text;
 import '../../core/l10n/app_text.dart';
 import '../../core/services/app_state_service.dart';
@@ -35,7 +36,7 @@ class ClientProfileScreen extends StatefulWidget {
 }
 
 class _ClientProfileScreenState extends State<ClientProfileScreen> {
-  final _appState = AppStateService();
+  late final _appState = AppScope.read(context).appState;
 
   @override
   void initState() {

@@ -5,7 +5,6 @@ import '../../../core/data/app_scope.dart';
 import '../../../core/data/repository_exception.dart';
 import '../../../core/data/repositories/master_cabinet_repository.dart';
 import '../../../core/widgets/states/async_screen.dart';
-import '../../../core/services/app_state_service.dart';
 import '../../../core/services/master_cabinet_store.dart';
 import '../../../core/services/masters_repository.dart';
 import '../../../core/utils/clock.dart';
@@ -42,7 +41,7 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
 
   // Брони и доход — проекции единого стора записей: обновляемся, когда он меняется
   // (новая запись клиента, отмена, подтверждение визита по QR)
-  final _appState = AppStateService();
+  late final _appState = AppScope.read(context).appState;
 
   @override
   void initState() {
@@ -108,7 +107,7 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
 
   Future<void> _loadProfile() async {
     try {
-      final profile = await AppScope.read(context).catalog.getMaster(AppStateService().masterId);
+      final profile = await AppScope.read(context).catalog.getMaster(AppScope.read(context).appState.masterId);
       if (mounted) setState(() => _profile = profile);
     } on RepositoryException {
       // Остаёмся с подписями по умолчанию
@@ -258,7 +257,7 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
   }
 
   Widget _buildMasterHeader() {
-    final appState = AppStateService();
+    final appState = AppScope.read(context).appState;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSizes.screenPadding),
       child: Row(
@@ -480,7 +479,7 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
                                 const SizedBox(width: 2),
                                 Flexible(
                                   child: Text(
-                                    AppStateService().masterSalon,
+                                    AppScope.read(context).appState.masterSalon,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(fontSize: 11, color: AppColors.muted),
                                   ),

@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart' hide Text;
 import '../../core/l10n/app_text.dart';
 import '../../core/models/salon_filter_params.dart';
-import '../../core/services/app_state_service.dart';
 import '../../core/data/app_dependencies.dart';
 import '../../core/data/app_scope.dart';
 import '../../core/data/repository_exception.dart';
@@ -54,7 +53,7 @@ class _PopularService {
 
 class _ClientHomeScreenState extends State<ClientHomeScreen> {
   late final AppDependencies _deps;
-  final _appState = AppStateService();
+  late final _appState = AppScope.read(context).appState;
   final _searchController = TextEditingController();
 
   SalonFilterParams _filterParams = const SalonFilterParams();

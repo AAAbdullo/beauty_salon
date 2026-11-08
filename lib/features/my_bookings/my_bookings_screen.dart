@@ -30,7 +30,7 @@ class MyBookingsScreen extends StatefulWidget {
 
 class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final _appState = AppStateService();
+  late final _appState = AppScope.read(context).appState;
 
   @override
   void initState() {

@@ -1,7 +1,7 @@
+import '../../core/data/app_scope.dart';
 import 'package:flutter/material.dart' hide Text;
 import '../../core/l10n/app_text.dart';
 import 'package:flutter/services.dart';
-import '../../core/services/app_state_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/buttons/app_gradient_button.dart';
@@ -197,7 +197,7 @@ class _EditProfileForm extends StatefulWidget {
 }
 
 class _EditProfileFormState extends State<_EditProfileForm> {
-  final _appState = AppStateService();
+  late final _appState = AppScope.read(context).appState;
   late final TextEditingController _nameController;
   late final TextEditingController _phoneController;
   late final TextEditingController _birthController;

@@ -4,7 +4,6 @@ import '../../core/l10n/app_text.dart';
 import '../../core/data/app_dependencies.dart';
 import '../../core/data/app_scope.dart';
 import '../../core/data/repository_exception.dart';
-import '../../core/services/app_state_service.dart';
 import '../../core/services/masters_repository.dart';
 import '../../core/services/salons_repository.dart';
 import '../../core/theme/app_theme.dart';
@@ -37,7 +36,7 @@ class FavoritesScreen extends StatefulWidget {
 class _FavoritesScreenState extends State<FavoritesScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final _appState = AppStateService();
+  late final _appState = AppScope.read(context).appState;
   late final AppDependencies _deps;
 
   // Избранное хранится как id; сами салоны и мастера приходят из каталога

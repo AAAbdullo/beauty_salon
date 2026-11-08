@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart' hide Text;
 import '../../core/l10n/app_text.dart';
 import '../../core/data/app_scope.dart';
-import '../../core/services/app_state_service.dart';
 import '../../core/services/masters_repository.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/buttons/app_gradient_button.dart';
@@ -82,7 +81,7 @@ class _MasterProfileView extends StatefulWidget {
 class _MasterProfileViewState extends State<_MasterProfileView> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   late MasterProfileModel _master;
-  final _appState = AppStateService();
+  late final _appState = AppScope.read(context).appState;
 
   @override
   void initState() {

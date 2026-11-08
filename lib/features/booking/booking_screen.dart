@@ -106,7 +106,7 @@ class _BookingView extends StatefulWidget {
 class _BookingViewState extends State<_BookingView> with WidgetsBindingObserver {
   static const _anyMaster = 'Любой мастер';
 
-  final _appState = AppStateService();
+  late final _appState = AppScope.read(context).appState;
   late final AppDependencies _deps;
 
   late final SalonModel _salon;

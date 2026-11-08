@@ -4,7 +4,6 @@ import '../../../core/l10n/app_text.dart';
 import '../../../core/data/app_scope.dart';
 import '../../../core/data/repositories/master_cabinet_repository.dart';
 import '../../../core/data/repository_exception.dart';
-import '../../../core/services/app_state_service.dart';
 import '../../../core/services/masters_repository.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/formatters.dart';
@@ -39,7 +38,7 @@ class _MasterAccountScreenState extends State<MasterAccountScreen> {
 
   // Показатели месяца: пока грузятся или при сбое — прочерк
   MasterAccountStats? _stats;
-  final _appState = AppStateService();
+  late final _appState = AppScope.read(context).appState;
 
   @override
   void initState() {
@@ -66,7 +65,7 @@ class _MasterAccountScreenState extends State<MasterAccountScreen> {
 
   Future<void> _loadProfile() async {
     try {
-      final profile = await AppScope.read(context).catalog.getMaster(AppStateService().masterId);
+      final profile = await AppScope.read(context).catalog.getMaster(AppScope.read(context).appState.masterId);
       if (mounted) setState(() => _profileData = profile);
     } on RepositoryException {
       // Остаёмся с подписями по умолчанию
@@ -75,7 +74,7 @@ class _MasterAccountScreenState extends State<MasterAccountScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final appState = AppStateService();
+    final appState = AppScope.read(context).appState;
     final stats = _stats;
     final profile = _profileData;
 

@@ -3,7 +3,6 @@ import '../../core/l10n/app_text.dart';
 import 'package:flutter/services.dart';
 import '../../core/data/app_scope.dart';
 import '../../core/data/repositories/catalog_repository.dart';
-import '../../core/services/app_state_service.dart';
 import '../../core/services/masters_repository.dart';
 import '../../core/services/salons_repository.dart';
 import '../../core/theme/app_theme.dart';
@@ -93,7 +92,7 @@ class _SalonDetailView extends StatefulWidget {
 
 class _SalonDetailViewState extends State<_SalonDetailView> with SingleTickerProviderStateMixin {
   late final TabController _tabController;
-  final _appState = AppStateService();
+  late final _appState = AppScope.read(context).appState;
 
   late final SalonModel _salon;
   late final List<MasterServiceItem> _services;

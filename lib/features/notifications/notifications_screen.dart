@@ -1,3 +1,4 @@
+import '../../core/data/app_scope.dart';
 import 'package:flutter/material.dart' hide Text;
 import '../../core/l10n/app_text.dart';
 import '../../core/services/app_state_service.dart';
@@ -14,7 +15,7 @@ class NotificationsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final appState = AppStateService();
+    final appState = AppScope.read(context).appState;
 
     return ListenableBuilder(
       listenable: appState,

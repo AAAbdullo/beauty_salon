@@ -1,6 +1,6 @@
+import '../../core/data/app_scope.dart';
 import 'package:flutter/material.dart' hide Text;
 import '../../core/l10n/app_text.dart';
-import '../../core/services/app_state_service.dart';
 import '../../core/l10n/app_locale.dart';
 import '../../core/theme/app_appearance.dart';
 import '../../core/theme/app_theme.dart';
@@ -30,7 +30,7 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  final _appState = AppStateService();
+  late final _appState = AppScope.read(context).appState;
 
   @override
   void initState() {

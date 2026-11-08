@@ -9,7 +9,6 @@ import '../../core/data/app_dependencies.dart';
 import '../../core/data/app_scope.dart';
 import '../../core/data/repository_exception.dart';
 import '../../core/models/salon_filter_params.dart';
-import '../../core/services/app_state_service.dart';
 import '../../core/services/location_permission_service.dart';
 import '../../core/services/salons_repository.dart';
 import '../../core/services/turn_announcement.dart';
@@ -400,7 +399,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
   /// Системное окно разрешения показывается здесь, при открытии карты, а не при запуске приложения.
   /// [showFeedback] — объяснить пользователю, почему геолокация недоступна (только по кнопке).
   Future<bool> _ensureLocationAccess({required bool showFeedback}) async {
-    if (!AppStateService().useLocationEnabled) {
+    if (!AppScope.read(context).appState.useLocationEnabled) {
       if (showFeedback && mounted) {
         showAppSnack(context, 'Геолокация выключена в настройках приложения («Показывать салоны рядом со мной»).');
       }
