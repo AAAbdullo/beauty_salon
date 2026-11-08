@@ -262,6 +262,10 @@ class _EditProfileFormState extends State<_EditProfileForm> {
     widget.onSaved();
   }
 
+  /// Префикс поля фиксированной ширины: иконки и «+998» стоят в одной колонке,
+  /// а введённый текст во всех полях начинается с одного и того же места.
+  Widget _prefix(Widget child) => SizedBox(width: 56, child: Center(child: child));
+
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
@@ -275,7 +279,7 @@ class _EditProfileFormState extends State<_EditProfileForm> {
             hintText: 'Ваше имя',
             textCapitalization: TextCapitalization.words,
             textInputAction: TextInputAction.next,
-            prefixIcon: const Icon(Icons.badge_outlined, color: AppColors.primary),
+            prefixIcon: _prefix(const Icon(Icons.badge_outlined, color: AppColors.primary, size: 22)),
           ),
           const SizedBox(height: 14),
           const _FieldLabel('Телефон'),
@@ -284,9 +288,8 @@ class _EditProfileFormState extends State<_EditProfileForm> {
             hintText: '90 123 45 67',
             keyboardType: TextInputType.phone,
             inputFormatters: const [UzPhoneInputFormatter()],
-            prefixIcon: Padding(
-              padding: EdgeInsets.only(left: 16, right: 8),
-              child: Text(
+            prefixIcon: _prefix(
+              Text(
                 '+998',
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.primaryText),
               ),
@@ -298,7 +301,7 @@ class _EditProfileFormState extends State<_EditProfileForm> {
           AppTextField(
             controller: _birthController,
             readOnly: true,
-            prefixIcon: const Icon(Icons.calendar_today_outlined, color: AppColors.primary),
+            prefixIcon: _prefix(const Icon(Icons.calendar_today_outlined, color: AppColors.primary, size: 22)),
             onTap: _pickBirthDate,
           ),
           const SizedBox(height: 14),

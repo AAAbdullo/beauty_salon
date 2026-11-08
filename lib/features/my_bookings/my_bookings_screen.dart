@@ -19,10 +19,13 @@ class MyBookingsScreen extends StatefulWidget {
   final VoidCallback onBookNew;
   final ValueChanged<String>? onOpenSalon;
 
+  /// «Назад» (например, в профиль). Если не задан, кнопки нет: экран открыт из нижней панели
+  final VoidCallback? onBack;
+
   /// 0 — Активные, 1 — Прошедшие, 2 — Отменённые
   final int initialTab;
 
-  const MyBookingsScreen({super.key, required this.onBookNew, this.onOpenSalon, this.initialTab = 0});
+  const MyBookingsScreen({super.key, required this.onBookNew, this.onOpenSalon, this.onBack, this.initialTab = 0});
 
   @override
   State<MyBookingsScreen> createState() => _MyBookingsScreenState();
@@ -188,6 +191,9 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        leading: widget.onBack == null
+            ? null
+            : IconButton(icon: Icon(Icons.arrow_back, color: AppColors.ink), onPressed: widget.onBack),
         title: Text(
           'Мои записи',
           style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.ink),

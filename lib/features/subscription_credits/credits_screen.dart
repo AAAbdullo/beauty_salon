@@ -13,7 +13,10 @@ import '../../core/widgets/cards/app_card.dart';
 import '../../core/widgets/sheets/app_sheet.dart';
 
 class CreditsScreen extends StatefulWidget {
-  const CreditsScreen({super.key});
+  /// «Назад» (например, в профиль). Если не задан, кнопки нет: экран открыт из нижней панели
+  final VoidCallback? onBack;
+
+  const CreditsScreen({super.key, this.onBack});
 
   @override
   State<CreditsScreen> createState() => _CreditsScreenState();
@@ -206,6 +209,9 @@ class _CreditsScreenState extends State<CreditsScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        leading: widget.onBack == null
+            ? null
+            : IconButton(icon: Icon(Icons.arrow_back, color: AppColors.ink), onPressed: widget.onBack),
         title: Text(
           'Кредиты и Абонемент',
           style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.ink),

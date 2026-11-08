@@ -177,6 +177,39 @@ void main() {
       expect(find.text('Салоны (10)'), findsOneWidget);
       await disposeTree(tester);
     });
+
+    testWidgets('пункты профиля возвращают «Назад» в профиль, а из нижней панели кнопки «Назад» нет', (tester) async {
+      await pumpApp(tester, AppDependencies.mock(network: MockNetwork()));
+      await loginClient(tester);
+
+      // Из пункта профиля: есть кнопка «Назад», она ведёт в профиль
+      await tester.tap(find.text('Профиль').last);
+      await settle(tester);
+      await tester.tap(find.text('Кредиты и оплата'));
+      await settle(tester);
+      expect(find.text('Кредиты и Абонемент'), findsOneWidget);
+      expect(find.byIcon(Icons.arrow_back), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.arrow_back));
+      await settle(tester);
+      expect(find.text('Кредиты и Абонемент'), findsNothing);
+      expect(find.text('Ваш тариф'), findsOneWidget);
+
+      // Системная «Назад» с «Мои записи» тоже возвращает в профиль, а не на главную
+      await tester.tap(find.text('Мои записи'));
+      await settle(tester);
+      expect(find.byIcon(Icons.arrow_back), findsOneWidget);
+      await tester.binding.handlePopRoute();
+      await settle(tester);
+      expect(find.text('Ваш тариф'), findsOneWidget);
+
+      // Из нижней панели: кнопки «Назад» нет
+      await tester.tap(find.text('Кредиты').last);
+      await settle(tester);
+      expect(find.text('Кредиты и Абонемент'), findsOneWidget);
+      expect(find.byIcon(Icons.arrow_back), findsNothing);
+      await disposeTree(tester);
+    });
   });
 
   group('Кнопка и QR-окно', () {

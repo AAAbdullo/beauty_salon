@@ -195,6 +195,9 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
   String? _mapFocusSalonId;
   int _mapFocusNonce = 0;
 
+  // Вкладка, в которую вернёт «Назад» (4 — профиль, если вкладку открыли из пункта профиля). `null` — обычный переход
+  int? _tabReturnTo;
+
   // Вкладка «Мои записи», которую открыть (0 — активные, 1 — прошедшие)
   int _bookingsInitialTab = 0;
 
@@ -223,7 +226,7 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
     } else if (_isMasterMode) {
       setState(() => _masterTabIndex = 0);
     } else {
-      _goToClientTab(0);
+      _goToClientTab(_tabReturnTo ?? 0);
     }
   }
 
@@ -244,8 +247,9 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
 
   void _openMaster(String masterId) => _push(_Page(_PageKind.master, masterId: masterId));
 
-  void _goToClientTab(int index, {int? bookingsTab}) => setState(() {
+  void _goToClientTab(int index, {int? bookingsTab, int? returnTo}) => setState(() {
     _clearPages();
+    _tabReturnTo = returnTo;
     // Вход на вкладку карты обычным путём (панель, «На карте» на главной) показывает всю карту без выбранного салона.
     // Салон показывается только после «На карте» из карточки салона (`_showSalonOnMap`).
     if (index == 1 && _clientTabIndex != 1 && _mapFocusSalonId != null) {
@@ -389,6 +393,7 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
         ..clear()
         ..add(0);
       _mapFocusSalonId = null;
+      _tabReturnTo = null;
       _bookingsInitialTab = 0;
     });
   }
@@ -575,7 +580,7 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
       () => SalonsMapScreen(
         key: ValueKey('map_$_mapFocusNonce'),
         initialSalonId: _mapFocusSalonId,
-        onBack: () => _goToClientTab(0),
+        onBack: () => _goToClientTab(_tabReturnTo ?? 0),
         onSelectSalon: _openSalon,
       ),
       () => MyBookingsScreen(
@@ -583,16 +588,19 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
         initialTab: _bookingsInitialTab,
         onBookNew: () => _goToClientTab(0),
         onOpenSalon: _openSalon,
+        // Кнопка «Назад» только если сюда пришли из профиля
+        onBack: _tabReturnTo == null ? null : () => _goToClientTab(_tabReturnTo!),
       ),
-      () => const CreditsScreen(),
+      () => CreditsScreen(onBack: _tabReturnTo == null ? null : () => _goToClientTab(_tabReturnTo!)),
       () => ClientProfileScreen(
         onOpenSettings: () => _push(_Page(_PageKind.settings)),
         onOpenQr: () => ClientQrModal.showForNearestBooking(context, onBookNew: () => _goToClientTab(0)),
         onOpenFavorites: () => _push(_Page(_PageKind.favorites)),
         onOpenNotifications: () => _push(_Page(_PageKind.notifications)),
-        onOpenBookings: (tab) => _goToClientTab(2, bookingsTab: tab),
-        onOpenCredits: () => _goToClientTab(3),
-        onOpenMap: () => _goToClientTab(1),
+        // Пункты профиля открывают вкладки с возвратом в профиль (4)
+        onOpenBookings: (tab) => _goToClientTab(2, bookingsTab: tab, returnTo: 4),
+        onOpenCredits: () => _goToClientTab(3, returnTo: 4),
+        onOpenMap: () => _goToClientTab(1, returnTo: 4),
       ),
     ]);
   }
