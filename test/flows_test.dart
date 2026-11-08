@@ -177,6 +177,23 @@ void main() {
       BookingScreen(salonId: salonId, onBack: () {}, onConfirm: onConfirm ?? (_, _) async => true),
     );
 
+    testWidgets('таймер удержания тикает: обновляется надпись времени без перерисовки всего экрана', (tester) async {
+      await pumpBooking(tester);
+      await tester.ensureVisible(find.text('12:00'));
+      await tester.tap(find.text('12:00'));
+      await settle(tester);
+      expect(find.textContaining('10:00'), findsWidgets);
+
+      clock.set(clock.now().add(const Duration(seconds: 65))); // прошло 65 секунд из 600
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('08:55'), findsOneWidget);
+
+      clock.set(clock.now().add(const Duration(seconds: 480))); // осталось меньше двух минут: предупреждение
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('00:55'), findsOneWidget);
+      await disposeTree(tester);
+    });
+
     testWidgets('выбор слота закрепляет его на 10 минут, смена мастера освобождает', (tester) async {
       final slots = deps.slots as MockSlotsRepository;
       await pumpBooking(tester);

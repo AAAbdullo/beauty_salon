@@ -135,7 +135,8 @@ class _BookingViewState extends State<_BookingView> with WidgetsBindingObserver 
   SlotHold? _hold;
   bool _holding = false;
   Timer? _holdTimer;
-  int _holdSecondsLeft = 0;
+  // Обновляется каждую секунду: перерисовывается только надпись таймера, а не весь экран записи
+  final _holdSecondsLeft = ValueNotifier<int>(0);
 
   // Ключ идемпотентности попытки: повтор (двойной тап) не создаст вторую запись
   String _idempotencyKey = Uuid.v4();
@@ -187,6 +188,7 @@ class _BookingViewState extends State<_BookingView> with WidgetsBindingObserver 
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _holdTimer?.cancel();
+    _holdSecondsLeft.dispose();
     final hold = _hold;
     // Экран владеет удержанием, пока жив (экран оплаты лежит поверх него). Ушли без записи — слот
     // возвращается в продажу; если запись создана, удержание уже израсходовано и освобождение ничего не делает.
@@ -307,14 +309,14 @@ class _BookingViewState extends State<_BookingView> with WidgetsBindingObserver 
     if (!mounted || hold == null || _submitting) return;
     final left = hold.expiresAt.difference(AppClock.now()).inSeconds;
     if (left > 0) {
-      setState(() => _holdSecondsLeft = left);
+      _holdSecondsLeft.value = left;
       return;
     }
     _holdTimer?.cancel();
     setState(() {
       _hold = null;
       _selectedStart = null;
-      _holdSecondsLeft = 0;
+      _holdSecondsLeft.value = 0;
     });
     _showTimeoutDialog();
     unawaited(_reloadSlots());
@@ -326,7 +328,7 @@ class _BookingViewState extends State<_BookingView> with WidgetsBindingObserver 
     final hold = _hold;
     _hold = null;
     _selectedStart = null;
-    _holdSecondsLeft = 0;
+    _holdSecondsLeft.value = 0;
     _idempotencyKey = Uuid.v4();
     if (hold != null) unawaited(_deps.slots.releaseHold(hold.id));
   }
@@ -365,7 +367,7 @@ class _BookingViewState extends State<_BookingView> with WidgetsBindingObserver 
           setState(() {
             _hold = null;
             _selectedStart = null;
-            _holdSecondsLeft = 0;
+            _holdSecondsLeft.value = 0;
           });
           showAppSnack(context, error.message);
           unawaited(_reloadSlots()); // слот мог занять другой клиент — обновляем список
@@ -598,9 +600,14 @@ class _BookingViewState extends State<_BookingView> with WidgetsBindingObserver 
   }
 
   /// ТЗ M-08: Индикатор удержания слота на 10 минут
-  Widget _buildHoldTimerBanner() {
+  Widget _buildHoldTimerBanner() => ValueListenableBuilder<int>(
+    valueListenable: _holdSecondsLeft,
+    builder: (context, secondsLeft, _) => _holdTimerBannerBody(secondsLeft),
+  );
+
+  Widget _holdTimerBannerBody(int secondsLeft) {
     final hasSlot = _hold != null;
-    final isLowTime = hasSlot && _holdSecondsLeft < 120;
+    final isLowTime = hasSlot && secondsLeft < 120;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -629,7 +636,7 @@ class _BookingViewState extends State<_BookingView> with WidgetsBindingObserver 
                             style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.ink),
                           ),
                           Text(
-                            _formatTimer(_holdSecondsLeft),
+                            _formatTimer(secondsLeft),
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w900,
