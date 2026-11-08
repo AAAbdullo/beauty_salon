@@ -84,6 +84,28 @@ class _AuthScreenState extends State<AuthScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // Фон-градиент уходит под верхнюю панель, а кнопка языка стоит в самом правом верхнем углу
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        automaticallyImplyLeading: false,
+        actions: [
+          // Смена языка до входа: узбекский (латиница, кириллица) и русский
+          Padding(
+            padding: const EdgeInsets.only(right: AppSizes.screenPadding),
+            child: ActionChip(
+              avatar: const Icon(Icons.language, size: 18, color: AppColors.primary),
+              label: Text(
+                languageLabel(AppLocale.instance.language),
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink),
+              ),
+              onPressed: () => showLanguagePicker(context),
+            ),
+          ),
+        ],
+      ),
       body: Container(
         decoration: BoxDecoration(
           gradient: AppGradients.page,
@@ -96,19 +118,6 @@ class _AuthScreenState extends State<AuthScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Смена языка до входа: узбекский (латиница, кириллица) и русский
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: ActionChip(
-                      avatar: const Icon(Icons.language, size: 18, color: AppColors.primary),
-                      label: Text(
-                        languageLabel(AppLocale.instance.language),
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink),
-                      ),
-                      onPressed: () => showLanguagePicker(context),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
                   Center(
                     child: Container(
                       width: 80,
