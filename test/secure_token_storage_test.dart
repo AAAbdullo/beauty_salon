@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:beauty_salons/core/data/repositories/auth_repository.dart';
 import 'package:beauty_salons/core/data/secure_token_storage.dart';
 
 void main() {
@@ -85,7 +86,7 @@ void main() {
     await storage.write('abc');
 
     await storage.clear();
-    expect(data['access_token'], 'abc'); // Keychain не дал удалить
+    expect(SecureTokenStorage.decode(data['access_token'])?.access, 'abc'); // Keychain не дал удалить
 
     // Следующий запуск: Keychain снова работает — токен стирается до чтения и не восстанавливает сессию
     expect(await storage.read(), isNull);
@@ -103,6 +104,33 @@ void main() {
 
     await storage.write('new-session');
     await storage.clearIfFreshInstall(); // уже не первый запуск
-    expect(data['access_token'], 'new-session');
+    expect(SecureTokenStorage.decode(data['access_token'])?.access, 'new-session');
+  });
+
+  test('пара токенов access+refresh сохраняется и читается', () async {
+    final data = installStorage();
+    final storage = SecureTokenStorage();
+    await storage.writeTokens(const AuthTokens(access: 'a1', refresh: 'r1'));
+    expect(await storage.readTokens(), const AuthTokens(access: 'a1', refresh: 'r1'));
+    expect(await storage.read(), 'a1');
+    expect(data['access_token'], startsWith('{'));
+
+    await storage.write('only-access'); // без refresh
+    expect(await storage.readTokens(), const AuthTokens(access: 'only-access'));
+  });
+
+  test('токен, записанный старой версией простой строкой, читается без миграции', () async {
+    final data = installStorage();
+    data['access_token'] = 'legacy-plain-token';
+    final storage = SecureTokenStorage();
+    expect(await storage.readTokens(), const AuthTokens(access: 'legacy-plain-token'));
+  });
+
+  test('повреждённый JSON в хранилище — «нет сессии»', () async {
+    final data = installStorage();
+    data['access_token'] = '{broken';
+    expect(await SecureTokenStorage().readTokens(), isNull);
+    data['access_token'] = '{"refresh":"r"}'; // нет access
+    expect(await SecureTokenStorage().readTokens(), isNull);
   });
 }

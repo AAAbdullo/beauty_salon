@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'repositories/auth_repository.dart';
@@ -6,7 +8,7 @@ import 'repositories/auth_repository.dart';
 /// Сбой хранилища не должен ронять приложение: чтение даёт «нет сессии», запись молча пропускается.
 /// Очистка при сбое повторяется, а если не удалась — запоминается и выполняется до следующего чтения токена,
 /// чтобы токен прошлого пользователя не восстановил его сессию.
-class SecureTokenStorage implements TokenStorage {
+class SecureTokenStorage extends TokenStorage {
   SecureTokenStorage({FlutterSecureStorage? storage}) : _storage = storage ?? const FlutterSecureStorage();
 
   static const _key = 'access_token';
@@ -25,8 +27,29 @@ class SecureTokenStorage implements TokenStorage {
     } catch (_) {}
   }
 
+  /// Хранится JSON {"access": ..., "refresh": ...}. Ключ прежний: токен, записанный старой версией
+  /// как обычная строка, читается как access без refresh — миграция не нужна.
+  static AuthTokens? decode(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    if (raw.startsWith('{')) {
+      try {
+        final map = jsonDecode(raw) as Map<String, dynamic>;
+        final access = map['access'];
+        if (access is! String || access.isEmpty) return null;
+        final refresh = map['refresh'];
+        return AuthTokens(access: access, refresh: refresh is String && refresh.isNotEmpty ? refresh : null);
+      } catch (_) {
+        return null;
+      }
+    }
+    return AuthTokens(access: raw);
+  }
+
+  static String encode(AuthTokens t) =>
+      jsonEncode({'access': t.access, if (t.refresh != null) 'refresh': t.refresh});
+
   @override
-  Future<String?> read() async {
+  Future<AuthTokens?> readTokens() async {
     // Прошлая очистка не удалась — завершаем её, а токен не отдаём
     if (await _isClearPending()) {
       try {
@@ -37,16 +60,16 @@ class SecureTokenStorage implements TokenStorage {
       }
     }
     try {
-      return await _storage.read(key: _key);
+      return decode(await _storage.read(key: _key));
     } catch (_) {
       return null;
     }
   }
 
   @override
-  Future<void> write(String token) async {
+  Future<void> writeTokens(AuthTokens tokens) async {
     try {
-      await _storage.write(key: _key, value: token);
+      await _storage.write(key: _key, value: encode(tokens));
     } catch (_) {}
   }
 

@@ -23,25 +23,46 @@ class AuthError {
   String toString() => 'AuthError($message)';
 }
 
-/// Хранилище токена. На устройстве — защищённое (Keychain / Keystore через flutter_secure_storage),
-/// в моках — в памяти.
-abstract interface class TokenStorage {
-  Future<String?> read();
-  Future<void> write(String token);
-  Future<void> clear();
+/// Пара токенов сессии: короткоживущий access и (когда появится бэкенд) долгоживущий refresh.
+/// Refresh обновляет Dio-перехватчик в слое данных; экраны видят только [AuthRepository.sessionExpired].
+class AuthTokens {
+  final String access;
+  final String? refresh;
+
+  const AuthTokens({required this.access, this.refresh});
+
+  @override
+  bool operator ==(Object other) => other is AuthTokens && other.access == access && other.refresh == refresh;
+
+  @override
+  int get hashCode => Object.hash(access, refresh);
 }
 
-class InMemoryTokenStorage implements TokenStorage {
-  String? _token;
+/// Хранилище токенов. На устройстве — защищённое (Keychain / Keystore через flutter_secure_storage),
+/// в моках — в памяти. Реализации наследуют класс и определяют [readTokens]/[writeTokens]/[clear].
+abstract class TokenStorage {
+  Future<AuthTokens?> readTokens();
+  Future<void> writeTokens(AuthTokens tokens);
+  Future<void> clear();
+
+  /// Только access-токен (пока refresh не нужен)
+  Future<String?> read() async => (await readTokens())?.access;
+
+  /// Сохранить access-токен без refresh
+  Future<void> write(String token) => writeTokens(AuthTokens(access: token));
+}
+
+class InMemoryTokenStorage extends TokenStorage {
+  AuthTokens? _tokens;
 
   @override
-  Future<String?> read() async => _token;
+  Future<AuthTokens?> readTokens() async => _tokens;
 
   @override
-  Future<void> write(String token) async => _token = token;
+  Future<void> writeTokens(AuthTokens tokens) async => _tokens = tokens;
 
   @override
-  Future<void> clear() async => _token = null;
+  Future<void> clear() async => _tokens = null;
 }
 
 /// Вход и сессия.
