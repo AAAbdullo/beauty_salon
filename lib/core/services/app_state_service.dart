@@ -49,6 +49,10 @@ class AppStateService extends ChangeNotifier {
   final BookingStore _store = BookingStore();
   final SlotService _slots = SlotService();
 
+  /// Меняется только при изменении записей (новая, отмена, перенос, визит по QR), а не при смене избранного,
+  /// аватара или настроек. Кабинет мастера перечитывает данные по этому событию.
+  Listenable get bookingChanges => _store;
+
   // Бизнес-правила (ТЗ) — значения живут в BookingRules
   static const freeCancelMinutes = BookingRules.freeCancelMinutes;
   static const minLeadMinutes = BookingRules.minLeadMinutes;

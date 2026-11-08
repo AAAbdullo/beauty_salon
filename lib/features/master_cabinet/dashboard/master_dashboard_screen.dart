@@ -54,12 +54,16 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
   @override
   void initState() {
     super.initState();
-    _appState.addListener(_onStateChanged);
+    _appState.bookingChanges.addListener(_onStateChanged);
     unawaited(_loadProfile());
     unawaited(_load());
   }
 
+  // Номер последнего запроса: ответ на более старый запрос не должен затереть более новый
+  int _loadId = 0;
+
   Future<void> _load({bool silent = false}) async {
+    final id = ++_loadId;
     if (!silent) {
       setState(() {
         _isLoading = true;
@@ -68,7 +72,7 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
     }
     try {
       final data = await AppScope.read(context).masterCabinet.dashboard();
-      if (mounted) {
+      if (mounted && id == _loadId) {
         setState(() {
           _data = data;
           _error = null;
@@ -77,7 +81,7 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
       }
     } on RepositoryException catch (e) {
       // Тихое обновление не затирает уже показанные данные ошибкой
-      if (mounted && !silent) {
+      if (mounted && !silent && id == _loadId) {
         setState(() {
           _error = e;
           _isLoading = false;
@@ -99,7 +103,7 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
 
   @override
   void dispose() {
-    _appState.removeListener(_onStateChanged);
+    _appState.bookingChanges.removeListener(_onStateChanged);
     super.dispose();
   }
 

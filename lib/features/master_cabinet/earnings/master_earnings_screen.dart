@@ -34,11 +34,15 @@ class _MasterEarningsScreenState extends State<MasterEarningsScreen> {
   @override
   void initState() {
     super.initState();
-    _appState.addListener(_onStateChanged);
+    _appState.bookingChanges.addListener(_onStateChanged);
     unawaited(_load());
   }
 
+  // Номер последнего запроса: ответ на более старый запрос (другой месяц или прежнее состояние) игнорируется
+  int _loadId = 0;
+
   Future<void> _load({bool silent = false}) async {
+    final id = ++_loadId;
     if (!silent) {
       setState(() {
         _isLoading = true;
@@ -49,7 +53,7 @@ class _MasterEarningsScreenState extends State<MasterEarningsScreen> {
     try {
       final data = await AppScope.read(context).masterCabinet.earnings(offset);
       // Пока шёл запрос, пользователь мог переключить месяц — устаревший ответ не показываем
-      if (mounted && offset == _monthOffset) {
+      if (mounted && id == _loadId && offset == _monthOffset) {
         setState(() {
           _data = data;
           _error = null;
@@ -57,7 +61,7 @@ class _MasterEarningsScreenState extends State<MasterEarningsScreen> {
         });
       }
     } on RepositoryException catch (e) {
-      if (mounted && offset == _monthOffset && !silent) {
+      if (mounted && id == _loadId && offset == _monthOffset && !silent) {
         setState(() {
           _error = e;
           _isLoading = false;
@@ -73,7 +77,7 @@ class _MasterEarningsScreenState extends State<MasterEarningsScreen> {
 
   @override
   void dispose() {
-    _appState.removeListener(_onStateChanged);
+    _appState.bookingChanges.removeListener(_onStateChanged);
     super.dispose();
   }
 

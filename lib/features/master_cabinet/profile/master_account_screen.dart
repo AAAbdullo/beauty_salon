@@ -44,21 +44,24 @@ class _MasterAccountScreenState extends State<MasterAccountScreen> {
   @override
   void initState() {
     super.initState();
-    _appState.addListener(_loadStats);
+    _appState.bookingChanges.addListener(_loadStats);
     unawaited(_loadProfile());
     unawaited(_loadStats());
   }
 
   @override
   void dispose() {
-    _appState.removeListener(_loadStats);
+    _appState.bookingChanges.removeListener(_loadStats);
     super.dispose();
   }
 
+  int _statsLoadId = 0; // ответ на устаревший запрос игнорируется
+
   Future<void> _loadStats() async {
+    final id = ++_statsLoadId;
     try {
       final stats = await AppScope.read(context).masterCabinet.accountStats();
-      if (mounted) setState(() => _stats = stats);
+      if (mounted && id == _statsLoadId) setState(() => _stats = stats);
     } on RepositoryException {
       // Остаёмся с прочерками; данные подтянутся при следующем изменении записей
     }
