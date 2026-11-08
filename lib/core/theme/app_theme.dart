@@ -182,6 +182,14 @@ ThemeData _build({
         textStyle: GoogleFonts.manrope(fontSize: 16, fontWeight: FontWeight.w700),
       ),
     ),
+    // В тёмной теме стандартное уведомление светлое и слепит: делаем его тёмным, в тон карточкам
+    snackBarTheme: brightness == Brightness.dark
+        ? SnackBarThemeData(
+            backgroundColor: line,
+            contentTextStyle: GoogleFonts.manrope(fontSize: 14, fontWeight: FontWeight.w600, color: ink),
+            actionTextColor: AppColors.primaryText,
+          )
+        : null,
     chipTheme: ChipThemeData(
       backgroundColor: surface,
       selectedColor: AppColors.primary,
