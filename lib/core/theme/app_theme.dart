@@ -228,11 +228,25 @@ ThemeData _build({
         GoogleFonts.manrope(fontSize: 11, fontWeight: FontWeight.w600),
       ),
     ),
+    // Переключатель: состояние читается без подсказок.
+    // Включён — розовая дорожка, белый ползунок справа с галочкой.
+    // Выключен — серая дорожка с контуром, серый ползунок слева с крестиком.
     switchTheme: SwitchThemeData(
       trackColor: WidgetStateProperty.resolveWith(
-        (s) => s.contains(WidgetState.selected) ? AppColors.primary : line,
+        (s) => s.contains(WidgetState.selected)
+            ? AppColors.primary
+            : (brightness == Brightness.dark ? const Color(0xFF2A2234) : const Color(0xFFE9E4E8)),
       ),
-      thumbColor: const WidgetStatePropertyAll(Colors.white),
+      trackOutlineColor: WidgetStateProperty.resolveWith(
+        (s) => s.contains(WidgetState.selected) ? Colors.transparent : muted,
+      ),
+      trackOutlineWidth: const WidgetStatePropertyAll(1.5),
+      thumbColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? Colors.white : muted),
+      thumbIcon: WidgetStateProperty.resolveWith(
+        (s) => s.contains(WidgetState.selected)
+            ? const Icon(Icons.check, color: AppColors.primary)
+            : Icon(Icons.close, color: surface),
+      ),
     ),
   );
 }

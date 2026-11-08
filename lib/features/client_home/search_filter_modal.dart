@@ -296,7 +296,6 @@ class _SearchFilterModalState extends State<SearchFilterModal> {
           ),
           Switch(
             value: value,
-            activeThumbColor: AppColors.primary,
             onChanged: onChanged,
           ),
         ],

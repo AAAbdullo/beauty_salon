@@ -336,7 +336,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
           ),
-          Switch(value: value, activeThumbColor: AppColors.primary, onChanged: onChanged),
+          Switch(value: value, onChanged: onChanged),
         ],
       ),
     );
