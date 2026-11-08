@@ -163,6 +163,7 @@ class SalonsRepository {
       minPriceSum: 220000,
       minCredits: 50,
       point: Point(latitude: 41.299000, longitude: 69.268000),
+      imageAsset: 'assets/images/salons/salon_glow_and_go.jpg',
     ),
     SalonModel(
       id: 's-005',
@@ -181,6 +182,7 @@ class SalonsRepository {
       minPriceSum: 100000,
       minCredits: 0,
       point: Point(latitude: 41.332000, longitude: 69.289000),
+      imageAsset: 'assets/images/salons/salon_zara_beauty_lab.jpg',
     ),
     SalonModel(
       id: 's-006',
@@ -199,6 +201,7 @@ class SalonsRepository {
       minPriceSum: 130000,
       minCredits: 30,
       point: Point(latitude: 41.285000, longitude: 69.215000),
+      imageAsset: 'assets/images/salons/salon_chilonzor_grace.jpg',
     ),
     SalonModel(
       id: 's-007',
@@ -217,6 +220,7 @@ class SalonsRepository {
       minPriceSum: 160000,
       minCredits: 36,
       point: Point(latitude: 41.301500, longitude: 69.278500),
+      imageAsset: 'assets/images/salons/salon_bella_donna.jpg',
     ),
     SalonModel(
       id: 's-008',
@@ -254,6 +258,7 @@ class SalonsRepository {
       minPriceSum: 140000,
       minCredits: 32,
       point: Point(latitude: 41.229000, longitude: 69.221000),
+      imageAsset: 'assets/images/salons/salon_aura_spa.jpg',
     ),
     SalonModel(
       id: 's-010',
@@ -272,6 +277,7 @@ class SalonsRepository {
       minPriceSum: 95000,
       minCredits: 22,
       point: Point(latitude: 41.289000, longitude: 69.178000),
+      imageAsset: 'assets/images/salons/salon_estetika_uchtepa.jpg',
     ),
   ];
 
