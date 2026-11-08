@@ -246,6 +246,12 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
 
   void _goToClientTab(int index, {int? bookingsTab}) => setState(() {
     _clearPages();
+    // Вход на вкладку карты обычным путём (панель, «На карте» на главной) показывает всю карту без выбранного салона.
+    // Салон показывается только после «На карте» из карточки салона (`_showSalonOnMap`).
+    if (index == 1 && _clientTabIndex != 1 && _mapFocusSalonId != null) {
+      _mapFocusSalonId = null;
+      _mapFocusNonce++; // новый ключ — карта создаётся заново, без прежнего выбора
+    }
     _clientTabIndex = index;
     _clientTabsBuilt.add(index);
     if (bookingsTab != null) _bookingsInitialTab = bookingsTab;

@@ -815,9 +815,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
       ),
     );
     _lastTurnAnnouncement = null;
-    _voiceGuidance.speak(
-      _isWalkingRoute ? 'Маршрут пешком построен. Двигайтесь по маршруту.' : 'Маршрут построен. Поехали!',
-    );
+    _voiceGuidance.speak('Маршрут построен');
     _updateNextManeuver(_navStepIndex);
 
     _navTrackingTimer?.cancel();
