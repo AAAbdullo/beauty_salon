@@ -42,6 +42,9 @@ import 'core/utils/result.dart';
 import 'core/services/masters_repository.dart';
 import 'core/widgets/sheets/app_sheet.dart';
 
+/// Наибольший масштаб системного шрифта, который учитывает приложение
+const maxTextScale = 1.3;
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await AppPreferences.restoreAndWatch(); // язык и тема с прошлого запуска
@@ -123,6 +126,15 @@ class _GozallikAppState extends State<GozallikApp> with WidgetsBindingObserver {
         supportedLocales: const [Locale('ru'), Locale('uz')],
         localizationsDelegates: GlobalMaterialLocalizations.delegates,
         themeAnimationDuration: Duration.zero, // палитра переключается мгновенно и целиком
+        // Крупный системный шрифт учитываем до 1,3: в интерфейсе много фиксированных высот
+        // (нижняя панель, плитки), при 1,5–2,0 подписи переполняли бы их.
+        builder: (context, child) {
+          final media = MediaQuery.of(context);
+          return MediaQuery(
+            data: media.copyWith(textScaler: media.textScaler.clamp(maxScaleFactor: maxTextScale)),
+            child: child ?? const SizedBox.shrink(),
+          );
+        },
         home: const RootNavigationContainer(),
       ),
     );

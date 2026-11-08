@@ -647,11 +647,16 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
         children: [
           Row(
             children: [
-              Text(
-                _showTomorrow ? 'Записи на завтра' : 'Сегодняшние записи',
-                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+              // Заголовок уступает место чипам при крупном шрифте
+              Expanded(
+                child: Text(
+                  _showTomorrow ? 'Записи на завтра' : 'Сегодняшние записи',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+                ),
               ),
-              const Spacer(),
+              const SizedBox(width: 8),
               _dayChip('Сегодня', !_showTomorrow, () => setState(() => _showTomorrow = false)),
               const SizedBox(width: 6),
               _dayChip('Завтра', _showTomorrow, () => setState(() => _showTomorrow = true)),
