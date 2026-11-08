@@ -10,6 +10,7 @@ import '../../core/services/salons_repository.dart';
 import '../../core/widgets/sheets/app_sheet.dart';
 import '../../core/widgets/states/async_screen.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/avatars/avatar_image.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/badges/app_status_badge.dart';
 import '../../core/widgets/cards/app_card.dart';
@@ -443,8 +444,8 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                 border: Border.all(color: AppColors.primary, width: 1.5),
               ),
               child: ClipOval(
-                child: Image.asset(
-                  _appState.clientAvatar,
+                child: Image(
+                  image: avatarProvider(_appState.clientAvatar),
                   fit: BoxFit.cover,
                   errorBuilder: (_, _, _) => const Icon(Icons.person, color: AppColors.primary, size: 26),
                 ),

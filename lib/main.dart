@@ -29,6 +29,7 @@ import 'features/master_cabinet/profile/master_account_screen.dart';
 import 'dart:async';
 import 'core/data/app_dependencies.dart';
 import 'core/data/secure_token_storage.dart';
+import 'core/services/profile_photo_storage.dart';
 import 'core/data/app_scope.dart';
 import 'core/data/repositories/auth_repository.dart';
 import 'core/data/repositories/bookings_repository.dart';
@@ -42,6 +43,8 @@ import 'core/widgets/sheets/app_sheet.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await AppPreferences.restoreAndWatch(); // язык и тема с прошлого запуска
+  final savedPhoto = await ProfilePhotoStorage.restore(); // фото профиля с прошлого запуска
+  if (savedPhoto != null) AppStateService().updateClientAvatar(savedPhoto);
   runApp(GozallikApp(dependencies: AppDependencies.mock(tokenStorage: SecureTokenStorage())));
 }
 
@@ -379,6 +382,7 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
   void _logout() {
     unawaited(_deps.auth.logout());
     _deps.appState.resetSession();
+    unawaited(ProfilePhotoStorage.clear()); // фото принадлежит вышедшему пользователю
     setState(() {
       _clearPages(); // экраны записи при этом освобождают удержания слотов
       _isAuthenticated = false;

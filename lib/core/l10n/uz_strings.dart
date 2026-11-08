@@ -731,6 +731,14 @@ const Map<String, String> uzExact = {
   '• Платежи обрабатывают Click, Payme и Uzum — данные карт приложение не хранит.': '• To\'lovlarni Click, Payme va Uzum qayta ishlaydi — ilova karta ma\'lumotlarini saqlamaydi.',
   '• Пользовательское соглашение и политика конфиденциальности публикуются на gozallik.uz.': '• Foydalanuvchi shartnomasi va maxfiylik siyosati gozallik.uz saytida e\'lon qilinadi.',
   '• Услуги оказывают салоны-партнёры; претензии по качеству рассматриваются через поддержку.': '• Xizmatlarni hamkor salonlar ko\'rsatadi; sifat bo\'yicha e\'tirozlar qo\'llab-quvvatlash orqali ko\'rib chiqiladi.',
+  'Фото профиля': 'Profil rasmi',
+  'Выбрать из галереи': 'Galereyadan tanlash',
+  'Сделать фото': 'Rasmga olish',
+  'Удалить фото': 'Rasmni o\'chirish',
+  'Изменить фото': 'Rasmni o\'zgartirish',
+  'Фото профиля обновлено': 'Profil rasmi yangilandi',
+  'Фото удалено': 'Rasm o\'chirildi',
+  'Не удалось получить фото. Проверьте доступ к камере и фото в настройках телефона.': 'Rasmni olib bo\'lmadi. Telefon sozlamalarida kamera va rasmlarga ruxsatni tekshiring.',
 };
 
 const Map<String, String> uzTemplates = {
@@ -1604,6 +1612,14 @@ const Map<String, String> uzCyrlExact = {
   '• Платежи обрабатывают Click, Payme и Uzum — данные карт приложение не хранит.': '• Тўловларни Click, Payme ва Uzum қайта ишлайди — илова карта маълумотларини сақламайди.',
   '• Пользовательское соглашение и политика конфиденциальности публикуются на gozallik.uz.': '• Фойдаланувчи шартномаси ва махфийлик сиёсати gozallik.uz сайтида эълон қилинади.',
   '• Услуги оказывают салоны-партнёры; претензии по качеству рассматриваются через поддержку.': '• Хизматларни ҳамкор салонлар кўрсатади; сифат бўйича эътирозлар қўллаб-қувватлаш орқали кўриб чиқилади.',
+  'Фото профиля': 'Профил расми',
+  'Выбрать из галереи': 'Галереядан танлаш',
+  'Сделать фото': 'Расмга олиш',
+  'Удалить фото': 'Расмни ўчириш',
+  'Изменить фото': 'Расмни ўзгартириш',
+  'Фото профиля обновлено': 'Профил расми янгиланди',
+  'Фото удалено': 'Расм ўчирилди',
+  'Не удалось получить фото. Проверьте доступ к камере и фото в настройках телефона.': 'Расмни олиб бўлмади. Телефон созламаларида камера ва расмларга рухсатни текширинг.',
 };
 
 const Map<String, String> uzCyrlTemplates = {

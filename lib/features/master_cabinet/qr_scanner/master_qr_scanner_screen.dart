@@ -6,6 +6,7 @@ import '../../../core/utils/clock.dart';
 import '../../../core/data/app_scope.dart';
 import '../../../core/data/repository_exception.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/avatars/avatar_image.dart';
 import '../../../core/widgets/buttons/app_gradient_button.dart';
 
 class MasterQrScannerScreen extends StatefulWidget {
@@ -345,8 +346,8 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
                               ClipOval(
                                 child: _scannedClientAvatar == null
                                     ? const SizedBox(width: 24, height: 24, child: Icon(Icons.person, size: 18))
-                                    : Image.asset(
-                                        _scannedClientAvatar!,
+                                    : Image(
+                                        image: avatarProvider(_scannedClientAvatar!),
                                         width: 24,
                                         height: 24,
                                         fit: BoxFit.cover,

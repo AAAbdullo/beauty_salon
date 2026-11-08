@@ -22,6 +22,9 @@ class AppColors {
   static Color get ink => _p(lightInk, darkInk);
   static Color get muted => _p(lightMuted, darkMuted);
 
+  /// Фон уведомлений (SnackBar): тёмный в обеих темах, текст на нём светлый
+  static Color get snackBackground => _p(lightInk, darkLine);
+
   /// Разделители и контуры карточек
   static Color get line => _p(lightLine, darkLine);
 

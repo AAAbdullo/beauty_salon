@@ -3,6 +3,7 @@ import 'package:flutter/material.dart' hide Text;
 import '../../core/l10n/app_text.dart';
 import '../../core/services/app_state_service.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/avatars/avatar_image.dart';
 import '../../core/widgets/badges/app_status_badge.dart';
 import '../../core/widgets/cards/app_card.dart';
 import 'profile_sheets.dart';
@@ -123,24 +124,33 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
       padding: const EdgeInsets.symmetric(horizontal: AppSizes.screenPadding),
       child: Row(
         children: [
-          Container(
-            width: 74,
-            height: 74,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: AppColors.primary, width: 2),
-            ),
-            child: ClipOval(
-              child: Image.asset(
-                _appState.clientAvatar,
-                width: 74,
-                height: 74,
-                fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => Container(
-                  color: AppColors.primaryTint,
-                  child: const Icon(Icons.person, size: 45, color: AppColors.primary),
+          GestureDetector(
+            onTap: () => ProfileSheets.changePhoto(context),
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  width: 74,
+                  height: 74,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: AppColors.primary, width: 2),
+                  ),
+                  child: ClipOval(
+                    child: Image(
+                      image: avatarProvider(_appState.clientAvatar),
+                      width: 74,
+                      height: 74,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => Container(
+                        color: AppColors.primaryTint,
+                        child: const Icon(Icons.person, size: 45, color: AppColors.primary),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+                const Positioned(right: -2, bottom: -2, child: PhotoEditBadge()),
+              ],
             ),
           ),
           const SizedBox(width: 14),

@@ -11,6 +11,7 @@ import '../../../core/utils/clock.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/sheets/app_sheet.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/avatars/avatar_image.dart';
 import '../../../core/widgets/buttons/app_pill_button.dart';
 import '../../../core/widgets/cards/app_card.dart';
 
@@ -446,7 +447,7 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
                         radius: 24,
                         backgroundColor: AppColors.primaryTint,
                         backgroundImage: next.appointment.clientAvatar != null
-                            ? AssetImage(next.appointment.clientAvatar!)
+                            ? avatarProvider(next.appointment.clientAvatar!)
                             : null,
                         child: next.appointment.clientAvatar == null
                             ? const Icon(Icons.person, color: AppColors.primary)

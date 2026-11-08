@@ -264,6 +264,15 @@ class AppStateService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Фото профиля: путь к файлу, выбранному пользователем, или встроенный ресурс
+  void updateClientAvatar(String path) {
+    clientAvatar = path;
+    notifyListeners();
+  }
+
+  /// Вернуть стандартный аватар (фото удалено)
+  void resetClientAvatar() => updateClientAvatar(seedClientAvatar);
+
   void updateClientProfile({
     required String name,
     required String phone,

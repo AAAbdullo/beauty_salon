@@ -69,7 +69,7 @@ void showAppSnack(BuildContext context, String message, {bool success = false}) 
     ..hideCurrentSnackBar()
     ..showSnackBar(
       SnackBar(
-        backgroundColor: success ? AppColors.primary : AppColors.ink,
+        backgroundColor: success ? AppColors.primary : AppColors.snackBackground,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         content: Text(message),

@@ -162,7 +162,7 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
-          backgroundColor: AppColors.ink,
+          backgroundColor: AppColors.snackBackground,
           content: Text('Вход через $provider появится после подключения сервера. Используйте номер телефона.'),
         ),
       );

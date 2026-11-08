@@ -4,6 +4,7 @@ import '../../core/l10n/app_text.dart';
 import '../../core/l10n/app_locale.dart';
 import '../../core/theme/app_appearance.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/avatars/avatar_image.dart';
 import '../../core/widgets/cards/app_card.dart';
 import '../../core/widgets/sheets/app_sheet.dart';
 import 'profile_sheets.dart';
@@ -190,8 +191,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               border: Border.all(color: AppColors.primary, width: 2),
             ),
             child: ClipOval(
-              child: Image.asset(
-                avatar,
+              child: Image(
+                image: avatarProvider(avatar),
                 fit: BoxFit.cover,
                 errorBuilder: (_, _, _) => const Icon(Icons.person, color: AppColors.primary, size: 40),
               ),

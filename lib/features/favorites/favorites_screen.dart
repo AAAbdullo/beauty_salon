@@ -283,7 +283,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                           _appState.toggleSalonFavorite(s.id);
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              backgroundColor: AppColors.ink,
+                              backgroundColor: AppColors.snackBackground,
                               behavior: SnackBarBehavior.floating,
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12)),
@@ -497,7 +497,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                           _appState.toggleMasterFavorite(m.id);
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              backgroundColor: AppColors.ink,
+                              backgroundColor: AppColors.snackBackground,
                               behavior: SnackBarBehavior.floating,
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12)),

@@ -1,5 +1,8 @@
+import 'package:image_picker/image_picker.dart';
 import '../../core/data/app_scope.dart';
 import 'package:flutter/material.dart' hide Text;
+import '../../core/services/profile_photo_storage.dart';
+import '../../core/widgets/avatars/avatar_image.dart';
 import '../../core/l10n/app_text.dart';
 import 'package:flutter/services.dart';
 import '../../core/theme/app_theme.dart';
@@ -26,6 +29,70 @@ class ProfileSheets {
         },
       ),
     );
+  }
+
+  /// Смена фото профиля: галерея, камера или удаление текущего фото
+  static void changePhoto(BuildContext context) {
+    final state = AppScope.read(context).appState;
+    showAppSheet<void>(
+      context: context,
+      title: 'Фото профиля',
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined, color: AppColors.primary),
+              title: const Text('Выбрать из галереи'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickPhoto(context, ImageSource.gallery);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined, color: AppColors.primary),
+              title: const Text('Сделать фото'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickPhoto(context, ImageSource.camera);
+              },
+            ),
+            if (isCustomAvatar(state.clientAvatar))
+              ListTile(
+                leading: Icon(Icons.delete_outline, color: AppColors.primaryText),
+                title: const Text('Удалить фото'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _removePhoto(context);
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static Future<void> _pickPhoto(BuildContext context, ImageSource source) async {
+    final state = AppScope.read(context).appState;
+    try {
+      final picked = await ImagePicker().pickImage(source: source, maxWidth: 1024, maxHeight: 1024, imageQuality: 85);
+      if (picked == null) return; // пользователь закрыл выбор
+      final path = await ProfilePhotoStorage.save(picked.path);
+      state.updateClientAvatar(path);
+      if (context.mounted) showAppSnack(context, 'Фото профиля обновлено');
+    } catch (_) {
+      if (context.mounted) {
+        showAppSnack(context, 'Не удалось получить фото. Проверьте доступ к камере и фото в настройках телефона.');
+      }
+    }
+  }
+
+  static Future<void> _removePhoto(BuildContext context) async {
+    final state = AppScope.read(context).appState;
+    await ProfilePhotoStorage.clear();
+    state.resetClientAvatar();
+    if (context.mounted) showAppSnack(context, 'Фото удалено');
   }
 
   /// Частые вопросы — по правилам сервиса из ТЗ
@@ -186,6 +253,25 @@ class _FieldLabel extends StatelessWidget {
   }
 }
 
+/// Маленькая круглая кнопка с камерой на углу аватара: подсказывает, что фото можно сменить
+class PhotoEditBadge extends StatelessWidget {
+  const PhotoEditBadge({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 26,
+      height: 26,
+      decoration: BoxDecoration(
+        color: AppColors.primary,
+        shape: BoxShape.circle,
+        border: Border.all(color: AppColors.surface, width: 2),
+      ),
+      child: const Icon(Icons.photo_camera, size: 13, color: Colors.white),
+    );
+  }
+}
+
 /// Форма редактирования профиля; владеет своими контроллерами и освобождает их в dispose
 class _EditProfileForm extends StatefulWidget {
   final VoidCallback onSaved;
@@ -273,6 +359,46 @@ class _EditProfileFormState extends State<_EditProfileForm> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Center(
+            child: ListenableBuilder(
+              listenable: _appState,
+              builder: (context, _) => GestureDetector(
+                onTap: () => ProfileSheets.changePhoto(context),
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Container(
+                      width: 92,
+                      height: 92,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppColors.primary, width: 2),
+                      ),
+                      child: ClipOval(
+                        child: Image(
+                          image: avatarProvider(_appState.clientAvatar),
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => Container(
+                            color: AppColors.primaryTint,
+                            child: const Icon(Icons.person, size: 52, color: AppColors.primary),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const Positioned(right: -2, bottom: -2, child: PhotoEditBadge()),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Center(
+            child: TextButton(
+              onPressed: () => ProfileSheets.changePhoto(context),
+              child: const Text('Изменить фото'),
+            ),
+          ),
+          const SizedBox(height: 6),
           const _FieldLabel('Имя и фамилия'),
           AppTextField(
             controller: _nameController,
