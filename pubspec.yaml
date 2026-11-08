@@ -76,6 +76,7 @@ flutter:
     - assets/images/masters/
     - assets/images/clients/
     - assets/images/portfolio/
+    - assets/images/services/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

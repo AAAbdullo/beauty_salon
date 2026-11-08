@@ -49,7 +49,10 @@ class _PopularService {
   final String time;
   final IconData icon;
 
-  const _PopularService(this.name, this.query, this.price, this.time, this.icon);
+  /// Фото услуги для карточки; если не загрузилось, показывается иконка
+  final String imageAsset;
+
+  const _PopularService(this.name, this.query, this.price, this.time, this.icon, this.imageAsset);
 }
 
 class _ClientHomeScreenState extends State<ClientHomeScreen> {
@@ -68,10 +71,14 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
   int _salonsRequestId = 0;
 
   static const _popularServices = [
-    _PopularService('Маникюр комплекс', 'Маникюр', '34 кр.', '60 мин', Icons.back_hand_outlined),
-    _PopularService('Женская стрижка', 'Стрижки', '40 кр.', '45 мин', Icons.content_cut),
-    _PopularService('Ламинирование ресниц', 'Ресницы', '28 кр.', '90 мин', Icons.remove_red_eye_outlined),
-    _PopularService('Окрашивание волос', 'Окрашивание', '75 кр.', '120 мин', Icons.palette_outlined),
+    _PopularService('Маникюр комплекс', 'Маникюр', '34 кр.', '60 мин', Icons.back_hand_outlined,
+        'assets/images/services/service_manicure.jpg'),
+    _PopularService('Женская стрижка', 'Стрижки', '40 кр.', '45 мин', Icons.content_cut,
+        'assets/images/services/service_haircut.jpg'),
+    _PopularService('Ламинирование ресниц', 'Ресницы', '28 кр.', '90 мин', Icons.remove_red_eye_outlined,
+        'assets/images/services/service_lashes.jpg'),
+    _PopularService('Окрашивание волос', 'Окрашивание', '75 кр.', '120 мин', Icons.palette_outlined,
+        'assets/images/services/service_coloring.jpg'),
   ];
 
   @override
@@ -1049,13 +1056,21 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        height: 70,
-                        decoration: BoxDecoration(
-                          color: AppColors.primaryTint,
-                          borderRadius: BorderRadius.circular(12),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: SizedBox(
+                          height: 70,
+                          width: double.infinity,
+                          child: Image.asset(
+                            s.imageAsset,
+                            fit: BoxFit.cover,
+                            cacheWidth: 400,
+                            errorBuilder: (_, _, _) => Container(
+                              color: AppColors.primaryTint,
+                              child: Center(child: Icon(s.icon, color: AppColors.primary, size: 28)),
+                            ),
+                          ),
                         ),
-                        child: Center(child: Icon(s.icon, color: AppColors.primary, size: 28)),
                       ),
                       const SizedBox(height: 6),
                       Text(
