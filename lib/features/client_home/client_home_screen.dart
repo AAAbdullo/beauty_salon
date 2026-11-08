@@ -999,7 +999,14 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                                 color: AppColors.primaryText,
                               ),
                             ),
-                            AppStatusBadge(text: s.workingHours),
+                            // Не помещается — слегка сжимается, а не вылезает за край карточки
+                            Flexible(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerRight,
+                                child: AppStatusBadge(text: s.workingHours),
+                              ),
+                            ),
                           ],
                         ),
                       ],
