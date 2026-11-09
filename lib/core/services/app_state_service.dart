@@ -700,6 +700,7 @@ class AppStateService extends ChangeNotifier {
 
   /// Проверка QR мастером: формат, срок жизни кода, статус записи, салон, окно −30/+60 мин.
   /// При успехе визит отмечается выполненным и попадает в доход мастера.
+  /// [ignoreTimeWindow] — только для демо-режима мока и тестов; репозиторий наружу его не отдаёт.
   VisitQrResult validateVisitQr(String raw, {bool ignoreTimeWindow = false}) {
     final parts = raw.split('|');
     if (parts.length != 4 || parts[0] != 'GZL') {

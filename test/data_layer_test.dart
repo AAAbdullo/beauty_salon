@@ -9,6 +9,7 @@ import 'package:beauty_salons/core/data/mock/mock_slots_repository.dart';
 import 'package:beauty_salons/core/data/repositories/auth_repository.dart';
 import 'package:beauty_salons/core/data/repositories/bookings_repository.dart';
 import 'package:beauty_salons/core/data/repositories/slots_repository.dart';
+import 'package:beauty_salons/core/data/repositories/visit_qr_repository.dart';
 import 'package:beauty_salons/core/data/repository_exception.dart';
 import 'package:beauty_salons/core/services/app_state_service.dart';
 import 'package:beauty_salons/core/utils/clock.dart';
@@ -429,16 +430,36 @@ void main() {
 
   group('QR визита (задача 15)', () {
     test('токен выдаётся через репозиторий и подтверждает визит один раз', () async {
+      // Визит b-001 в 11:20: подтверждать можно за 30 минут до начала, поэтому подводим часы к окну
+      final start = state.bookingById('b-001')!.startsAt;
+      clock.set(start.subtract(const Duration(minutes: 10)));
       final token = await deps.visitQr.issueToken('b-001');
-      expect(token.expiresAt, wednesday.add(const Duration(seconds: 60)));
+      expect(token.expiresAt, clock.now().add(const Duration(seconds: 60)));
       expect(token.value.split('|').length, 4);
 
-      final first = await deps.visitQr.verifyAndConfirm(token.value, ignoreTimeWindow: true);
+      final first = await deps.visitQr.verifyAndConfirm(token.value);
       expect(first.isSuccess, isTrue);
       expect(first.booking!.clientName, 'Wazow');
 
-      final replay = await deps.visitQr.verifyAndConfirm(token.value, ignoreTimeWindow: true);
+      final replay = await deps.visitQr.verifyAndConfirm(token.value);
       expect(replay.isSuccess, isFalse);
+    });
+
+    test('вне окна визита репозиторий отказывает: обойти проверку времени через контракт нельзя', () async {
+      // Сейчас 10:00, визит в 11:20 — это за 80 минут до начала (окно: за 30)
+      final token = await deps.visitQr.issueToken('b-001');
+      final result = await deps.visitQr.verifyAndConfirm(token.value);
+      expect(result.isSuccess, isFalse);
+      expect(result.error, contains('Подтвердить можно'));
+      expect(state.bookingById('b-001')!.status, BookingStatus.active);
+    });
+
+    test('демо-режим мока подтверждает визит вне окна, но только через отдельный интерфейс', () async {
+      final repo = deps.visitQr;
+      expect(repo, isA<DemoVisitQr>());
+      final result = await (repo as DemoVisitQr).confirmDemoVisit('b-001');
+      expect(result.isSuccess, isTrue);
+      expect(state.bookingById('b-001')!.status, BookingStatus.completed);
     });
 
     test('один и тот же nonce нельзя использовать повторно даже для другой записи', () async {

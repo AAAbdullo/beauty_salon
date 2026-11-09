@@ -7,7 +7,7 @@ import 'mock_network.dart';
 
 /// Мок QR визита. Токен выдаётся и проверяется «на сервере» (`AppStateService`):
 /// срок жизни 60 секунд, одноразовый nonce, проверка салона и окна визита.
-class MockVisitQrRepository implements VisitQrRepository {
+class MockVisitQrRepository implements VisitQrRepository, DemoVisitQr {
   MockVisitQrRepository({MockNetwork? network, AppStateService? state})
     : _network = network ?? MockNetwork(),
       _state = state ?? AppStateService();
@@ -26,6 +26,12 @@ class MockVisitQrRepository implements VisitQrRepository {
   });
 
   @override
-  Future<VisitQrResult> verifyAndConfirm(String raw, {bool ignoreTimeWindow = false}) =>
-      _network(() => _state.validateVisitQr(raw, ignoreTimeWindow: ignoreTimeWindow));
+  Future<VisitQrResult> verifyAndConfirm(String raw) => _network(() => _state.validateVisitQr(raw));
+
+  @override
+  Future<VisitQrResult> confirmDemoVisit(String bookingId) => _network(() {
+    final booking = _state.bookingById(bookingId);
+    if (booking == null) throw const RepositoryException('Запись не найдена. Обновите список записей.');
+    return _state.validateVisitQr(_state.visitQrToken(booking), ignoreTimeWindow: true);
+  });
 }

@@ -18,5 +18,13 @@ abstract interface class VisitQrRepository {
   Future<VisitQrToken> issueToken(String bookingId);
 
   /// Проверить отсканированный код и подтвердить визит
-  Future<VisitQrResult> verifyAndConfirm(String raw, {bool ignoreTimeWindow = false});
+  ///
+  /// Окно визита (−30/+60 мин) проверяет сервер и обойти его параметром нельзя.
+  Future<VisitQrResult> verifyAndConfirm(String raw);
+}
+
+/// Только для мока и отладочной сборки: подтвердить ближайший визит без камеры и вне окна визита,
+/// как будто клиент показал код вовремя. В контракт [VisitQrRepository] не входит, у настоящего сервера этого нет.
+abstract interface class DemoVisitQr {
+  Future<VisitQrResult> confirmDemoVisit(String bookingId);
 }

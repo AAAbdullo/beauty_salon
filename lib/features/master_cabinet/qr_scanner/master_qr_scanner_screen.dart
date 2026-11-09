@@ -5,7 +5,9 @@ import '../../../core/l10n/app_text.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../../core/utils/clock.dart';
 import '../../../core/data/app_scope.dart';
+import '../../../core/data/repositories/visit_qr_repository.dart';
 import '../../../core/data/repository_exception.dart';
+import '../../../core/services/app_state_service.dart' show VisitQrResult;
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/avatars/avatar_image.dart';
 import '../../../core/widgets/buttons/app_gradient_button.dart';
@@ -68,11 +70,15 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
 
   /// Проверка QR по правилам ТЗ: формат, 60-секундный срок, одноразовость, салон, окно −30/+60 мин.
   /// Проверку и подтверждение визита делает «сервер» (VisitQrRepository), приложение показывает результат.
-  Future<void> _processScannedCode(String rawCode, {bool ignoreTimeWindow = false}) async {
+  Future<void> _processScannedCode(String rawCode) =>
+      _verify(() => AppScope.read(context).visitQr.verifyAndConfirm(rawCode), consumedRaw: rawCode);
+
+  /// Общая часть для камеры и демо: запускает проверку «на сервере» и показывает результат
+  Future<void> _verify(Future<VisitQrResult> Function() run, {String? consumedRaw}) async {
     if (_isProcessing) return;
     _isProcessing = true;
     try {
-      final result = await AppScope.read(context).visitQr.verifyAndConfirm(rawCode, ignoreTimeWindow: ignoreTimeWindow);
+      final result = await run();
       if (!mounted) return;
       final booking = result.booking;
       setState(() {
@@ -91,8 +97,8 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
           _stateView = 2;
         }
       });
-      if (booking != null) {
-        _consumedRaw = rawCode;
+      if (booking != null && consumedRaw != null) {
+        _consumedRaw = consumedRaw;
         _consumedAt = AppClock.now();
       }
     } on RepositoryException catch (e) {
@@ -106,29 +112,23 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
     }
   }
 
-  /// Демо для симулятора (камеры нет): «клиент» показывает QR ближайшей записи в этот салон
+  /// Демо для симулятора (камеры нет): «клиент» показывает QR ближайшей записи в этот салон.
+  /// Работает только с мок-репозиторием ([DemoVisitQr]); у настоящего сервера обхода окна визита нет.
   Future<void> _simulateClientQr() async {
     if (_isProcessing) return;
-    final appState = AppScope.read(context).appState;
-    final candidates = appState.activeBookings.where((b) => b.salonId == appState.masterSalonId);
+    final deps = AppScope.read(context);
+    final repo = deps.visitQr;
+    final demo = repo is DemoVisitQr ? repo as DemoVisitQr : null;
+    if (demo == null) return;
+    final candidates = deps.appState.activeBookings.where((b) => b.salonId == deps.appState.masterSalonId);
     if (candidates.isEmpty) {
       setState(() {
-        _errorMessage = 'Нет активных записей в салон ${appState.masterSalon} для проверки.';
+        _errorMessage = 'Нет активных записей в салон ${deps.appState.masterSalon} для проверки.';
         _stateView = 2;
       });
       return;
     }
-    try {
-      final token = await AppScope.read(context).visitQr.issueToken(candidates.first.id);
-      if (!mounted) return;
-      await _processScannedCode(token.value, ignoreTimeWindow: true);
-    } on RepositoryException catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _errorMessage = e.message;
-        _stateView = 2;
-      });
-    }
+    await _verify(() => demo.confirmDemoVisit(candidates.first.id));
   }
 
   @override
@@ -282,7 +282,7 @@ class _MasterQrScannerScreenState extends State<MasterQrScannerScreen> {
                 ),
               ),
               // Кнопки симуляции — только в отладочной сборке: в релизе мастер не должен подтверждать визиты без клиента
-              if (kDebugMode) ...[
+              if (kDebugMode && AppScope.read(context).visitQr is DemoVisitQr) ...[
                 const SizedBox(height: 20),
                 Row(
                   children: [
