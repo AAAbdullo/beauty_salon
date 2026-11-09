@@ -7,8 +7,10 @@ import 'helpers/test_fonts.dart';
 import 'package:beauty_salons/core/data/app_dependencies.dart';
 import 'package:beauty_salons/core/data/mock/mock_network.dart';
 import 'package:beauty_salons/core/l10n/app_locale.dart';
+import 'package:beauty_salons/core/l10n/uz_strings.dart';
 import 'package:beauty_salons/core/services/app_state_service.dart';
 import 'package:beauty_salons/core/utils/clock.dart';
+import 'package:beauty_salons/core/utils/formatters.dart';
 import 'package:beauty_salons/core/widgets/buttons/app_gradient_button.dart';
 import 'package:beauty_salons/main.dart';
 
@@ -41,6 +43,40 @@ void main() {
       expect(tr('Сегодня, 12 ноя'), startsWith('Bugun'));
       expect(tr('12 ноября 2026'), '12 noyabr 2026');
       expect(tr('Неизвестная русская фраза'), 'Неизвестная русская фраза');
+    });
+
+    test('экраны мастера: профиль клиента и клиенты месяца есть в словарях', () {
+      // Одно слово с заглавной буквы («История») и фразы вида «… записи» не остаются русскими, а попадают
+      // в запасную транслитерацию имён или в шаблон «{0} записи» и выглядят как узбекские, но неверны.
+      // Поэтому проверяем наличие точных записей в обоих словарях, а не отсутствие русских букв.
+      const phrases = [
+        'Профиль клиента',
+        'Визитов у вас',
+        'Предстоящих',
+        'Отмен',
+        'Предстоящие записи',
+        'История',
+        'Предстоящих записей нет',
+        'Прошлых записей пока нет',
+        'Клиент не найден. Возможно, у вас нет записей этого клиента.',
+        'Подтверждено',
+        'Завершено',
+        'Отменено',
+        'Клиенты в этом месяце',
+        'Нажмите на клиента, чтобы открыть его профиль',
+        'В этом месяце ещё нет подтверждённых визитов',
+      ];
+      expect(phrases.where((p) => !uzExact.containsKey(p)).toList(), isEmpty, reason: 'латиница');
+      expect(phrases.where((p) => !uzCyrlExact.containsKey(p)).toList(), isEmpty, reason: 'кириллица');
+
+      // Склонения «визит / визита / визитов» — по шаблонам
+      for (final n in [1, 2, 5, 11, 21, 24]) {
+        final text = Formatters.plural(n, 'визит', 'визита', 'визитов');
+        AppLocale.instance.setLanguage(AppLanguage.uz);
+        expect(tr(text), '$n ta tashrif');
+        AppLocale.instance.setLanguage(AppLanguage.uzCyrl);
+        expect(tr(text), '$n та ташриф');
+      }
     });
 
     test('после возврата на русский тексты не переводятся', () {
@@ -152,6 +188,34 @@ void main() {
         await settle(tester);
         expect(russianLeft(tester), isEmpty, reason: tab);
       }
+      await disposeTree(tester);
+    });
+
+    testWidgets('мастер: клиенты месяца и профиль клиента — без русских надписей', (tester) async {
+      useBigPhone(tester);
+      AppLocale.instance.setLanguage(AppLanguage.uz);
+      await tester.pumpWidget(
+        GozallikApp(
+          dependencies: AppDependencies.mock(network: MockNetwork()),
+          themeOverride: ThemeData(fontFamily: 'Roboto'),
+        ),
+      );
+      await settle(tester);
+      await tester.enterText(find.byType(TextField).at(0), 'master');
+      await tester.enterText(find.byType(TextField).at(1), '12345678');
+      await tester.tap(find.text('Kirish').first);
+      await settle(tester, frames: 12);
+
+      await tester.ensureVisible(find.byIcon(Icons.people_outline));
+      await settle(tester);
+      await tester.tap(find.byIcon(Icons.people_outline));
+      await settle(tester, frames: 12);
+      expect(find.byType(ListTile), findsWidgets, reason: 'в моке у мастера есть клиенты месяца');
+      expect(russianLeft(tester), isEmpty, reason: 'окно «клиенты в этом месяце»');
+
+      await tester.tap(find.byType(ListTile).first);
+      await settle(tester, frames: 12);
+      expect(russianLeft(tester), isEmpty, reason: 'профиль клиента');
       await disposeTree(tester);
     });
 
