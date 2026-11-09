@@ -79,6 +79,14 @@ void main() {
       }
     });
 
+    test('отмена онлайн-записи: текст окна с точной суммой и подтверждение переведены', () {
+      AppLocale.instance.setLanguage(AppLanguage.uz);
+      expect(tr('Оплата 22 000 сум вернётся на карту полностью.'), "To'lov 22 000 so'm kartaga to'liq qaytariladi.");
+      expect(tr('Запись отменена. Оплата возвращается на карту.'), "Yozuv bekor qilindi. To'lov kartaga qaytarilmoqda.");
+      AppLocale.instance.setLanguage(AppLanguage.uzCyrl);
+      expect(tr('Оплата 22 000 сум вернётся на карту полностью.'), 'Тўлов 22 000 сўм картага тўлиқ қайтарилади.');
+    });
+
     test('после возврата на русский тексты не переводятся', () {
       AppLocale.instance.setLanguage(AppLanguage.uz);
       expect(tr('Главная'), 'Bosh sahifa');

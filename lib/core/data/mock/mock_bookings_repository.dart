@@ -3,16 +3,24 @@ import '../../utils/result.dart';
 import '../idempotency.dart';
 import '../repositories/bookings_repository.dart';
 import 'mock_network.dart';
+import 'mock_payments_repository.dart';
 import 'mock_slots_repository.dart';
 
 /// Мок операций с записями. «Сервер» — это `AppStateService` (правила) и удержания слотов.
 /// Каждая изменяющая операция выполняется один раз на ключ идемпотентности.
 class MockBookingsRepository implements BookingsRepository {
-  MockBookingsRepository({required MockSlotsRepository slots, MockNetwork? network, AppStateService? state})
-    : _slots = slots,
-      _network = network ?? MockNetwork(),
-      _state = state ?? AppStateService();
+  MockBookingsRepository({
+    required MockSlotsRepository slots,
+    MockNetwork? network,
+    AppStateService? state,
+    MockPaymentsRepository? payments,
+  }) : _slots = slots,
+       _network = network ?? MockNetwork(),
+       _state = state ?? AppStateService(),
+       _payments = payments;
 
+  /// «Сервер» знает платежи: по квитанции записи он берёт сумму и сам возвращает деньги при отмене
+  final MockPaymentsRepository? _payments;
   final MockSlotsRepository _slots;
   final MockNetwork _network;
   final AppStateService _state;
@@ -68,6 +76,8 @@ class MockBookingsRepository implements BookingsRepository {
         baseCredits: r.baseCredits,
         sumPrice: r.sumPrice,
         paymentMethod: r.paymentMethod,
+        paymentReceiptId: r.paymentReceiptId,
+        paidAmount: r.paymentReceiptId == null ? null : _payments?.receiptById(r.paymentReceiptId!)?.amount,
       );
       if (result.isSuccess) _slots.consumeHold(r.holdId);
       return result;
@@ -76,7 +86,16 @@ class MockBookingsRepository implements BookingsRepository {
 
   @override
   Future<Result<BookingItem, BookingError>> cancel({required String bookingId, required String idempotencyKey}) =>
-      _guard.run('cancel:$idempotencyKey', () => _network(() => _state.cancelBooking(bookingId)));
+      _guard.run(
+        'cancel:$idempotencyKey',
+        () => _network<Result<BookingItem, BookingError>>(() {
+          final result = _state.cancelBooking(bookingId);
+          // Отмена и возврат оплаты — одна операция на сервере: нельзя отменить и не вернуть деньги
+          final receiptId = result.valueOrNull?.paymentReceiptId;
+          if (receiptId != null) _payments?.refundOnServer(receiptId);
+          return result;
+        }),
+      );
 
   @override
   Future<Result<BookingItem, BookingError>> reschedule({

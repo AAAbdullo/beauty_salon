@@ -479,6 +479,8 @@ class AppStateService extends ChangeNotifier {
     required int baseCredits,
     required int sumPrice,
     required String paymentMethod,
+    String? paymentReceiptId,
+    int? paidAmount,
   }) {
     final check = validateNewBooking(
       salonId: salonId,
@@ -519,6 +521,8 @@ class AppStateService extends ChangeNotifier {
       credits: credits,
       sumPrice: sumPrice,
       paymentMethod: paymentMethod,
+      paymentReceiptId: paymentReceiptId,
+      paidAmount: paidAmount,
     );
 
     if (booking.isPaidWithCredits) clientCredits -= credits;
@@ -545,7 +549,8 @@ class AppStateService extends ChangeNotifier {
   }
 
   /// Отмена бронирования: только активная запись и не позднее чем за 2 часа.
-  /// Повторный вызов не вернёт кредиты второй раз.
+  /// Повторный вызов не вернёт кредиты второй раз. Возврат онлайн-оплаты по квитанции записи делает «сервер»
+  /// (`MockBookingsRepository`): здесь только состояние записи и кредиты.
   Result<BookingItem, BookingError> cancelBooking(String bookingId) {
     final own = _ownActiveBooking(bookingId);
     if (own case Failure()) return own;

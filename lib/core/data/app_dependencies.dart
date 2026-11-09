@@ -50,12 +50,13 @@ class AppDependencies {
   factory AppDependencies.mock({MockNetwork? network, TokenStorage? tokenStorage}) {
     final net = network ?? MockNetwork(latency: const Duration(milliseconds: 150));
     final slots = MockSlotsRepository(network: net);
+    final payments = MockPaymentsRepository(slots: slots, network: net);
     return AppDependencies(
       auth: MockAuthRepository(storage: tokenStorage, network: net),
       catalog: MockCatalogRepository(network: net),
       slots: slots,
-      bookings: MockBookingsRepository(slots: slots, network: net),
-      payments: MockPaymentsRepository(slots: slots, network: net),
+      bookings: MockBookingsRepository(slots: slots, network: net, payments: payments),
+      payments: payments,
       subscription: MockSubscriptionRepository(network: net),
       visitQr: MockVisitQrRepository(network: net),
       masterCabinet: MockMasterCabinetRepository(network: net),

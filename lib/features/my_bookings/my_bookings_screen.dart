@@ -131,7 +131,10 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
     var submitting = false;
     final refundNote = switch (booking.paymentMethod) {
       PaymentMethods.credits => 'На баланс вернутся ${booking.credits} кр.',
-      PaymentMethods.online => 'Оплата вернётся на карту полностью.',
+      PaymentMethods.online =>
+        booking.paidAmount == null
+            ? 'Оплата вернётся на карту полностью.'
+            : 'Оплата ${Formatters.formatSum(booking.paidAmount!)} вернётся на карту полностью.',
       _ => 'Оплата не списывалась — запись просто отменится.',
     };
     showDialog(
@@ -170,6 +173,8 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
                       context,
                       value.isPaidWithCredits
                           ? 'Запись отменена. ${value.credits} кр. вернулись на баланс.'
+                          : value.paymentReceiptId != null
+                          ? 'Запись отменена. Оплата возвращается на карту.'
                           : 'Запись отменена.',
                     );
                   case Failure(:final error):

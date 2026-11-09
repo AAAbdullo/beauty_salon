@@ -30,6 +30,11 @@ class MockPaymentsRepository implements PaymentsRepository {
 
   bool wasRefunded(String receiptId) => _refunded.contains(receiptId);
 
+  PaymentReceipt? receiptById(String receiptId) => receipts.where((r) => r.id == receiptId).firstOrNull;
+
+  /// Возврат, который «сервер» делает сам (например, при отмене записи): без сетевого вызова клиента
+  void refundOnServer(String receiptId) => _refunded.add(receiptId);
+
   @override
   Future<Result<PaymentReceipt, PaymentError>> pay({
     required int amount,

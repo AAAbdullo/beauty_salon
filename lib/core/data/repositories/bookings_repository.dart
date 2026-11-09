@@ -59,6 +59,9 @@ abstract interface class BookingsRepository {
 
   Future<Result<BookingItem, BookingError>> create(CreateBookingRequest request);
 
+  /// Отмена записи. Кредиты и онлайн-оплату по квитанции записи возвращает сервер в той же операции,
+  /// клиент отдельный возврат не вызывает.
+  /// [BACKEND NOTE]: POST /bookings/:id/cancel — сервер сам делает возврат платежа и отвечает обновлённой записью
   Future<Result<BookingItem, BookingError>> cancel({required String bookingId, required String idempotencyKey});
 
   Future<Result<BookingItem, BookingError>> reschedule({

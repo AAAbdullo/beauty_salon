@@ -41,7 +41,11 @@ void main() {
   DateTime at(int dayOffset, int hour) => DateTime(2026, 11, 11 + dayOffset, hour);
 
   /// Удержать слот Sabina (брови, 45 мин) и собрать запрос на запись
-  Future<CreateBookingRequest> requestFor(DateTime when, {String method = PaymentMethods.credits}) async {
+  Future<CreateBookingRequest> requestFor(
+    DateTime when, {
+    String method = PaymentMethods.credits,
+    String? paymentReceiptId,
+  }) async {
     final hold = (await deps.slots.holdSlot(
       salonId: 's-001',
       masterId: 'm-002',
@@ -63,6 +67,7 @@ void main() {
       baseCredits: 24,
       sumPrice: 110000,
       paymentMethod: method,
+      paymentReceiptId: paymentReceiptId,
     );
   }
 
@@ -365,6 +370,49 @@ void main() {
         idempotencyKey: Uuid.v4(),
       );
       expect(paid.isFailure, isTrue);
+    });
+
+    test('отмена онлайн-записи возвращает платёж: квитанция и сумма хранятся в записи', () async {
+      final payments = deps.payments as MockPaymentsRepository;
+      final held = await requestFor(at(1, 15), method: PaymentMethods.online);
+      final receipt = (await deps.payments.pay(
+        amount: 22000,
+        provider: 'Click',
+        holdId: held.holdId,
+        idempotencyKey: Uuid.v4(),
+      )).valueOrNull!;
+      final request = CreateBookingRequest(
+        idempotencyKey: held.idempotencyKey,
+        holdId: held.holdId,
+        salonId: held.salonId,
+        salonName: held.salonName,
+        serviceId: held.serviceId,
+        serviceName: held.serviceName,
+        masterId: held.masterId,
+        masterName: held.masterName,
+        startsAt: held.startsAt,
+        durationMinutes: held.durationMinutes,
+        baseCredits: held.baseCredits,
+        sumPrice: held.sumPrice,
+        paymentMethod: held.paymentMethod,
+        paymentReceiptId: receipt.id,
+      );
+      final booking = (await deps.bookings.create(request)).valueOrNull!;
+      expect(booking.paymentReceiptId, receipt.id);
+      expect(booking.paidAmount, 22000);
+
+      expect(payments.wasRefunded(receipt.id), isFalse);
+      final cancelled = await deps.bookings.cancel(bookingId: booking.id, idempotencyKey: Uuid.v4());
+      expect(cancelled.isSuccess, isTrue);
+      expect(payments.wasRefunded(receipt.id), isTrue);
+    });
+
+    test('отмена записи за кредиты платёжей не трогает', () async {
+      final payments = deps.payments as MockPaymentsRepository;
+      final booking = (await deps.bookings.create(await requestFor(at(1, 15)))).valueOrNull!;
+      expect(booking.paymentReceiptId, isNull);
+      await deps.bookings.cancel(bookingId: booking.id, idempotencyKey: Uuid.v4());
+      expect(payments.receipts, isEmpty);
     });
 
     test('возврат платежа выполняется один раз на ключ', () async {

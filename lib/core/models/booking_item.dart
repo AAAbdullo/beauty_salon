@@ -59,6 +59,12 @@ class BookingItem {
   final int credits;
   final int sumPrice;
   final String paymentMethod;
+
+  /// Квитанция онлайн-оплаты, по которой при отмене возвращаются деньги (`null` — оплаты не было)
+  final String? paymentReceiptId;
+
+  /// Сколько фактически оплачено онлайн (депозит или полная сумма); `null` — неизвестно или оплаты не было
+  final int? paidAmount;
   final BookingStatus status;
   final int? reviewRating;
   final List<String>? reviewTags;
@@ -82,6 +88,8 @@ class BookingItem {
     required this.credits,
     required this.sumPrice,
     required this.paymentMethod,
+    this.paymentReceiptId,
+    this.paidAmount,
     this.status = BookingStatus.active,
     this.reviewRating,
     List<String>? reviewTags,
@@ -117,6 +125,8 @@ class BookingItem {
       credits: credits ?? this.credits,
       sumPrice: sumPrice,
       paymentMethod: paymentMethod,
+      paymentReceiptId: paymentReceiptId,
+      paidAmount: paidAmount,
       status: status ?? this.status,
       reviewRating: reviewRating ?? this.reviewRating,
       reviewTags: reviewTags ?? this.reviewTags,
