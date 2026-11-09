@@ -87,7 +87,8 @@ class AppStateService extends ChangeNotifier {
   // Настройки приложения
   late bool promoNotificationsEnabled;
   late bool newsNotificationsEnabled;
-  late bool useLocationEnabled;
+  /// Настройка устройства, а не аккаунта: при выходе не сбрасывается (см. [resetSession])
+  bool useLocationEnabled = true;
 
   // Избранные салоны и мастера (ТЗ M-15) — только по id
   late Set<String> _favoriteSalonIds;
@@ -127,7 +128,6 @@ class AppStateService extends ChangeNotifier {
 
     promoNotificationsEnabled = true;
     newsNotificationsEnabled = true;
-    useLocationEnabled = true;
 
     _favoriteSalonIds = {'s-001', 's-003'};
     _favoriteMasterIds = {'m-001', 'm-002'};

@@ -48,7 +48,7 @@ const maxTextScale = 2.0;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await AppPreferences.restoreAndWatch(); // язык и тема с прошлого запуска
+  await AppPreferences.restoreAndWatch(settingsState: AppStateService()); // язык, тема и настройки с прошлого запуска
   // Фото профиля клиента и мастера с прошлого запуска
   final savedPhoto = await ProfilePhotoStorage.restore();
   if (savedPhoto != null) AppStateService().updateClientAvatar(savedPhoto);
