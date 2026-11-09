@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import '../models/booking_error.dart';
+import '../models/credit_package.dart';
 import '../models/booking_item.dart';
 import '../models/booking_rules.dart';
 import '../utils/clock.dart';
@@ -65,9 +66,6 @@ class AppStateService extends ChangeNotifier {
   static const qrGraceSeconds = BookingRules.qrGraceSeconds;
   static const qrEarlyMinutes = BookingRules.qrEarlyMinutes;
   static const qrLateMinutes = BookingRules.qrLateMinutes;
-
-  /// Пакеты кредитов (ТЗ): название → кредитов в месяц
-  static const planCredits = {'Lite': 60, 'Standart': 120, 'Premium': 250};
 
   // Состояние клиента
   late String clientId;
@@ -198,7 +196,7 @@ class AppStateService extends ChangeNotifier {
   String get subscriptionExpiry => Formatters.fullDate(subscriptionExpiresAt);
 
   /// Объём кредитов текущего тарифа
-  int get planTotalCredits => planCredits[subscriptionPlan] ?? 60;
+  int get planTotalCredits => mockCreditPackages.where((p) => p.name == subscriptionPlan).firstOrNull?.credits ?? 60;
 
   /// Израсходовано кредитов в текущем периоде (для прогресс-бара)
   int get usedPlanCredits => (planTotalCredits - clientCredits).clamp(0, planTotalCredits);

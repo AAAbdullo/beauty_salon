@@ -39,12 +39,12 @@ class MockPaymentsRepository implements PaymentsRepository {
   Future<Result<PaymentReceipt, PaymentError>> pay({
     required int amount,
     required String provider,
-    required String holdId,
+    String? holdId,
     required String idempotencyKey,
   }) => _guard.run(
     'pay:$idempotencyKey',
     () => _network<Result<PaymentReceipt, PaymentError>>(() {
-      if (_slots.extendHold(holdId, paymentWindow) == null) {
+      if (holdId != null && _slots.extendHold(holdId, paymentWindow) == null) {
         return const Result.failure(PaymentError('Время удержания слота истекло. Оплата не выполнена.'));
       }
       if (declineNext) {

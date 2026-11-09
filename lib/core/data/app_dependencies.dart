@@ -57,7 +57,7 @@ class AppDependencies {
       slots: slots,
       bookings: MockBookingsRepository(slots: slots, network: net, payments: payments),
       payments: payments,
-      subscription: MockSubscriptionRepository(network: net),
+      subscription: MockSubscriptionRepository(network: net, payments: payments),
       visitQr: MockVisitQrRepository(network: net),
       masterCabinet: MockMasterCabinetRepository(network: net),
       appState: AppStateService(),

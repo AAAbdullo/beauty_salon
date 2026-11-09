@@ -97,6 +97,17 @@ void main() {
       expect(tr('Неверный код. Осталось попыток: 4.'), 'Нотўғри код. Қолган уринишлар: 4.');
     });
 
+    test('покупка пакета: сообщения сервера переведены, склейка с «Платёж будет возвращён.» работает', () {
+      AppLocale.instance.setLanguage(AppLanguage.uz);
+      expect(
+        tr('Платёж не найден или не совпадает с ценой пакета. Платёж будет возвращён.'),
+        "To'lov topilmadi yoki paket narxiga mos kelmaydi. To'lov qaytariladi.",
+      );
+      expect(isFullyTranslated('Не удалось загрузить пакеты'), isTrue);
+      // Цена за кредит считается по модели и форматируется с неразрывным пробелом — переводится шаблоном
+      expect(tr('${Formatters.formatSum(4150)}/кр.'), contains("so'm/kr."));
+    });
+
     test('после возврата на русский тексты не переводятся', () {
       AppLocale.instance.setLanguage(AppLanguage.uz);
       expect(tr('Главная'), 'Bosh sahifa');

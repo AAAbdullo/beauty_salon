@@ -1,7 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart' hide Text;
 import '../../core/l10n/app_text.dart';
 import '../../core/data/app_scope.dart';
+import '../../core/data/repositories/payments_repository.dart';
 import '../../core/data/repository_exception.dart';
+import '../../core/models/booking_error.dart';
+import '../../core/models/credit_package.dart';
 import '../../core/services/app_state_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/result.dart';
@@ -25,10 +29,25 @@ class CreditsScreen extends StatefulWidget {
 class _CreditsScreenState extends State<CreditsScreen> {
   late final _appState = AppScope.read(context).appState;
 
+  // Пакеты приходят из репозитория (каталог на сервере), а не зашиты в экран
+  List<CreditPackage>? _packages;
+  bool _packagesFailed = false;
+
   @override
   void initState() {
     super.initState();
     _appState.addListener(_onStateChanged);
+    unawaited(_loadPackages());
+  }
+
+  Future<void> _loadPackages() async {
+    setState(() => _packagesFailed = false);
+    try {
+      final packages = await AppScope.read(context).subscription.packages();
+      if (mounted) setState(() => _packages = packages);
+    } on RepositoryException {
+      if (mounted) setState(() => _packagesFailed = true);
+    }
   }
 
   void _onStateChanged() {
@@ -160,10 +179,18 @@ class _CreditsScreenState extends State<CreditsScreen> {
     );
   }
 
-  void _buyPackage(String name, int credits, int price) {
-    // Ключ идемпотентности привязан к открытому окну покупки: двойной тап не начислит кредиты дважды
-    final requestKey = Uuid.v4();
-    var submitting = false;
+  /// Способы онлайн-оплаты пакета (как на экране оплаты записи)
+  static const _providers = ['Click', 'Payme', 'Uzum', 'Сохранённая карта ···· 4417'];
+
+  void _buyPackage(CreditPackage pkg) {
+    final name = pkg.name;
+    final credits = pkg.credits;
+    // Ключи привязаны к открытому окну покупки: двойной тап не спишет деньги и не начислит кредиты дважды
+    final payKey = Uuid.v4();
+    final purchaseKey = Uuid.v4();
+    var provider = _providers.first;
+    PaymentReceipt? receipt; // деньги списаны, пакет ещё не выдан
+    var purchased = false;
     final isCurrent = name == _appState.subscriptionPlan;
     final preview = _appState.previewPurchase(credits);
     final carryNote = _appState.clientCredits == 0
@@ -172,41 +199,90 @@ class _CreditsScreenState extends State<CreditsScreen> {
         ? 'Из текущих ${_appState.clientCredits} кр. перенесётся ${preview.carried} кр. (не больше 20% прежнего пакета), '
               '${preview.burned} кр. сгорят.'
         : 'Текущие ${_appState.clientCredits} кр. сохранятся.';
+    final deps = AppScope.read(context);
+
+    Future<void> payAndActivate(BuildContext sheetContext) async {
+      try {
+        if (receipt == null) {
+          final paid = await deps.payments.pay(amount: pkg.price, provider: provider, idempotencyKey: payKey);
+          if (!mounted) return;
+          switch (paid) {
+            case Success(:final value):
+              receipt = value;
+            case Failure(:final error):
+              showAppSnack(context, error.message);
+              return;
+          }
+        }
+        final result = await deps.subscription.purchasePackage(
+          planName: name,
+          paymentReceiptId: receipt!.id,
+          idempotencyKey: purchaseKey,
+        );
+        if (!mounted) return;
+        switch (result) {
+          case Success():
+            purchased = true;
+            if (sheetContext.mounted) Navigator.pop(sheetContext);
+            showAppSnack(context, 'Пакет «$name» активирован! На балансе ${_appState.clientCredits} кр.', success: true);
+          case Failure(:final error):
+            // Пакет не выдан — возвращаем деньги, окно закрывается
+            unawaited(deps.payments.refund(receiptId: receipt!.id, idempotencyKey: 'refund-$purchaseKey'));
+            receipt = null;
+            if (sheetContext.mounted) Navigator.pop(sheetContext);
+            showAppSnack(context, '${error.message} Платёж будет возвращён.');
+        }
+      } on RepositoryException catch (e) {
+        // Связь оборвалась: если деньги уже списаны, повторное нажатие не платит второй раз
+        if (mounted) showAppSnack(context, e.message);
+      }
+    }
+
     showAppSheet<void>(
       context: context,
       title: isCurrent ? 'Продлить «$name»' : 'Перейти на «$name»',
       subtitle: '+$credits кредитов на 30 дней. $carryNote Итого на балансе: ${preview.total} кр.',
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-        child: AppGradientButton(
-          text: 'Оплатить ${Formatters.formatSum(price)}',
-          onPressed: () {
-            if (submitting) return;
-            submitting = true;
-            Navigator.pop(ctx);
-            // [BACKEND NOTE]: POST /api/v1/subscriptions → Click / Payme / Uzum
-            _runSubscriptionAction(
-              () => AppScope.read(context).subscription.purchasePackage(
-                planName: name,
-                credits: credits,
-                idempotencyKey: requestKey,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Способ оплаты', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 8),
+              for (final p in _providers)
+                ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(p),
+                  leading: Icon(
+                    p == provider ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                    color: AppColors.primary,
+                  ),
+                  // После списания способ уже не сменить: деньги ушли через выбранный
+                  onTap: receipt != null ? null : () => setSheetState(() => provider = p),
+                ),
+              const SizedBox(height: 8),
+              AppGradientButton(
+                text: 'Оплатить ${Formatters.formatSum(pkg.price)}',
+                onPressed: () => payAndActivate(ctx),
               ),
-              successMessage: () => 'Пакет «$name» активирован! На балансе ${_appState.clientCredits} кр.',
-            );
-          },
+            ],
+          ),
         ),
       ),
-    );
+    ).whenComplete(() {
+      // Окно закрыли после списания, но без выдачи пакета: деньги возвращаются
+      final stuck = receipt;
+      if (stuck != null && !purchased) {
+        unawaited(deps.payments.refund(receiptId: stuck.id, idempotencyKey: 'refund-$purchaseKey'));
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final packages = [
-      {'name': 'Lite', 'credits': 60, 'price': 249000, 'costPer': '4 150 сум/кр.'},
-      {'name': 'Standart', 'credits': 120, 'price': 449000, 'costPer': '3 742 сум/кр.', 'popular': true},
-      {'name': 'Premium', 'credits': 250, 'price': 849000, 'costPer': '3 396 сум/кр.'},
-    ];
-
     return Scaffold(
       appBar: AppBar(
         leading: widget.onBack == null
@@ -342,8 +418,23 @@ class _CreditsScreenState extends State<CreditsScreen> {
               ),
               const SizedBox(height: 16),
 
-              ...packages.map((pkg) {
-                final isPopular = pkg['popular'] == true;
+              if (_packages == null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  child: Center(
+                    child: _packagesFailed
+                        ? Column(
+                            children: [
+                              Text('Не удалось загрузить пакеты', style: TextStyle(color: AppColors.muted)),
+                              TextButton(onPressed: _loadPackages, child: const Text('Повторить')),
+                            ],
+                          )
+                        : const CircularProgressIndicator(color: AppColors.primary),
+                  ),
+                )
+              else
+                ..._packages!.map((pkg) {
+                final isPopular = pkg.popular;
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: AppCard(
@@ -370,7 +461,7 @@ class _CreditsScreenState extends State<CreditsScreen> {
                                 runSpacing: 4,
                                 children: [
                                   Text(
-                                    pkg['name'] as String,
+                                    pkg.name,
                                     style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
                                   ),
                                   if (isPopular) ...[
@@ -390,11 +481,11 @@ class _CreditsScreenState extends State<CreditsScreen> {
                                 ],
                               ),
                               Text(
-                                '${pkg["credits"]} кредитов / месяц',
+                                '${pkg.credits} кредитов / месяц',
                                 style: TextStyle(fontSize: 12, color: AppColors.muted),
                               ),
                               Text(
-                                pkg['costPer'] as String,
+                                '${Formatters.formatSum(pkg.pricePerCredit)}/кр.',
                                 style: TextStyle(fontSize: 10, color: AppColors.muted),
                               ),
                             ],
@@ -404,17 +495,16 @@ class _CreditsScreenState extends State<CreditsScreen> {
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             Text(
-                              Formatters.formatSum(pkg['price'] as int),
+                              Formatters.formatSum(pkg.price),
                               style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
                             ),
                             const SizedBox(height: 6),
                             AppPillButton(
-                              text: pkg['name'] == _appState.subscriptionPlan ? 'Продлить' : 'Купить',
+                              text: pkg.name == _appState.subscriptionPlan ? 'Продлить' : 'Купить',
                               backgroundColor: AppColors.primary,
                               textColor: Colors.white,
                               height: 30,
-                              onPressed: () =>
-                                  _buyPackage(pkg['name'] as String, pkg['credits'] as int, pkg['price'] as int),
+                              onPressed: () => _buyPackage(pkg),
                             ),
                           ],
                         ),

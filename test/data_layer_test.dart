@@ -8,6 +8,7 @@ import 'package:beauty_salons/core/data/mock/mock_payments_repository.dart';
 import 'package:beauty_salons/core/data/mock/mock_slots_repository.dart';
 import 'package:beauty_salons/core/data/repositories/auth_repository.dart';
 import 'package:beauty_salons/core/data/repositories/bookings_repository.dart';
+import 'package:beauty_salons/core/data/repositories/payments_repository.dart';
 import 'package:beauty_salons/core/data/repositories/slots_repository.dart';
 import 'package:beauty_salons/core/data/repositories/visit_qr_repository.dart';
 import 'package:beauty_salons/core/data/repository_exception.dart';
@@ -177,14 +178,70 @@ void main() {
       expect(state.clientCredits, 86 + 26);
     });
 
+    /// Оплатить пакет онлайн (без слота) и получить квитанцию
+    Future<PaymentReceipt> payFor(String planName) async {
+      final package = (await deps.subscription.packages()).firstWhere((p) => p.name == planName);
+      final paid = await deps.payments.pay(amount: package.price, provider: 'Click', idempotencyKey: Uuid.v4());
+      return paid.valueOrNull!;
+    }
+
     test('двойная покупка пакета начисляет кредиты один раз', () async {
+      final receipt = await payFor('Lite');
       final key = Uuid.v4();
       await Future.wait([
-        deps.subscription.purchasePackage(planName: 'Lite', credits: 60, idempotencyKey: key),
-        deps.subscription.purchasePackage(planName: 'Lite', credits: 60, idempotencyKey: key),
+        deps.subscription.purchasePackage(planName: 'Lite', paymentReceiptId: receipt.id, idempotencyKey: key),
+        deps.subscription.purchasePackage(planName: 'Lite', paymentReceiptId: receipt.id, idempotencyKey: key),
       ]);
       // Premium 250 → перенос не больше 20% = 50; 86 → 50 + 60
       expect(state.clientCredits, 110);
+    });
+
+    test('пакет без оплаты не покупается: квитанция должна существовать, быть на полную цену и использоваться раз', () async {
+      final before = state.clientCredits;
+      final noReceipt = await deps.subscription.purchasePackage(
+        planName: 'Lite',
+        paymentReceiptId: 'pay_нет-такого',
+        idempotencyKey: Uuid.v4(),
+      );
+      expect(noReceipt.errorOrNull?.code, BookingErrorCode.paymentMismatch);
+
+      // Заплатили за Lite, а просят Premium
+      final liteReceipt = await payFor('Lite');
+      final cheaper = await deps.subscription.purchasePackage(
+        planName: 'Premium',
+        paymentReceiptId: liteReceipt.id,
+        idempotencyKey: Uuid.v4(),
+      );
+      expect(cheaper.errorOrNull?.code, BookingErrorCode.paymentMismatch);
+      expect(state.clientCredits, before);
+
+      // Одну квитанцию нельзя потратить дважды
+      final ok = await deps.subscription.purchasePackage(
+        planName: 'Lite',
+        paymentReceiptId: liteReceipt.id,
+        idempotencyKey: Uuid.v4(),
+      );
+      expect(ok.isSuccess, isTrue);
+      final again = await deps.subscription.purchasePackage(
+        planName: 'Lite',
+        paymentReceiptId: liteReceipt.id,
+        idempotencyKey: Uuid.v4(),
+      );
+      expect(again.errorOrNull?.code, BookingErrorCode.paymentMismatch);
+
+      final unknown = await deps.subscription.purchasePackage(
+        planName: 'Платина',
+        paymentReceiptId: liteReceipt.id,
+        idempotencyKey: Uuid.v4(),
+      );
+      expect(unknown.errorOrNull?.code, BookingErrorCode.unknownPackage);
+    });
+
+    test('пакеты приходят из репозитория, цена за кредит считается из цены и объёма', () async {
+      final packages = await deps.subscription.packages();
+      expect(packages.map((p) => p.name), ['Lite', 'Standart', 'Premium']);
+      expect(packages.map((p) => p.pricePerCredit), [4150, 3742, 3396]);
+      expect(packages.where((p) => p.popular).single.name, 'Standart');
     });
 
     test('сбой сети не залипает: повтор с тем же ключом выполняется', () async {

@@ -16,6 +16,8 @@ enum BookingErrorCode {
   alreadyReviewed,
   freezeNotAllowed,
   holdExpired,
+  unknownPackage,
+  paymentMismatch,
 }
 
 class BookingError {
