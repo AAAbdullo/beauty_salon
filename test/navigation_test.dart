@@ -8,7 +8,10 @@ import 'helpers/test_fonts.dart';
 
 import 'package:beauty_salons/core/data/app_dependencies.dart';
 import 'package:beauty_salons/core/data/app_scope.dart';
+import 'package:beauty_salons/core/data/mock/mock_bookings_repository.dart';
 import 'package:beauty_salons/core/data/mock/mock_network.dart';
+import 'package:beauty_salons/core/data/mock/mock_payments_repository.dart';
+import 'package:beauty_salons/core/data/mock/mock_slots_repository.dart';
 import 'package:beauty_salons/core/services/app_state_service.dart';
 import 'package:beauty_salons/core/utils/clock.dart';
 import 'package:beauty_salons/core/widgets/buttons/app_gradient_button.dart';
@@ -137,6 +140,91 @@ void main() {
       await settle(tester, frames: 20, step: step);
       expect(state.bookings.length, before + 1); // платёж прошёл — запись создана
       expect(find.text('Мои записи'), findsOneWidget);
+      await disposeTree(tester);
+    });
+  });
+
+  group('Оплата прошла, а записи нет', () {
+    /// Сеть записи отдельная: её сбой попадает точно на создание записи, а не на оплату
+    ({AppDependencies deps, MockNetwork bookingNet}) depsWithFlakyBookings() {
+      final base = AppDependencies.mock(network: MockNetwork());
+      final bookingNet = MockNetwork();
+      final deps = AppDependencies(
+        auth: base.auth,
+        catalog: base.catalog,
+        slots: base.slots,
+        bookings: MockBookingsRepository(slots: base.slots as MockSlotsRepository, network: bookingNet),
+        payments: base.payments,
+        subscription: base.subscription,
+        visitQr: base.visitQr,
+        masterCabinet: base.masterCabinet,
+        appState: base.appState,
+      );
+      return (deps: deps, bookingNet: bookingNet);
+    }
+
+    Future<void> payAndFailToCreate(WidgetTester tester, MockNetwork bookingNet) async {
+      await goToPayment(tester);
+      bookingNet.failNext(); // оплата пройдёт, а создание записи оборвётся
+      final pay = find.ancestor(of: find.textContaining('Оплатить'), matching: find.byType(AppGradientButton));
+      await tester.ensureVisible(pay.last);
+      await tester.tap(pay.last);
+      await settle(tester, frames: 12);
+    }
+
+    testWidgets('«Назад» предлагает вернуть платёж, и возврат выполняется', (tester) async {
+      final (:deps, :bookingNet) = depsWithFlakyBookings();
+      await pumpApp(tester, deps);
+      await loginClient(tester);
+      final before = state.bookings.length;
+      await payAndFailToCreate(tester, bookingNet);
+
+      final payments = deps.payments as MockPaymentsRepository;
+      expect(payments.receipts, hasLength(1), reason: 'деньги списаны');
+      expect(state.bookings.length, before, reason: 'записи нет');
+      expect(find.text('Оплата'), findsOneWidget);
+
+      await tester.binding.handlePopRoute();
+      await settle(tester);
+      expect(find.text('Вернуть платёж'), findsOneWidget);
+      expect(find.text('Повторить'), findsOneWidget);
+
+      await tester.tap(find.text('Вернуть платёж'));
+      await settle(tester, frames: 12);
+      expect(payments.wasRefunded(payments.receipts.single.id), isTrue);
+      expect(find.text('Оплата'), findsNothing, reason: 'экран оплаты закрыт');
+      expect(state.bookings.length, before);
+      await disposeTree(tester);
+    });
+
+    testWidgets('«Повторить» создаёт запись по той же квитанции, возврата нет', (tester) async {
+      final (:deps, :bookingNet) = depsWithFlakyBookings();
+      await pumpApp(tester, deps);
+      await loginClient(tester);
+      final before = state.bookings.length;
+      await payAndFailToCreate(tester, bookingNet);
+
+      await tester.binding.handlePopRoute();
+      await settle(tester);
+      await tester.tap(find.text('Повторить'));
+      await settle(tester, frames: 14);
+
+      final payments = deps.payments as MockPaymentsRepository;
+      expect(payments.receipts, hasLength(1), reason: 'повторной оплаты нет');
+      expect(payments.wasRefunded(payments.receipts.single.id), isFalse);
+      expect(state.bookings.length, before + 1);
+      expect(find.text('Мои записи'), findsOneWidget);
+      await disposeTree(tester);
+    });
+
+    testWidgets('без неудавшейся записи «Назад» с оплаты закрывает экран без вопросов', (tester) async {
+      await pumpApp(tester, AppDependencies.mock(network: MockNetwork()));
+      await loginClient(tester);
+      await goToPayment(tester);
+      await tester.binding.handlePopRoute();
+      await settle(tester);
+      expect(find.text('Вернуть платёж'), findsNothing);
+      expect(find.text('Оплата'), findsNothing);
       await disposeTree(tester);
     });
   });

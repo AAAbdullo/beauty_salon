@@ -25,6 +25,9 @@ class MockPaymentsRepository implements PaymentsRepository {
 
   final Set<String> _refunded = {};
 
+  /// Все выданные квитанции (для тестов: проверить, что платёж без записи вернули)
+  final List<PaymentReceipt> receipts = [];
+
   bool wasRefunded(String receiptId) => _refunded.contains(receiptId);
 
   @override
@@ -43,9 +46,9 @@ class MockPaymentsRepository implements PaymentsRepository {
         declineNext = false;
         return Result.failure(PaymentError('Платёж отклонён ($provider). Попробуйте другой способ оплаты.'));
       }
-      return Result.success(
-        PaymentReceipt(id: 'pay_${Uuid.v4()}', amount: amount, provider: provider, paidAt: AppClock.now()),
-      );
+      final receipt = PaymentReceipt(id: 'pay_${Uuid.v4()}', amount: amount, provider: provider, paidAt: AppClock.now());
+      receipts.add(receipt);
+      return Result.success(receipt);
     }),
   );
 

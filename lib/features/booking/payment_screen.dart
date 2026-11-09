@@ -118,6 +118,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
     _error = null;
     _setBusy(true);
     final provider = _providers[_selectedProvider].$1;
+    final onPaid = widget.onPaid; // экран мог закрыться, пока шла оплата: квитанцию всё равно нужно передать дальше
     try {
       final result = await AppScope.read(context).payments.pay(
         amount: _amount,
@@ -125,13 +126,13 @@ class _PaymentScreenState extends State<PaymentScreen> {
         holdId: widget.draft.holdId,
         idempotencyKey: _payKey,
       );
-      if (!mounted) return;
       switch (result) {
         case Success(:final value):
           // Платёж прошёл — создаём запись; при отказе платёж вернёт вызывающий код
-          await widget.onPaid(value);
+          await onPaid(value);
           if (mounted) _setBusy(false);
         case Failure(:final error):
+          if (!mounted) return;
           _setBusy(false);
           setState(() {
             _error = error.message;

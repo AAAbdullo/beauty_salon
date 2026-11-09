@@ -229,6 +229,9 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
   // Завершится, когда закончится оплата (успех / назад / отказ): экран записи ждёт этого результата
   Completer<bool>? _paymentFlow;
 
+  // Деньги списаны, а запись не создана (оборвалась связь): платёж надо повторить или вернуть, молча его не бросаем
+  ({BookingDraft draft, PaymentReceipt receipt})? _unfinishedPayment;
+
   // «На карте» из карточки салона: номер запроса меняет ключ карты и заново наводит камеру
   String? _mapFocusSalonId;
   int _mapFocusNonce = 0;
@@ -253,9 +256,66 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
         showAppSnack(context, 'Идёт оплата. Подождите, пока она завершится.');
         return;
       }
+      if (_unfinishedPayment != null) {
+        unawaited(_askAboutUnfinishedPayment());
+        return;
+      }
       _finishPaymentFlow(false);
     }
     setState(() => _pages.removeLast());
+  }
+
+  /// «Назад» с экрана оплаты, когда платёж прошёл, а записи нет: повторить создание записи или вернуть деньги
+  Future<void> _askAboutUnfinishedPayment() async {
+    final pending = _unfinishedPayment;
+    if (pending == null) return;
+    final retry = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Оплата прошла, а запись не создана', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+        content: Text(
+          'Деньги уже списаны. Повторите создание записи или верните платёж.',
+          style: TextStyle(fontSize: 13, color: AppColors.muted),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Вернуть платёж')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            child: const Text('Повторить', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || retry == null) return;
+    if (retry) {
+      await _finalizeBooking(pending.draft, PaymentMethods.online, receipt: pending.receipt);
+    } else {
+      await _refundUnfinishedPayment(pending);
+    }
+  }
+
+  /// Вернуть платёж без записи и закрыть экран оплаты. Ключ тот же, что при отказе создания: повтор не вернёт дважды.
+  /// [BACKEND NOTE]: сервер должен сам сверять платежи без записи (webhook провайдера без bookingId) и возвращать их.
+  Future<void> _refundUnfinishedPayment(({BookingDraft draft, PaymentReceipt receipt}) pending) async {
+    try {
+      await _deps.payments.refund(
+        receiptId: pending.receipt.id,
+        idempotencyKey: 'refund-${pending.draft.idempotencyKey}',
+      );
+    } on RepositoryException {
+      if (mounted) showAppSnack(context, 'Не удалось вернуть платёж: нет связи. Попробуйте ещё раз.');
+      return;
+    }
+    _unfinishedPayment = null;
+    if (!mounted) return;
+    _finishPaymentFlow(false);
+    setState(() {
+      if (_pages.isNotEmpty && _pages.last.kind == _PageKind.payment) _pages.removeLast();
+    });
+    showAppSnack(context, 'Платёж возвращён.', success: true);
   }
 
   /// Системная «Назад»: сначала страницы, затем возврат на первую вкладку, и только оттуда — выход
@@ -280,6 +340,16 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
     _finishPaymentFlow(false);
     _paymentBusy = false;
     _pages.clear();
+    // Ушли с оплаты, не ответив на вопрос (переход на вкладку, выход): деньги без записи возвращаем сами
+    final pending = _unfinishedPayment;
+    if (pending != null) {
+      _unfinishedPayment = null;
+      unawaited(
+        _deps.payments
+            .refund(receiptId: pending.receipt.id, idempotencyKey: 'refund-${pending.draft.idempotencyKey}')
+            .catchError((_) {}),
+      );
+    }
   }
 
   void _openSalon(String salonId) => _push(_Page(_PageKind.salon, salonId: salonId));
@@ -388,6 +458,7 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
             // Деньги уже списаны, а записи нет — возвращаем платёж
             unawaited(_deps.payments.refund(receiptId: receipt.id, idempotencyKey: 'refund-${draft.idempotencyKey}'));
             message = '$message Платёж будет возвращён.';
+            _unfinishedPayment = null;
           }
           // С экрана оплаты возвращаемся на экран записи, он ждёт результата
           if (_pages.isNotEmpty && _pages.last.kind == _PageKind.payment) {
@@ -398,6 +469,7 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
           showAppSnack(context, message);
           return false;
         case Success():
+          _unfinishedPayment = null;
           _finishPaymentFlow(true);
           _goToClientTab(2); // Переходим сразу во вкладку «Мои записи»
           final message = switch (paymentMethod) {
@@ -410,7 +482,15 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
       }
     } on RepositoryException catch (e) {
       // Связь оборвалась: ключ идемпотентности сохранён, повторная попытка не создаст дубль
-      if (mounted) showAppSnack(context, e.message);
+      if (receipt != null) {
+        // Деньги списаны, записи нет: запоминаем платёж, «Назад» предложит повторить или вернуть деньги
+        _unfinishedPayment = (draft: draft, receipt: receipt);
+        if (mounted) {
+          showAppSnack(context, 'Оплата прошла, но запись не создана: нет связи. Повторите или верните платёж.');
+        }
+      } else if (mounted) {
+        showAppSnack(context, e.message);
+      }
       return false;
     } finally {
       _finalizing = false;
