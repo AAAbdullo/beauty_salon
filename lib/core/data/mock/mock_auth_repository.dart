@@ -3,12 +3,13 @@ import 'dart:convert';
 import '../../services/app_state_service.dart';
 import '../../utils/clock.dart';
 import '../../utils/result.dart';
+import '../../utils/uuid.dart';
 import '../repositories/auth_repository.dart';
 import 'mock_network.dart';
 
 /// Мок авторизации. Токен — «JWT без подписи»: роль и id пользователя лежат внутри токена,
 /// приложение читает их оттуда, а не из формы входа. Настоящий токен подпишет сервер.
-class MockAuthRepository implements AuthRepository {
+class MockAuthRepository implements AuthRepository, DemoOtpHint {
   MockAuthRepository({TokenStorage? storage, MockNetwork? network})
     : _storage = storage ?? InMemoryTokenStorage(),
       _network = network ?? MockNetwork();
@@ -100,10 +101,88 @@ class MockAuthRepository implements AuthRepository {
     return Result.success(await _startSession(account.$3, account.$2));
   }
 
+  // ── Регистрация по SMS ────────────────────────────────────────────────────
+
+  /// В моке «SMS» всегда содержит этот код
   @override
-  Future<AuthSession> completeRegistration({required String phone}) async {
-    await _network(() {});
-    return _startSession(AppStateService().clientId, UserRole.client);
+  String get demoOtpCode => '1234';
+
+  static const resendInterval = Duration(seconds: 45);
+  static const otpLifetime = Duration(minutes: 5);
+  static const maxOtpAttempts = 5;
+
+  final Map<String, _SentOtp> _otps = {};
+  final Map<String, String> _verifiedTokens = {};
+
+  static String _digits(String phone) => phone.replaceAll(RegExp(r'\D'), '');
+
+  @override
+  Future<Result<OtpChallenge, AuthError>> requestOtp({required String phone}) => _network(() {
+    final digits = _digits(phone);
+    if (digits.length != 12 || !digits.startsWith('998')) {
+      return const Result.failure(AuthError('Введите корректный номер телефона.'));
+    }
+    final now = AppClock.now();
+    final previous = _otps[digits];
+    if (previous != null) {
+      final wait = previous.sentAt.add(resendInterval).difference(now);
+      if (wait > Duration.zero) {
+        return Result.failure(AuthError('Повторно отправить код можно через ${wait.inSeconds + 1} с.'));
+      }
+    }
+    _otps[digits] = _SentOtp(sentAt: now, expiresAt: now.add(otpLifetime));
+    return const Result.success(OtpChallenge(resendAfter: resendInterval));
+  });
+
+  @override
+  Future<Result<PhoneVerification, AuthError>> verifyOtp({required String phone, required String code}) =>
+      _network(() {
+        final digits = _digits(phone);
+        final otp = _otps[digits];
+        if (otp == null) return const Result.failure(AuthError('Сначала запросите код.'));
+        if (!AppClock.now().isBefore(otp.expiresAt)) {
+          _otps.remove(digits);
+          return const Result.failure(AuthError('Код устарел. Запросите новый.'));
+        }
+        if (otp.attempts >= maxOtpAttempts) {
+          return const Result.failure(AuthError('Слишком много попыток. Запросите новый код.'));
+        }
+        if (code.trim() != demoOtpCode) {
+          otp.attempts++;
+          final left = maxOtpAttempts - otp.attempts;
+          return Result.failure(
+            AuthError(left > 0 ? 'Неверный код. Осталось попыток: $left.' : 'Слишком много попыток. Запросите новый код.'),
+          );
+        }
+        _otps.remove(digits);
+        final token = 'reg_${Uuid.v4()}';
+        _verifiedTokens[token] = digits;
+        return Result.success(PhoneVerification(token: token, phone: phone));
+      });
+
+  @override
+  Future<Result<AuthSession, AuthError>> completeRegistration({
+    required PhoneVerification verification,
+    required RegistrationProfile profile,
+  }) async {
+    final failure = await _network<AuthError?>(() {
+      final verified = _verifiedTokens[verification.token];
+      if (verified == null || verified != _digits(profile.phone)) {
+        return const AuthError('Номер не подтверждён. Пройдите проверку по SMS заново.');
+      }
+      if (profile.firstName.trim().isEmpty) return const AuthError('Укажите имя.');
+      _verifiedTokens.remove(verification.token); // токен одноразовый
+      // «Сервер» заводит нового клиента: без кредитов, записей и избранного
+      AppStateService().startNewClient(
+        name: profile.fullName,
+        phone: profile.phone,
+        birthDate: profile.birthDate,
+        gender: profile.gender,
+      );
+      return null;
+    });
+    if (failure != null) return Result.failure(failure);
+    return Result.success(await _startSession(AppStateService().clientId, UserRole.client));
   }
 
   @override
@@ -111,4 +190,12 @@ class MockAuthRepository implements AuthRepository {
     await _storage.clear();
     _session = null;
   }
+}
+
+class _SentOtp {
+  _SentOtp({required this.sentAt, required this.expiresAt});
+
+  final DateTime sentAt;
+  final DateTime expiresAt;
+  int attempts = 0;
 }

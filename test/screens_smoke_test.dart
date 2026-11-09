@@ -35,7 +35,7 @@ void main() {
 
   final screens = <String, Widget Function()>{
     'Auth': () => AuthScreen(onLoginSuccess: (_) {}),
-    'Onboarding': () => OnboardingRegistrationScreen(onCompleted: noop, onBackToLogin: noop),
+    'Onboarding': () => OnboardingRegistrationScreen(onCompleted: (_, _) async {}, onBackToLogin: noop),
     'Home': () => ClientHomeScreen(
       onOpenMap: noop,
       onSalonTap: (_) {},

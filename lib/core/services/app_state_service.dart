@@ -292,6 +292,25 @@ class AppStateService extends ChangeNotifier {
 
   void resetMasterAvatar() => updateMasterAvatar(seedMasterAvatar);
 
+  /// Мок «сервера»: завести нового клиента при регистрации. Данные демо-клиента не наследуются:
+  /// ни кредитов, ни записей, ни избранного, ни уведомлений.
+  /// [BACKEND NOTE]: после входа кэш заполняется ответом GET /me.
+  void startNewClient({required String name, required String phone, required String birthDate, required String gender}) {
+    _applySeed();
+    clientId = 'c-${Uuid.v4()}';
+    clientName = name;
+    clientPhone = phone;
+    clientBirthDate = birthDate;
+    clientGender = gender;
+    clientCredits = 0;
+    // Абонемента нет: тариф-заглушка с истёкшим сроком (до покупки пакета кредитами платить нельзя)
+    subscriptionExpiresAt = AppClock.now();
+    _favoriteSalonIds = {};
+    _favoriteMasterIds = {};
+    _notifications = [];
+    notifyListeners();
+  }
+
   void updateClientProfile({
     required String name,
     required String phone,

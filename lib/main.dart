@@ -545,16 +545,21 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
     if (!_isAuthenticated) {
       if (_isRegistering) {
         return OnboardingRegistrationScreen(
-          onCompleted: () async {
+          onCompleted: (verification, profile) async {
             try {
-              final session = await _deps.auth.completeRegistration(phone: _deps.appState.clientPhone);
+              final result = await _deps.auth.completeRegistration(verification: verification, profile: profile);
               if (!mounted) return;
-              setState(() {
-                _isRegistering = false;
-                _isMasterMode = session.isMaster;
-                _isAuthenticated = true;
-                _clientTabIndex = 0;
-              });
+              switch (result) {
+                case Success(:final value):
+                  setState(() {
+                    _isRegistering = false;
+                    _isMasterMode = value.isMaster;
+                    _isAuthenticated = true;
+                    _clientTabIndex = 0;
+                  });
+                case Failure(:final error):
+                  showAppSnack(this.context, error.message);
+              }
             } on RepositoryException catch (e) {
               if (mounted) showAppSnack(this.context, e.message);
             }

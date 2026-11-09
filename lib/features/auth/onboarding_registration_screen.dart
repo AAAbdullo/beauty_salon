@@ -1,4 +1,7 @@
 import '../../core/data/app_scope.dart';
+import '../../core/data/repositories/auth_repository.dart';
+import '../../core/data/repository_exception.dart';
+import '../../core/utils/result.dart';
 import 'dart:async';
 import 'package:flutter/material.dart' hide Text;
 import '../../core/l10n/app_text.dart';
@@ -13,7 +16,8 @@ import '../../core/widgets/inputs/app_text_field.dart';
 /// Шаг 2: Ввод SMS-кода с таймером 00:45
 /// Шаг 3: Заполнение анкеты (Имя, Фамилия, Дата рождения, Пол)
 class OnboardingRegistrationScreen extends StatefulWidget {
-  final VoidCallback onCompleted;
+  /// Анкета заполнена: завершить регистрацию на «сервере» (номер уже подтверждён по SMS)
+  final Future<void> Function(PhoneVerification verification, RegistrationProfile profile) onCompleted;
   final VoidCallback onBackToLogin;
 
   const OnboardingRegistrationScreen({
@@ -39,6 +43,10 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
   int _timerSeconds = 45;
   Timer? _countdownTimer;
   String? _otpError;
+  bool _otpBusy = false;
+
+  // Номер, подтверждённый по SMS: без него анкету не принимают
+  PhoneVerification? _verification;
 
   // Шаг 3: Анкета
   final _firstNameController = TextEditingController(text: 'Азиза');
@@ -63,9 +71,9 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
     super.dispose();
   }
 
-  void _startTimer() {
+  void _startTimer([int seconds = 45]) {
     _countdownTimer?.cancel();
-    setState(() => _timerSeconds = 45);
+    setState(() => _timerSeconds = seconds);
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) {
         timer.cancel();
@@ -79,13 +87,17 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
     });
   }
 
-  void _submitPhone() {
+  String get _fullPhone => '+998 ${_phoneController.text.trim()}';
+
+  Future<void> _submitPhone() async {
     final raw = _phoneController.text.replaceAll(RegExp(r'\D'), '');
     if (raw.length != UzPhoneInputFormatter.digitsCount) {
       setState(() => _phoneError = 'Введите корректный 9-значный номер');
       return;
     }
     FocusScope.of(context).unfocus();
+    final challenge = await _requestOtp((message) => setState(() => _phoneError = message));
+    if (challenge == null || !mounted) return;
     for (final c in _otpControllers) {
       c.clear();
     }
@@ -94,7 +106,7 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
       _otpError = null;
       _currentStep = 2;
     });
-    _startTimer();
+    _startTimer(challenge.resendAfter.inSeconds);
     // Фокус на первое поле SMS
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_otpFocusNodes[0].canRequestFocus) {
@@ -103,18 +115,76 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
     });
   }
 
-  void _submitOtp() {
+  /// Запросить SMS-код; при отказе сервера [onError] получает причину, при обрыве связи — её же
+  Future<OtpChallenge?> _requestOtp(void Function(String message) onError) async {
+    try {
+      final result = await AppScope.read(context).auth.requestOtp(phone: _fullPhone);
+      if (!mounted) return null;
+      switch (result) {
+        case Success(:final value):
+          return value;
+        case Failure(:final error):
+          onError(error.message);
+          return null;
+      }
+    } on RepositoryException catch (e) {
+      if (mounted) onError(e.message);
+      return null;
+    }
+  }
+
+  Future<void> _resendOtp() async {
+    final challenge = await _requestOtp((message) => setState(() => _otpError = message));
+    if (challenge == null || !mounted) return;
+    for (final c in _otpControllers) {
+      c.clear();
+    }
+    setState(() => _otpError = null);
+    _startTimer(challenge.resendAfter.inSeconds);
+    _otpFocusNodes[0].requestFocus();
+  }
+
+  Future<void> _submitOtp() async {
+    if (_otpBusy) return; // код приходит из автозаполнения и по кнопке: проверяем один раз
     final code = _otpControllers.map((c) => c.text).join();
     if (code.length < 4) {
       setState(() => _otpError = 'Введите 4-значный код из SMS');
       return;
     }
     FocusScope.of(context).unfocus();
-    _countdownTimer?.cancel();
-    setState(() {
-      _otpError = null;
-      _currentStep = 3;
-    });
+    // Вернулись с анкеты на шаг SMS: этот номер уже подтверждён, повторно проверять код нельзя (он одноразовый)
+    if (_verification?.phone == _fullPhone) {
+      _countdownTimer?.cancel();
+      setState(() {
+        _otpError = null;
+        _currentStep = 3;
+      });
+      return;
+    }
+    _otpBusy = true;
+    try {
+      final result = await AppScope.read(context).auth.verifyOtp(phone: _fullPhone, code: code);
+      if (!mounted) return;
+      switch (result) {
+        case Success(:final value):
+          _countdownTimer?.cancel();
+          setState(() {
+            _verification = value;
+            _otpError = null;
+            _currentStep = 3;
+          });
+        case Failure(:final error):
+          for (final c in _otpControllers) {
+            c.clear();
+          }
+          setState(() => _otpError = error.message);
+          _otpFocusNodes[0].requestFocus();
+      }
+    } on RepositoryException catch (e) {
+      if (mounted) setState(() => _otpError = e.message);
+    } finally {
+      _otpBusy = false;
+    }
   }
 
   Future<void> _selectBirthDate() async {
@@ -168,26 +238,33 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
       );
   }
 
-  void _submitProfile() {
+  Future<void> _submitProfile() async {
     final first = _firstNameController.text.trim();
     final last = _lastNameController.text.trim();
+    final verification = _verification;
     if (first.isEmpty) {
       setState(() => _profileError = 'Пожалуйста, введите ваше имя');
       return;
     }
-
-    final fullName = last.isNotEmpty ? '$first $last' : first;
-    final phone = '+998 ${_phoneController.text.trim()}';
-
-    // Обновляем синглтон состояния
-    AppScope.read(context).appState.updateClientProfile(
-      name: fullName,
-      phone: phone,
-      birthDate: _birthDateController.text,
-      gender: _selectedGender,
+    if (verification == null) {
+      // Сюда не попасть без SMS-шага; на случай возврата назад по стеку — вернуть на проверку номера
+      setState(() {
+        _profileError = null;
+        _currentStep = 1;
+      });
+      return;
+    }
+    setState(() => _profileError = null);
+    await widget.onCompleted(
+      verification,
+      RegistrationProfile(
+        phone: _fullPhone,
+        firstName: first,
+        lastName: last,
+        birthDate: _birthDateController.text,
+        gender: _selectedGender,
+      ),
     );
-
-    widget.onCompleted();
   }
 
   @override
@@ -415,6 +492,13 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
           'Мы отправили 4-значный SMS-код на номер +998 ${_phoneController.text}',
           style: TextStyle(fontSize: 14, color: AppColors.muted),
         ),
+        if (AppScope.read(context).auth case final DemoOtpHint hint) ...[
+          const SizedBox(height: 6),
+          Text(
+            'Демо-режим: код из SMS — ${hint.demoOtpCode}',
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primary),
+          ),
+        ],
         const SizedBox(height: 36),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -495,7 +579,7 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
                   style: TextStyle(fontSize: 13, color: AppColors.muted, fontWeight: FontWeight.w600),
                 )
               : TextButton(
-                  onPressed: _startTimer,
+                  onPressed: _resendOtp,
                   child: const Text(
                     'Отправить код повторно',
                     style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 14),

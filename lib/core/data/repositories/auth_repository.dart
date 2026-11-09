@@ -38,6 +38,46 @@ class AuthTokens {
   int get hashCode => Object.hash(access, refresh);
 }
 
+/// Ответ на запрос SMS-кода
+class OtpChallenge {
+  /// Через сколько можно запросить код повторно
+  final Duration resendAfter;
+
+  const OtpChallenge({required this.resendAfter});
+}
+
+/// Подтверждённый по SMS номер: одноразовый токен, который принимает завершение регистрации
+class PhoneVerification {
+  final String token;
+  final String phone;
+
+  const PhoneVerification({required this.token, required this.phone});
+}
+
+/// Анкета нового клиента
+class RegistrationProfile {
+  final String phone;
+  final String firstName;
+  final String lastName;
+  final String birthDate;
+  final String gender;
+
+  const RegistrationProfile({
+    required this.phone,
+    required this.firstName,
+    this.lastName = '',
+    required this.birthDate,
+    required this.gender,
+  });
+
+  String get fullName => lastName.isEmpty ? firstName : '$firstName $lastName';
+}
+
+/// Только для мока: показать тестировщику, какой код «пришёл по SMS». У настоящего сервера этого нет.
+abstract interface class DemoOtpHint {
+  String get demoOtpCode;
+}
+
 /// Хранилище токенов. На устройстве — защищённое (Keychain / Keystore через flutter_secure_storage),
 /// в моках — в памяти. Реализации наследуют класс и определяют [readTokens]/[writeTokens]/[clear].
 abstract class TokenStorage {
@@ -81,8 +121,22 @@ abstract interface class AuthRepository {
 
   Future<Result<AuthSession, AuthError>> login({required String login, required String password});
 
-  /// Завершение регистрации клиента (после подтверждения телефона по SMS)
-  Future<AuthSession> completeRegistration({required String phone});
+  /// Регистрация клиента в три шага: [requestOtp] (SMS на номер) → [verifyOtp] (проверка кода) →
+  /// [completeRegistration] (анкета). Номер должен быть подтверждён: без [PhoneVerification] анкету не принимают.
+  /// [BACKEND NOTE]: POST /auth/register/otp, POST /auth/register/otp/verify, POST /auth/register/confirm
+  ///
+  /// Отправить SMS-код на [phone] (формат «+998 90 123 45 67»). В ответе — через сколько можно запросить новый.
+  Future<Result<OtpChallenge, AuthError>> requestOtp({required String phone});
+
+  /// Проверить код. Неверный код ограниченное число раз, потом нужно запросить новый.
+  Future<Result<PhoneVerification, AuthError>> verifyOtp({required String phone, required String code});
+
+  /// Завершить регистрацию анкетой; возвращает сессию нового клиента.
+  /// Профиль нового клиента пустой: без кредитов, записей и избранного.
+  Future<Result<AuthSession, AuthError>> completeRegistration({
+    required PhoneVerification verification,
+    required RegistrationProfile profile,
+  });
 
   Future<void> logout();
 }

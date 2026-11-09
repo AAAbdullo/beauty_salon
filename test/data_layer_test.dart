@@ -476,6 +476,97 @@ void main() {
     });
   });
 
+  group('Регистрация по SMS', () {
+    const phone = '+998 90 123 45 67';
+    const profile = RegistrationProfile(
+      phone: phone,
+      firstName: 'Азиза',
+      lastName: 'Каримова',
+      birthDate: '14.05.1998',
+      gender: 'Женский',
+    );
+
+    Future<PhoneVerification> verified() async {
+      await deps.auth.requestOtp(phone: phone);
+      return (await deps.auth.verifyOtp(phone: phone, code: '1234')).valueOrNull!;
+    }
+
+    test('код запрашивается с ожиданием повтора; раньше срока повторная отправка отклоняется', () async {
+      final first = await deps.auth.requestOtp(phone: phone);
+      expect(first.valueOrNull!.resendAfter, const Duration(seconds: 45));
+
+      final early = await deps.auth.requestOtp(phone: phone);
+      expect(early.isFailure, isTrue);
+      expect(early.errorOrNull!.message, contains('Повторно отправить код можно через'));
+
+      clock.advance(const Duration(seconds: 46));
+      expect((await deps.auth.requestOtp(phone: phone)).isSuccess, isTrue);
+    });
+
+    test('некорректный номер отклоняется', () async {
+      final result = await deps.auth.requestOtp(phone: '+998 90 12');
+      expect(result.errorOrNull!.message, contains('корректный номер'));
+    });
+
+    test('неверный код: осталось попыток уменьшается, после пяти ошибок верный код тоже не принимается', () async {
+      await deps.auth.requestOtp(phone: phone);
+      final first = await deps.auth.verifyOtp(phone: phone, code: '0000');
+      expect(first.errorOrNull!.message, 'Неверный код. Осталось попыток: 4.');
+      for (var i = 0; i < 4; i++) {
+        await deps.auth.verifyOtp(phone: phone, code: '0000');
+      }
+      final locked = await deps.auth.verifyOtp(phone: phone, code: '1234');
+      expect(locked.errorOrNull!.message, contains('Слишком много попыток'));
+
+      // Новый код снимает блокировку
+      clock.advance(const Duration(seconds: 46));
+      await deps.auth.requestOtp(phone: phone);
+      expect((await deps.auth.verifyOtp(phone: phone, code: '1234')).isSuccess, isTrue);
+    });
+
+    test('код устаревает через 5 минут; без запроса кода проверять нечего', () async {
+      expect((await deps.auth.verifyOtp(phone: phone, code: '1234')).errorOrNull!.message, 'Сначала запросите код.');
+      await deps.auth.requestOtp(phone: phone);
+      clock.advance(const Duration(minutes: 5, seconds: 1));
+      expect((await deps.auth.verifyOtp(phone: phone, code: '1234')).errorOrNull!.message, contains('устарел'));
+    });
+
+    test('анкету принимают только с подтверждённым номером; токен одноразовый и привязан к номеру', () async {
+      const forged = PhoneVerification(token: 'reg_подделка', phone: phone);
+      final noProof = await deps.auth.completeRegistration(verification: forged, profile: profile);
+      expect(noProof.errorOrNull!.message, contains('не подтверждён'));
+
+      final proof = await verified();
+      const otherPhone = RegistrationProfile(
+        phone: '+998 91 000 00 00',
+        firstName: 'Азиза',
+        birthDate: '14.05.1998',
+        gender: 'Женский',
+      );
+      final wrongPhone = await deps.auth.completeRegistration(verification: proof, profile: otherPhone);
+      expect(wrongPhone.isFailure, isTrue);
+
+      final ok = await deps.auth.completeRegistration(verification: proof, profile: profile);
+      expect(ok.isSuccess, isTrue);
+      final replay = await deps.auth.completeRegistration(verification: proof, profile: profile);
+      expect(replay.isFailure, isTrue, reason: 'токен уже использован');
+    });
+
+    test('новый клиент получает пустой профиль, а не данные демо-клиента c-001', () async {
+      final session = (await deps.auth.completeRegistration(verification: await verified(), profile: profile)).valueOrNull!;
+      expect(session.role, UserRole.client);
+      expect(session.userId, isNot('c-001'));
+      expect(state.clientId, session.userId);
+      expect(state.clientName, 'Азиза Каримова');
+      expect(state.clientPhone, phone);
+      expect(state.clientCredits, 0);
+      expect(state.bookings, isEmpty);
+      expect(state.favoriteSalonIds, isEmpty);
+      expect(state.notifications, isEmpty);
+      expect(state.isSubscriptionExpired, isTrue, reason: 'абонемента нет — кредитами платить нельзя');
+    });
+  });
+
   group('QR визита (задача 15)', () {
     test('токен выдаётся через репозиторий и подтверждает визит один раз', () async {
       // Визит b-001 в 11:20: подтверждать можно за 30 минут до начала, поэтому подводим часы к окну

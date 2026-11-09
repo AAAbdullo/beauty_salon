@@ -87,6 +87,16 @@ void main() {
       expect(tr('Оплата 22 000 сум вернётся на карту полностью.'), 'Тўлов 22 000 сўм картага тўлиқ қайтарилади.');
     });
 
+    test('регистрация по SMS: сообщения сервера и подсказка переведены', () {
+      AppLocale.instance.setLanguage(AppLanguage.uz);
+      expect(tr('Неверный код. Осталось попыток: 4.'), "Noto'g'ri kod. Qolgan urinishlar: 4.");
+      expect(tr('Повторно отправить код можно через 30 с.'), 'Kodni qayta yuborish 30 soniyadan keyin mumkin.');
+      expect(tr('Слишком много попыток. Запросите новый код.'), "Juda ko'p urinish. Yangi kod so'rang.");
+      expect(tr('Демо-режим: код из SMS — 1234'), 'Demo rejim: SMS dagi kod — 1234');
+      AppLocale.instance.setLanguage(AppLanguage.uzCyrl);
+      expect(tr('Неверный код. Осталось попыток: 4.'), 'Нотўғри код. Қолган уринишлар: 4.');
+    });
+
     test('после возврата на русский тексты не переводятся', () {
       AppLocale.instance.setLanguage(AppLanguage.uz);
       expect(tr('Главная'), 'Bosh sahifa');
