@@ -54,6 +54,7 @@ const Map<String, String> uzExact = {
   'Uyga chiqish (мастер выезжает к клиенту)': 'Uyga chiqish (usta mijoz oldiga boradi)',
   'client или master': 'client yoki master',
   'Абонемент заморожен': 'Obuna muzlatilgan',
+  'Абонемент истёк': 'Obuna muddati tugagan',
   'Абонемент и оплата': 'Obuna va to\'lov',
   'Абонемент снова активен': 'Obuna yana faol',
   'Август': 'Avgust',

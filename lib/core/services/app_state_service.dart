@@ -116,7 +116,8 @@ class AppStateService extends ChangeNotifier {
     clientAvatar = seedClientAvatar;
     clientCredits = 86;
     subscriptionPlan = 'Premium';
-    subscriptionExpiresAt = DateTime(2026, 11, 12);
+    // Мок: срок считается от текущих часов, чтобы демо не «протухало» с календарём
+    subscriptionExpiresAt = AppClock.now().add(const Duration(days: 20));
     clientBirthDate = '14.05.1998';
     clientGender = 'Женский';
 
@@ -190,6 +191,9 @@ class AppStateService extends ChangeNotifier {
     final until = frozenUntil;
     return until != null && AppClock.now().isBefore(until);
   }
+
+  /// Срок абонемента вышел: кредитами платить нельзя, пока не куплен новый пакет
+  bool get isSubscriptionExpired => !AppClock.now().isBefore(subscriptionExpiresAt);
 
   String get subscriptionExpiry => Formatters.fullDate(subscriptionExpiresAt);
 
@@ -382,6 +386,9 @@ class AppStateService extends ChangeNotifier {
   }) {
     if (isFrozen) {
       return const BookingError(BookingErrorCode.creditsFrozen, 'Абонемент заморожен');
+    }
+    if (isSubscriptionExpired) {
+      return const BookingError(BookingErrorCode.subscriptionExpired, 'Абонемент истёк');
     }
     if (clientCredits < credits) {
       return BookingError(BookingErrorCode.notEnoughCredits, 'Не хватает ${credits - clientCredits} кр.');

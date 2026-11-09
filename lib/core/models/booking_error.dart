@@ -8,6 +8,7 @@ enum BookingErrorCode {
   inPast,
   overlapsOwnBooking,
   creditsFrozen,
+  subscriptionExpired,
   notEnoughCredits,
   creditsLimit,
   notCompleted,

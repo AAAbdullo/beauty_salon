@@ -235,6 +235,23 @@ void main() {
       expect(book(when: at(1, 15), method: PaymentMethods.inSalon).isSuccess, isTrue);
     });
 
+    test('срок абонемента в моке считается от часов: сегодня + 20 дней', () {
+      expect(state.subscriptionExpiresAt, wednesday.add(const Duration(days: 20)));
+      expect(state.isSubscriptionExpired, isFalse);
+    });
+
+    test('после срока абонемента кредитами платить нельзя, онлайн и в салоне — можно', () {
+      clock.set(state.subscriptionExpiresAt.add(const Duration(hours: 1)));
+      expect(state.isSubscriptionExpired, isTrue);
+      final when = clock.now().add(const Duration(days: 1, hours: 4));
+      expect(codeOf(book(when: when)), BookingErrorCode.subscriptionExpired);
+      expect(
+        state.creditsBlockReason(salonId: 's-001', credits: 24, dateTime: when),
+        'Абонемент истёк',
+      );
+      expect(book(when: when, method: PaymentMethods.online).isSuccess, isTrue);
+    });
+
     test('«Любой мастер» подменяется конкретным свободным мастером', () {
       final r = book(
         masterId: null,
