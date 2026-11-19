@@ -87,8 +87,25 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
     super.initState();
     _deps = AppScope.read(context);
     _appState.addListener(_onAppStateChanged);
+    _appState.reviewChanges.addListener(_refreshRatings);
     unawaited(_loadSalons());
     unawaited(_loadMasters());
+  }
+
+  /// Отзыв оставили или изменили: рейтинги салонов и мастеров перечитываются без индикатора загрузки
+  Future<void> _refreshRatings() async {
+    final requestId = ++_salonsRequestId;
+    try {
+      final salons = await _deps.catalog.getSalons(_filterParams);
+      final masters = await _deps.catalog.getMasters();
+      if (!mounted || requestId != _salonsRequestId) return;
+      setState(() {
+        _salons = salons;
+        _masters = masters;
+      });
+    } on RepositoryException {
+      // Остаются прежние числа; они обновятся при следующей загрузке
+    }
   }
 
   /// Любое изменение фильтров: сохраняем и перезагружаем список салонов
@@ -137,6 +154,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
   @override
   void dispose() {
     _appState.removeListener(_onAppStateChanged);
+    _appState.reviewChanges.removeListener(_refreshRatings);
     _searchController.dispose();
     super.dispose();
   }

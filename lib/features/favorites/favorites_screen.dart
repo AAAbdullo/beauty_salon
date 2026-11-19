@@ -51,7 +51,22 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     _deps = AppScope.read(context);
     _tabController = TabController(length: 2, vsync: this);
     _appState.addListener(_onStateChanged);
+    _appState.reviewChanges.addListener(_refreshRatings);
     unawaited(_load());
+  }
+
+  /// Отзыв оставили или изменили: рейтинги перечитываются без индикатора загрузки
+  Future<void> _refreshRatings() async {
+    try {
+      final results = await Future.wait([_deps.catalog.getSalons(), _deps.catalog.getMasters()]);
+      if (!mounted) return;
+      setState(() {
+        _allSalons = results[0] as List<SalonModel>;
+        _allMasters = results[1] as List<MasterProfileModel>;
+      });
+    } on RepositoryException {
+      // Остаются прежние числа
+    }
   }
 
   Future<void> _load() async {
@@ -83,6 +98,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
   @override
   void dispose() {
     _appState.removeListener(_onStateChanged);
+    _appState.reviewChanges.removeListener(_refreshRatings);
     _tabController.dispose();
     super.dispose();
   }

@@ -270,7 +270,25 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
   void initState() {
     super.initState();
     _deps = AppScope.read(context);
+    _deps.appState.reviewChanges.addListener(_refreshRatings);
     unawaited(_loadSalons(selectInitial: true));
+  }
+
+  /// Отзыв оставили или изменили: рейтинги в карточках перечитываются, карта и выбор салона не сбрасываются
+  Future<void> _refreshRatings() async {
+    try {
+      final salons = await _deps.catalog.getSalons(_filterParams);
+      if (!mounted) return;
+      setState(() {
+        _salons = salons;
+        final selected = _selectedSalon;
+        if (selected != null) {
+          _selectedSalon = salons.where((s) => s.id == selected.id).firstOrNull ?? selected;
+        }
+      });
+    } on RepositoryException {
+      // Остаются прежние числа
+    }
   }
 
   /// Загрузка салонов по текущим фильтрам. Ответ на устаревший запрос отбрасывается.
@@ -308,6 +326,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
 
   @override
   void dispose() {
+    _deps.appState.reviewChanges.removeListener(_refreshRatings);
     _sheetController.dispose();
     _navTrackingTimer?.cancel();
     _voiceGuidance.stop();
