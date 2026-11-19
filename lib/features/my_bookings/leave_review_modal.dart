@@ -8,7 +8,8 @@ import '../../core/utils/result.dart';
 import '../../core/utils/uuid.dart';
 import '../../core/l10n/app_locale.dart';
 
-/// Модальное окно оценки и отзыва о прошедшем визите (ТЗ M-13)
+/// Модальное окно отзыва о мастере по подтверждённому визиту (ТЗ M-13).
+/// Если по записи уже есть отзыв ([BookingItem.reviewId]), окно открывается для правки.
 class LeaveReviewModal extends StatefulWidget {
   final BookingItem booking;
 
@@ -28,35 +29,22 @@ class LeaveReviewModal extends StatefulWidget {
 }
 
 class _LeaveReviewModalState extends State<LeaveReviewModal> {
-  int _rating = 5;
+  // Оценка не выбрана, пока клиент сам не поставит звёзды: по умолчанию 5 завышала бы рейтинг мастера
+  late int _rating = widget.booking.reviewRating ?? 0;
   String? _error;
   bool _submitting = false;
 
+  bool get _isEdit => widget.booking.reviewId != null;
+
   // Ключ идемпотентности: один отзыв на одну попытку
   String _requestKey = Uuid.v4();
-  final Set<String> _selectedTags = {'Профессионализм мастера', 'Чистота и гигиена'};
-  final TextEditingController _commentController = TextEditingController();
-
-  static const List<String> _positiveTags = [
-    'Чистота и гигиена',
-    'Профессионализм мастера',
-    'Вежливый персонал',
-    'Уютная атмосфера',
-    'Быстро и аккуратно',
-    'Вкусный кофе / чай',
-    'Соотношение цена/качество',
-  ];
-
-  static const List<String> _criticalTags = [
-    'Долгое ожидание',
-    'Неаккуратная работа',
-    'Недостаточная чистота',
-    'Шумно в салоне',
-    'Мастер был не в настроении',
-  ];
+  late final Set<String> _selectedTags = {...?widget.booking.reviewTags};
+  late final TextEditingController _commentController = TextEditingController(text: widget.booking.reviewComment ?? '');
 
   String _getRatingLabel(int rating) {
     switch (rating) {
+      case 0:
+        return 'Выберите оценку';
       case 1:
         return 'Очень плохо 😞';
       case 2:
@@ -71,22 +59,37 @@ class _LeaveReviewModalState extends State<LeaveReviewModal> {
     }
   }
 
+  /// Теги, подходящие к выбранной оценке (положительные при 4–5, проблемные при 1–3)
+  Set<String> get _availableTags => {...ReviewTags.master(_rating), ...ReviewTags.salon(_rating)};
+
+  void _setRating(int stars) {
+    setState(() {
+      _rating = stars;
+      // Тег из другой группы (положительный ↔ проблемный) к новой оценке не подходит
+      _selectedTags.retainAll(_availableTags);
+    });
+  }
+
   Future<void> _submitReview() async {
-    if (_submitting) return; // повторный тап
+    if (_submitting || _rating == 0) return; // повторный тап или оценка не выбрана
     setState(() {
       _submitting = true;
       _error = null;
     });
     try {
-      // [BACKEND NOTE]: POST /api/v1/bookings/:id/review
-      // body: { "rating": _rating, "tags": _selectedTags.toList(), "comment": _commentController.text.trim() }
-      final result = await AppScope.read(context).reviews.submit(
-        bookingId: widget.booking.id,
-        rating: _rating,
-        tags: _selectedTags.toList(),
-        comment: _commentController.text.trim(),
-        idempotencyKey: _requestKey,
-      );
+      // [BACKEND NOTE]: POST /api/v1/bookings/:id/review (новый) или PATCH /api/v1/reviews/:id (правка)
+      final repo = AppScope.read(context).reviews;
+      final tags = _selectedTags.toList();
+      final comment = _commentController.text.trim();
+      final result = _isEdit
+          ? await repo.edit(reviewId: widget.booking.reviewId!, rating: _rating, tags: tags, comment: comment)
+          : await repo.submit(
+              bookingId: widget.booking.id,
+              rating: _rating,
+              tags: tags,
+              comment: comment,
+              idempotencyKey: _requestKey,
+            );
       if (!mounted) return;
       switch (result) {
         case Success():
@@ -114,10 +117,56 @@ class _LeaveReviewModalState extends State<LeaveReviewModal> {
     super.dispose();
   }
 
+  Widget _tagGroup(String title, List<String> tags) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: AppColors.ink)),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: tags.map((tag) {
+            final isSelected = _selectedTags.contains(tag);
+            return GestureDetector(
+              onTap: () {
+                setState(() {
+                  if (isSelected) {
+                    _selectedTags.remove(tag);
+                  } else {
+                    _selectedTags.add(tag);
+                  }
+                });
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: isSelected ? AppColors.primaryTint : AppColors.surface,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: isSelected ? AppColors.primary : AppColors.handle,
+                    width: isSelected ? 1.5 : 1,
+                  ),
+                ),
+                child: Text(
+                  tag,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                    color: isSelected ? AppColors.primaryText : AppColors.ink,
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final availableTags = _rating >= 4 ? _positiveTags : _criticalTags;
-
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
@@ -152,12 +201,12 @@ class _LeaveReviewModalState extends State<LeaveReviewModal> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Оцените визит',
+                      _isEdit ? 'Изменить отзыв' : 'Оцените мастера',
                       style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.ink),
                     ),
                     SizedBox(height: 2),
                     Text(
-                      'Ваш отзыв помогает делать сервис лучше',
+                      'Ваша оценка формирует рейтинг мастера',
                       style: TextStyle(fontSize: 12, color: AppColors.muted),
                     ),
                   ],
@@ -225,12 +274,7 @@ class _LeaveReviewModalState extends State<LeaveReviewModal> {
                       final starIndex = index + 1;
                       final isFilled = starIndex <= _rating;
                       return GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _rating = starIndex;
-                            _selectedTags.clear();
-                          });
-                        },
+                        onTap: () => _setRating(starIndex),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 6),
                           child: Icon(
@@ -253,52 +297,13 @@ class _LeaveReviewModalState extends State<LeaveReviewModal> {
 
             const SizedBox(height: 20),
 
-            // Теги впечатления
-            Text(
-              _rating >= 4 ? 'Что вам понравилось?' : 'Что салону стоит улучшить?',
-              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: AppColors.ink),
-            ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: availableTags.map((tag) {
-                final isSelected = _selectedTags.contains(tag);
-                return GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      if (isSelected) {
-                        _selectedTags.remove(tag);
-                      } else {
-                        _selectedTags.add(tag);
-                      }
-                    });
-                  },
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 180),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: isSelected ? AppColors.primaryTint : AppColors.surface,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: isSelected ? AppColors.primary : AppColors.handle,
-                        width: isSelected ? 1.5 : 1,
-                      ),
-                    ),
-                    child: Text(
-                      tag,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                        color: isSelected ? AppColors.primaryText : AppColors.ink,
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-
-            const SizedBox(height: 20),
+            // Теги: отдельно о мастере и о салоне; появляются, когда выбрана оценка
+            if (_rating > 0) ...[
+              _tagGroup('О мастере', ReviewTags.master(_rating)),
+              const SizedBox(height: 14),
+              _tagGroup('О салоне', ReviewTags.salon(_rating)),
+              const SizedBox(height: 20),
+            ],
 
             // Комментарий
             Text(
@@ -309,6 +314,8 @@ class _LeaveReviewModalState extends State<LeaveReviewModal> {
             TextField(
               controller: _commentController,
               maxLines: 3,
+              maxLength: ReviewRules.maxCommentLength,
+              onChanged: (_) => setState(() {}),
               style: const TextStyle(fontSize: 13),
               decoration: InputDecoration(
                 hintText: tr('Поделитесь впечатлениями о сервисе, мастере или атмосфере салона...'),
@@ -331,6 +338,14 @@ class _LeaveReviewModalState extends State<LeaveReviewModal> {
               ),
             ),
 
+            if (_rating > 0 && _rating <= ReviewRules.lowRatingMax) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Выберите причину или опишите, что не понравилось',
+                style: TextStyle(fontSize: 11, color: AppColors.muted),
+              ),
+            ],
+
             if (_error != null) ...[
               const SizedBox(height: 12),
               Text(
@@ -346,14 +361,15 @@ class _LeaveReviewModalState extends State<LeaveReviewModal> {
               width: double.infinity,
               height: 48,
               child: ElevatedButton(
-                onPressed: _submitting ? null : _submitReview,
+                onPressed: (_submitting || _rating == 0) ? null : _submitReview,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
+                  disabledBackgroundColor: AppColors.handle,
                   elevation: 0,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 ),
-                child: const Text(
-                  'Отправить отзыв',
+                child: Text(
+                  _isEdit ? 'Сохранить' : 'Отправить отзыв',
                   style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white),
                 ),
               ),

@@ -506,6 +506,28 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
                               style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: AppColors.ink),
                             ),
                           ],
+                          // Пока окно открыто, отзыв можно изменить; потом он закрыт для правки
+                          if (b.isReviewWindowOpen) ...[
+                            const SizedBox(height: 4),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton.icon(
+                                onPressed: () async {
+                                  final res = await LeaveReviewModal.show(context, b);
+                                  if (res == true && context.mounted) showAppSnack(context, 'Отзыв изменён.');
+                                },
+                                icon: Icon(Icons.edit_outlined, size: 14, color: AppColors.primaryText),
+                                label: Text(
+                                  'Изменить',
+                                  style: TextStyle(
+                                    color: AppColors.primaryText,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
