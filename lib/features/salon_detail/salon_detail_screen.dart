@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import '../../core/data/app_scope.dart';
 import '../../core/data/repositories/catalog_repository.dart';
 import '../../core/models/master_review.dart';
+import '../../core/models/portfolio_work.dart';
+import '../../core/widgets/avatars/avatar_image.dart';
 import '../../core/services/masters_repository.dart';
 import '../../core/services/salons_repository.dart';
 import '../../core/theme/app_theme.dart';
@@ -100,6 +102,7 @@ class _SalonDetailViewState extends State<_SalonDetailView> with SingleTickerPro
   late final List<MasterServiceItem> _services;
   late final List<MasterProfileModel> _masters;
   late final List<MasterReview> _reviews;
+  late final Map<String, List<PortfolioWork>> _masterWorks;
   late final List<String> _photos;
   int _photoIndex = 0;
 
@@ -112,6 +115,7 @@ class _SalonDetailViewState extends State<_SalonDetailView> with SingleTickerPro
     _services = details.services;
     _masters = details.masters;
     _reviews = details.reviews;
+    _masterWorks = details.masterWorks;
     _photos = details.photos;
     _appState.addListener(_onStateChanged);
   }
@@ -558,39 +562,73 @@ class _SalonDetailViewState extends State<_SalonDetailView> with SingleTickerPro
           child: AppCard(
             padding: const EdgeInsets.all(12),
             onTap: () => widget.onMasterTap(m.id),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                CircleAvatar(
-                  radius: 28,
-                  backgroundColor: AppColors.primaryTint,
-                  backgroundImage: AssetImage(m.avatarAsset),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(m.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
-                      const SizedBox(height: 2),
-                      Text(m.specialty, style: TextStyle(fontSize: 11, color: AppColors.muted)),
-                      const SizedBox(height: 4),
-                      Row(
+                Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 28,
+                      backgroundColor: AppColors.primaryTint,
+                      backgroundImage: AssetImage(m.avatarAsset),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(Icons.star, size: 13, color: AppColors.primary),
-                          const SizedBox(width: 3),
-                          Text(
-                            '${m.rating} · ${Formatters.reviews(m.reviewsCount)} · опыт ${Formatters.years(m.experienceYears)}',
-                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                          Text(m.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+                          const SizedBox(height: 2),
+                          Text(m.specialty, style: TextStyle(fontSize: 11, color: AppColors.muted)),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              const Icon(Icons.star, size: 13, color: AppColors.primary),
+                              const SizedBox(width: 3),
+                              Flexible(
+                                child: Text(
+                                  '${m.rating} · ${Formatters.reviews(m.reviewsCount)} · опыт ${Formatters.years(m.experienceYears)}',
+                                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
+                    ),
+                    IconButton(
+                      icon: Icon(isFav ? Icons.favorite : Icons.favorite_border, color: AppColors.primary, size: 20),
+                      onPressed: () => _appState.toggleMasterFavorite(m.id),
+                    ),
+                  ],
+                ),
+                // До 3 миниатюр работ: закреплённые, а если их нет — самые свежие
+                if ((_masterWorks[m.id] ?? const <PortfolioWork>[]).isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      for (final w in _masterWorks[m.id]!)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Image(
+                              image: ResizeImage.resizeIfNeeded(200, null, avatarProvider(w.imageRef)),
+                              width: 56,
+                              height: 56,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, _, _) => Container(
+                                width: 56,
+                                height: 56,
+                                color: AppColors.primaryTint,
+                                child: const Icon(Icons.photo_outlined, color: AppColors.primary, size: 20),
+                              ),
+                            ),
+                          ),
+                        ),
                     ],
                   ),
-                ),
-                IconButton(
-                  icon: Icon(isFav ? Icons.favorite : Icons.favorite_border, color: AppColors.primary, size: 20),
-                  onPressed: () => _appState.toggleMasterFavorite(m.id),
-                ),
+                ],
               ],
             ),
           ),

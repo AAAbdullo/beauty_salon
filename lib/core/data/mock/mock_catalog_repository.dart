@@ -47,10 +47,12 @@ class MockCatalogRepository implements CatalogRepository {
   Future<SalonDetails?> getSalonDetails(String salonId) => _network<SalonDetails?>(() {
     final salon = _salons.getSalonById(salonId);
     if (salon == null) return null;
+    final masters = _masters.getMastersForSalon(salonId);
     return SalonDetails(
       salon: _salon(salon),
       services: _salons.getSalonServices(salonId),
-      masters: _masters.getMastersForSalon(salonId).map(_master).toList(),
+      masters: masters.map(_master).toList(),
+      masterWorks: {for (final m in masters) m.id: _state.portfolio.preview(m.id)},
       reviews: _state.salonReviews(salonId),
       photos: _salons.getSalonPhotos(salonId),
     );

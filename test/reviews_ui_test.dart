@@ -77,6 +77,8 @@ void main() {
 
   /// Главная → Nur Beauty → «Мастера» → Мадина Умарова → вкладка «Отзывы»
   Future<void> openMadinaReviews(WidgetTester tester) async {
+    // Высокий экран: карточки мастеров с миниатюрами работ помещаются целиком, без прокрутки
+    tester.view.physicalSize = const Size(390, 1600) * 3;
     await tester.tap(find.text('Nur Beauty').first);
     await settle(tester, frames: 12);
     await tester.tap(find.text('Мастера').first);

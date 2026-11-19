@@ -3,12 +3,15 @@ import '../../core/l10n/app_text.dart';
 import '../../core/data/app_scope.dart';
 import '../../core/data/repository_exception.dart';
 import '../../core/models/master_review.dart';
+import '../../core/models/portfolio_work.dart';
+import '../../core/widgets/avatars/avatar_image.dart';
 import '../../core/services/masters_repository.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/buttons/app_gradient_button.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/buttons/app_pill_button.dart';
 import '../../core/widgets/cards/app_card.dart';
+import '../../core/widgets/layout/fixed_height_box.dart';
 import '../../core/widgets/sheets/app_sheet.dart';
 import '../../core/widgets/states/async_screen.dart';
 import '../../core/widgets/states/not_found_screen.dart';
@@ -93,6 +96,54 @@ class _MasterProfileViewState extends State<_MasterProfileView> with SingleTicke
     _master = widget.master;
     _appState.addListener(_onStateChanged);
     _loadReviews();
+    _loadWorks();
+  }
+
+  // --- Портфолио: работы мастера (сначала закреплённые), фильтр по услуге
+  List<PortfolioWork> _works = const [];
+  bool _worksLoading = true;
+  String? _worksError;
+  String? _serviceFilter; // название услуги; null — «Все»
+
+  Future<void> _loadWorks() async {
+    setState(() {
+      _worksLoading = true;
+      _worksError = null;
+    });
+    try {
+      final works = await AppScope.read(context).portfolio.works(_master.id);
+      if (!mounted) return;
+      setState(() {
+        _works = works;
+        _worksLoading = false;
+      });
+    } on RepositoryException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _worksLoading = false;
+        _worksError = e.message;
+      });
+    }
+  }
+
+  List<PortfolioWork> get _visibleWorks =>
+      _serviceFilter == null ? _works : _works.where((w) => w.serviceName == _serviceFilter).toList();
+
+  /// Просмотр фото работы: услуга, цена, подпись и «Записаться на эту услугу» — тот же путь записи, что у нижней панели
+  void _openWork(List<PortfolioWork> works, int index) {
+    PhotoViewer.show(
+      context,
+      photos: [for (final w in works) w.imageRef],
+      initialIndex: index,
+      footerBuilder: (ctx, i) => _WorkFooter(
+        work: works[i],
+        service: _master.services.where((s) => s.id == works[i].serviceId).firstOrNull,
+        onBook: (service) {
+          Navigator.of(ctx).pop(); // закрыть просмотр, затем открыть запись
+          widget.onBookMaster(_master, service);
+        },
+      ),
+    );
   }
 
   // --- Отзывы: сводка и список страницами по 20 (свежие сверху)
@@ -500,48 +551,127 @@ class _MasterProfileViewState extends State<_MasterProfileView> with SingleTicke
 
   // 2. Вкладка Портфолио (ТЗ M-07)
   Widget _buildPortfolioGrid() {
-    return SliverGrid(
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisSpacing: 10,
-        crossAxisSpacing: 10,
-        childAspectRatio: 1.0,
-      ),
-      delegate: SliverChildBuilderDelegate((context, index) {
-        final imgAsset = _master.portfolioImages[index];
-        return GestureDetector(
-          onTap: () => PhotoViewer.show(context, photos: _master.portfolioImages, initialIndex: index),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: Container(
-              color: Colors.pink.shade50,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Image.asset(
-                    imgAsset,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) =>
-                        const Center(child: Icon(Icons.photo_camera_back_outlined, size: 40, color: AppColors.primary)),
-                  ),
-                  Positioned(
-                    bottom: 8,
-                    left: 8,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(10)),
-                      child: Text(
-                        'Работа #${index + 1}',
-                        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+    if (_worksLoading) {
+      return const SliverToBoxAdapter(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 24),
+          child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+        ),
+      );
+    }
+    if (_worksError != null) {
+      return SliverToBoxAdapter(
+        child: Column(
+          children: [
+            Text(_worksError!, textAlign: TextAlign.center),
+            TextButton(onPressed: _loadWorks, child: const Text('Повторить')),
+          ],
+        ),
+      );
+    }
+    if (_works.isEmpty) {
+      return SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 24),
+          child: Column(
+            children: [
+              Icon(Icons.photo_library_outlined, size: 40, color: AppColors.muted),
+              const SizedBox(height: 8),
+              Text('Мастер ещё не добавил работы', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+            ],
+          ),
+        ),
+      );
+    }
+    final visible = _visibleWorks;
+    final serviceNames = <String>[
+      for (final name in {for (final w in _works) w.serviceName}) name,
+    ];
+    return SliverMainAxisGroup(
+      slivers: [
+        SliverToBoxAdapter(
+          child: FixedHeightBox(
+            height: 40,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                _filterChip('Все', _serviceFilter == null, () => setState(() => _serviceFilter = null)),
+                for (final name in serviceNames)
+                  _filterChip(name, _serviceFilter == name, () => setState(() => _serviceFilter = name)),
+              ],
             ),
           ),
-        );
-      }, childCount: _master.portfolioImages.length),
+        ),
+        const SliverToBoxAdapter(child: SizedBox(height: 10)),
+        SliverGrid(
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            mainAxisSpacing: 10,
+            crossAxisSpacing: 10,
+            childAspectRatio: 1.0,
+          ),
+          delegate: SliverChildBuilderDelegate((context, index) {
+            final work = visible[index];
+            return GestureDetector(
+              onTap: () => _openWork(visible, index),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  color: Colors.pink.shade50,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Image(
+                        image: ResizeImage.resizeIfNeeded(600, null, avatarProvider(work.imageRef)),
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => const Center(
+                          child: Icon(Icons.photo_camera_back_outlined, size: 40, color: AppColors.primary),
+                        ),
+                      ),
+                      if (work.pinned)
+                        const Positioned(top: 8, right: 8, child: Icon(Icons.push_pin, size: 16, color: Colors.white)),
+                      Positioned(
+                        bottom: 8,
+                        left: 8,
+                        right: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(10)),
+                          child: Text(
+                            work.serviceName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }, childCount: visible.length),
+        ),
+      ],
+    );
+  }
+
+  Widget _filterChip(String label, bool selected, VoidCallback onTap) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: ChoiceChip(
+        label: Text(label),
+        selected: selected,
+        onSelected: (_) => onTap(),
+        selectedColor: AppColors.primary,
+        backgroundColor: AppColors.surface,
+        labelStyle: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          color: selected ? Colors.white : AppColors.ink,
+        ),
+        showCheckmark: false,
+      ),
     );
   }
 
@@ -601,6 +731,47 @@ class _MasterProfileViewState extends State<_MasterProfileView> with SingleTicke
         top: false,
         child: AppGradientButton(text: 'Записаться к мастеру', onPressed: () => widget.onBookMaster(_master, null)),
       ),
+    );
+  }
+}
+
+/// Подпись под фото работы: услуга, цена, подпись мастера и кнопка записи.
+/// Если услугу у мастера убрали, кнопки записи нет.
+class _WorkFooter extends StatelessWidget {
+  final PortfolioWork work;
+  final MasterServiceItem? service;
+  final ValueChanged<MasterServiceItem> onBook;
+
+  const _WorkFooter({required this.work, required this.service, required this.onBook});
+
+  @override
+  Widget build(BuildContext context) {
+    final service = this.service;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          work.serviceName,
+          style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w800),
+        ),
+        if (service != null) ...[
+          const SizedBox(height: 2),
+          Text(
+            '${service.creditsPrice} кр. · ${Formatters.formatSum(service.sumPrice)}',
+            style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+        ],
+        if (work.caption.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Text(work.caption, style: const TextStyle(color: Colors.white, fontSize: 13)),
+        ],
+        const SizedBox(height: 12),
+        if (service != null)
+          AppGradientButton(text: 'Записаться на эту услугу', onPressed: () => onBook(service))
+        else
+          Text('Услуга больше не оказывается', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+      ],
     );
   }
 }

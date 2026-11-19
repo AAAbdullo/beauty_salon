@@ -197,19 +197,21 @@ class _LeaveReviewModalState extends State<LeaveReviewModal> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _isEdit ? 'Изменить отзыв' : 'Оцените мастера',
-                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.ink),
-                    ),
-                    SizedBox(height: 2),
-                    Text(
-                      'Ваша оценка формирует рейтинг мастера',
-                      style: TextStyle(fontSize: 12, color: AppColors.muted),
-                    ),
-                  ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _isEdit ? 'Изменить отзыв' : 'Оцените мастера',
+                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.ink),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Ваша оценка формирует рейтинг мастера',
+                        style: TextStyle(fontSize: 12, color: AppColors.muted),
+                      ),
+                    ],
+                  ),
                 ),
                 IconButton(
                   onPressed: () => Navigator.pop(context),
