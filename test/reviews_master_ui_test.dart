@@ -8,6 +8,7 @@ import 'package:beauty_salons/core/data/app_dependencies.dart';
 import 'package:beauty_salons/core/data/mock/mock_network.dart';
 import 'package:beauty_salons/core/services/app_state_service.dart';
 import 'package:beauty_salons/core/utils/clock.dart';
+import 'package:beauty_salons/features/master_cabinet/profile/master_account_screen.dart';
 import 'package:beauty_salons/main.dart';
 
 /// Кабинет мастера: раздел «Отзывы» (сводка, список, ответ) и уведомление о новом отзыве.
@@ -57,7 +58,7 @@ void main() {
 
     await tester.tap(find.byIcon(Icons.arrow_back));
     await settle(tester);
-    expect(find.text('Профиль мастера'), findsOneWidget);
+    expect(find.byType(MasterAccountScreen), findsOneWidget); // список профиля прокручен: заголовок мог уйти за экран
     await disposeTree(tester);
   });
 
