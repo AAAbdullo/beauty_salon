@@ -80,7 +80,7 @@ class _LeaveReviewModalState extends State<LeaveReviewModal> {
     try {
       // [BACKEND NOTE]: POST /api/v1/bookings/:id/review
       // body: { "rating": _rating, "tags": _selectedTags.toList(), "comment": _commentController.text.trim() }
-      final result = await AppScope.read(context).bookings.addReview(
+      final result = await AppScope.read(context).reviews.submit(
         bookingId: widget.booking.id,
         rating: _rating,
         tags: _selectedTags.toList(),

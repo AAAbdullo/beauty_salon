@@ -198,6 +198,9 @@ class MasterCabinetStore {
   void reset() {
     salonAllowsScheduleEditing = true;
     _seedWeek();
+    notifications
+      ..clear()
+      ..addAll(_seedNotifications());
   }
 
   /// ТЗ, раздел 6: мастер меняет рабочее время и выходные, только если салон разрешил.
@@ -319,7 +322,12 @@ class MasterCabinetStore {
       .where((b) => b.status == BookingStatus.completed && _sameDay(b.startsAt, day))
       .fold(0, (sum, b) => sum + b.sumPrice);
 
-  final List<MasterNotification> notifications = const [
+  final List<MasterNotification> notifications = _seedNotifications();
+
+  /// Новое уведомление — сверху ленты
+  void addNotification(MasterNotification notification) => notifications.insert(0, notification);
+
+  static List<MasterNotification> _seedNotifications() => [
     MasterNotification(
       title: 'Новая запись',
       body: 'Дилноза Юсупова · Ламинирование ресниц с ботоксом · завтра 09:00',

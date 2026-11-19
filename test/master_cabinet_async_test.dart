@@ -106,6 +106,7 @@ void main() {
     final base = AppDependencies.mock(network: network);
     return AppDependencies(
       auth: base.auth,
+      reviews: base.reviews,
       catalog: base.catalog,
       slots: base.slots,
       bookings: base.bookings,

@@ -1,3 +1,4 @@
+import '../../models/master_review.dart';
 import '../../models/salon_filter_params.dart';
 import '../../services/masters_repository.dart';
 import '../../services/salons_repository.dart';
@@ -7,7 +8,8 @@ class SalonDetails {
   final SalonModel salon;
   final List<MasterServiceItem> services;
   final List<MasterProfileModel> masters;
-  final List<MasterReviewItem> reviews;
+  /// Свежие отзывы о мастерах салона (первая страница)
+  final List<MasterReview> reviews;
   final List<String> photos;
 
   const SalonDetails({

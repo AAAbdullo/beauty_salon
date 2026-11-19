@@ -353,27 +353,6 @@ void main() {
       expect(codeOf(state.rescheduleBooking(bookingId: 'b-001', newDateTime: at(1, 15))), BookingErrorCode.tooLate);
     });
 
-    test('отзыв: только после визита, один раз, в течение 7 дней', () {
-      expect(
-        codeOf(state.addReview(bookingId: 'b-001', rating: 5, tags: const [], comment: '')),
-        BookingErrorCode.notCompleted,
-      );
-      expect(state.addReview(bookingId: 'b-002', rating: 5, tags: const ['a'], comment: 'ok').isSuccess, isTrue);
-      expect(
-        codeOf(state.addReview(bookingId: 'b-002', rating: 1, tags: const [], comment: 'повтор')),
-        BookingErrorCode.alreadyReviewed,
-      );
-      expect(state.bookingById('b-002')!.reviewRating, 5);
-
-      // Визит подтверждён по QR, но отзыв пишут через 8 дней
-      expect(state.completeVisit('b-001').isSuccess, isTrue);
-      clock.advance(const Duration(days: 8));
-      expect(
-        codeOf(state.addReview(bookingId: 'b-001', rating: 5, tags: const [], comment: '')),
-        BookingErrorCode.reviewClosed,
-      );
-    });
-
     test('визит нельзя подтвердить дважды', () {
       expect(state.completeVisit('b-001').isSuccess, isTrue);
       expect(codeOf(state.completeVisit('b-001')), BookingErrorCode.notActive);

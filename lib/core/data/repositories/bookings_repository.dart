@@ -44,7 +44,7 @@ class CreateBookingRequest {
 
 /// Операции с записями клиента. Каждая изменяющая операция принимает ключ идемпотентности.
 /// Список записей читается из `AppStateService` (локальный реактивный кэш), который репозиторий обновляет.
-/// [BACKEND NOTE]: POST /api/v1/bookings, POST /bookings/:id/cancel, PATCH /bookings/:id/reschedule, POST /bookings/:id/review
+/// [BACKEND NOTE]: POST /api/v1/bookings, POST /bookings/:id/cancel, PATCH /bookings/:id/reschedule
 abstract interface class BookingsRepository {
   /// Проверка возможности записи без создания (перед онлайн-оплатой)
   Future<Result<void, BookingError>> validate({
@@ -67,14 +67,6 @@ abstract interface class BookingsRepository {
   Future<Result<BookingItem, BookingError>> reschedule({
     required String bookingId,
     required DateTime newStartsAt,
-    required String idempotencyKey,
-  });
-
-  Future<Result<BookingItem, BookingError>> addReview({
-    required String bookingId,
-    required int rating,
-    required List<String> tags,
-    required String comment,
     required String idempotencyKey,
   });
 }

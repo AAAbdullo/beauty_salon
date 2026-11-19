@@ -66,6 +66,8 @@ class BookingItem {
   /// Сколько фактически оплачено онлайн (депозит или полная сумма); `null` — неизвестно или оплаты не было
   final int? paidAmount;
   final BookingStatus status;
+  /// Отзыв о мастере, оставленный по этой записи (`null` — отзыва нет)
+  final String? reviewId;
   final int? reviewRating;
   final List<String>? reviewTags;
   final String? reviewComment;
@@ -91,6 +93,7 @@ class BookingItem {
     this.paymentReceiptId,
     this.paidAmount,
     this.status = BookingStatus.active,
+    this.reviewId,
     this.reviewRating,
     List<String>? reviewTags,
     this.reviewComment,
@@ -103,6 +106,7 @@ class BookingItem {
     DateTime? startsAt,
     int? credits,
     BookingStatus? status,
+    String? reviewId,
     int? reviewRating,
     List<String>? reviewTags,
     String? reviewComment,
@@ -128,6 +132,7 @@ class BookingItem {
       paymentReceiptId: paymentReceiptId,
       paidAmount: paidAmount,
       status: status ?? this.status,
+      reviewId: reviewId ?? this.reviewId,
       reviewRating: reviewRating ?? this.reviewRating,
       reviewTags: reviewTags ?? this.reviewTags,
       reviewComment: reviewComment ?? this.reviewComment,

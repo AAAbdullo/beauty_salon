@@ -106,16 +106,4 @@ class MockBookingsRepository implements BookingsRepository {
     'reschedule:$idempotencyKey',
     () => _network(() => _state.rescheduleBooking(bookingId: bookingId, newDateTime: newStartsAt)),
   );
-
-  @override
-  Future<Result<BookingItem, BookingError>> addReview({
-    required String bookingId,
-    required int rating,
-    required List<String> tags,
-    required String comment,
-    required String idempotencyKey,
-  }) => _guard.run(
-    'review:$idempotencyKey',
-    () => _network(() => _state.addReview(bookingId: bookingId, rating: rating, tags: tags, comment: comment)),
-  );
 }

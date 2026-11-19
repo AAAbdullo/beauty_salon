@@ -42,6 +42,27 @@ class SalonModel {
     this.imageAsset = 'assets/images/salons/salon_nur_beauty.jpg',
   });
 
+  /// Копия с пересчитанным рейтингом и числом отзывов (по отзывам мастеров салона)
+  SalonModel withRating({required double rating, required int reviewsCount}) => SalonModel(
+    id: id,
+    name: name,
+    district: district,
+    address: address,
+    services: services,
+    rating: rating,
+    reviewsCount: reviewsCount,
+    distance: distance,
+    workingHours: workingHours,
+    onlyWomen: onlyWomen,
+    homeVisit: homeVisit,
+    creditsAccepted: creditsAccepted,
+    availableToday: availableToday,
+    minPriceSum: minPriceSum,
+    minCredits: minCredits,
+    point: point,
+    imageAsset: imageAsset,
+  );
+
   /// Числовая часть id («s-007» → 7)
   int get _index => int.tryParse(id.replaceAll(RegExp(r'\D'), '')) ?? 0;
 
@@ -334,28 +355,6 @@ class SalonsRepository {
     });
   }
 
-  /// Отзывы о салоне: отзывы о его мастерах, иначе общие отзывы салона (моки)
-  /// [BACKEND NOTE]: GET /api/v1/salons/:id/reviews
-  List<MasterReviewItem> getSalonReviews(String salonId) {
-    final masters = MastersRepository().getMastersForSalon(salonId);
-    final reviews = [for (final m in masters) ...m.reviews];
-    if (reviews.isNotEmpty) return reviews;
-    return const [
-      MasterReviewItem(
-        authorName: 'Гульнора А.',
-        rating: 5.0,
-        date: 'На прошлой неделе',
-        comment: 'Уютно, чисто, мастера внимательные. Записалась по кредитам без проблем.',
-      ),
-      MasterReviewItem(
-        authorName: 'Камила Р.',
-        rating: 4.7,
-        date: '2 недели назад',
-        comment: 'Хороший сервис, приняли точно по времени. Приду ещё.',
-      ),
-    ];
-  }
-
   /// Фото салона: фасад/интерьер + работы мастеров
   List<String> getSalonPhotos(String salonId) {
     final salon = getSalonById(salonId);
@@ -372,10 +371,12 @@ class SalonsRepository {
   }
 
   /// Получение отфильтрованных салонов
-  List<SalonModel> getSalons([SalonFilterParams? params]) {
-    if (params == null) return List.unmodifiable(_mockSalons);
+  /// [enrich] подставляет пересчитанный рейтинг до фильтрации: фильтр «рейтинг от» работает по свежим данным.
+  List<SalonModel> getSalons([SalonFilterParams? params, SalonModel Function(SalonModel)? enrich]) {
+    final source = enrich == null ? _mockSalons : _mockSalons.map(enrich).toList();
+    if (params == null) return List.unmodifiable(source);
 
-    return _mockSalons.where((s) {
+    return source.where((s) {
       // 1. Фильтр по району
       if (params.district != null && s.district != params.district) {
         return false;

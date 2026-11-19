@@ -3,6 +3,7 @@ import '../models/booking_error.dart';
 import '../models/credit_package.dart';
 import '../models/booking_item.dart';
 import '../models/booking_rules.dart';
+import '../models/master_review.dart';
 import '../utils/clock.dart';
 import '../utils/formatters.dart';
 import '../utils/result.dart';
@@ -12,11 +13,13 @@ import 'booking_seed.dart';
 import 'booking_store.dart';
 import 'master_cabinet_store.dart';
 import 'masters_repository.dart';
+import 'review_store.dart';
 import 'slot_service.dart';
 
 // Экраны подключают только этот файл — модели записей доступны через него.
 export '../models/booking_error.dart';
 export '../models/booking_item.dart';
+export '../models/master_review.dart';
 
 /// Результат проверки QR-кода визита мастером
 class VisitQrResult {
@@ -103,6 +106,9 @@ class AppStateService extends ChangeNotifier {
   // Уведомления клиента
   late List<AppNotification> _notifications;
 
+  /// Отзывы о мастерах (мок «сервера»); пересоздаются вместе с записями при выходе из аккаунта
+  late ReviewStore reviews;
+
   /// Использованные nonce QR-кодов (мок серверной защиты от повторного предъявления одного кода)
   late Set<String> _usedQrNonces;
 
@@ -129,6 +135,8 @@ class AppStateService extends ChangeNotifier {
 
     _favoriteSalonIds = {'s-001', 's-003'};
     _favoriteMasterIds = {'m-001', 'm-002'};
+
+    reviews = ReviewStore.seed(masters: MastersRepository().getMasters(), bookings: seedBookings());
 
     masterId = 'm-002';
     masterName = 'Sabina Nur';
@@ -651,9 +659,43 @@ class AppStateService extends ChangeNotifier {
     return Result.success(updated);
   }
 
-  /// Оценка и отзыв о визите (M-13): только завершённый визит, один отзыв, в течение 7 дней.
+  // ---------------------------------------------------------------------------
+  // Отзывы о мастере (M-13)
+  // ---------------------------------------------------------------------------
+
+  /// Меняется при любом изменении отзывов: экраны с рейтингами перечитывают каталог по этому событию
+  final ValueNotifier<int> reviewChanges = ValueNotifier(0);
+
+  void _reviewsChanged() {
+    reviewChanges.value++;
+    notifyListeners();
+  }
+
+  /// Содержимое отзыва: оценка, длина, контакты, причина низкой оценки. Одно место для создания и правки.
+  ReviewError? _validateReview(int rating, List<String> tags, String comment) {
+    if (rating < 1 || rating > 5) {
+      return const ReviewError(ReviewErrorCode.ratingRequired, 'Выберите оценку от 1 до 5.');
+    }
+    final text = comment.trim();
+    if (text.length > ReviewRules.maxCommentLength) {
+      return const ReviewError(ReviewErrorCode.tooLong, 'Комментарий не длиннее ${ReviewRules.maxCommentLength} символов.');
+    }
+    if (ContactsInText.found(text)) {
+      return const ReviewError(ReviewErrorCode.contactsInText, 'Уберите из отзыва контакты и ссылки.');
+    }
+    if (rating <= ReviewRules.lowRatingMax && tags.isEmpty && text.length < ReviewRules.minReasonCommentLength) {
+      return const ReviewError(
+        ReviewErrorCode.reasonRequired,
+        'Выберите причину или опишите, что не понравилось (от ${ReviewRules.minReasonCommentLength} символов).',
+      );
+    }
+    return null;
+  }
+
+  /// Отзыв о мастере по завершённой записи: один раз, в течение 7 дней после визита.
+  /// Отзыв и проекция в записи (`review*`) пишутся одной операцией; мастер получает уведомление.
   /// [BACKEND NOTE]: POST /api/v1/bookings/:id/review  body: { rating, tags, comment }
-  Result<BookingItem, BookingError> addReview({
+  Result<MasterReview, ReviewError> submitReview({
     required String bookingId,
     required int rating,
     required List<String> tags,
@@ -661,32 +703,125 @@ class AppStateService extends ChangeNotifier {
   }) {
     final b = _store.byId(bookingId);
     if (b == null || b.clientId != clientId) {
-      return const Result.failure(BookingError(BookingErrorCode.notFound, 'Запись не найдена.'));
+      return const Result.failure(ReviewError(ReviewErrorCode.notFound, 'Запись не найдена.'));
     }
     if (b.status != BookingStatus.completed) {
       return const Result.failure(
-        BookingError(BookingErrorCode.notCompleted, 'Отзыв можно оставить только после визита.'),
+        ReviewError(ReviewErrorCode.notCompleted, 'Отзыв можно оставить только после подтверждённого визита.'),
       );
     }
-    if (b.reviewRating != null) {
-      return const Result.failure(BookingError(BookingErrorCode.alreadyReviewed, 'Вы уже оставили отзыв о визите.'));
+    if (b.reviewId != null) {
+      return const Result.failure(ReviewError(ReviewErrorCode.alreadyReviewed, 'Вы уже оставили отзыв о визите.'));
     }
     if (!b.isReviewWindowOpen) {
       return const Result.failure(
-        BookingError(
-          BookingErrorCode.reviewClosed,
-          'Отзыв можно оставить в течение $reviewWindowDays дней после визита.',
+        ReviewError(ReviewErrorCode.windowClosed, 'Отзыв можно оставить в течение $reviewWindowDays дней после визита.'),
+      );
+    }
+    final invalid = _validateReview(rating, tags, comment);
+    if (invalid != null) return Result.failure(invalid);
+
+    final masterId = b.masterId;
+    final master = masterId == null ? null : MastersRepository().getMasterById(masterId);
+    if (masterId == null || master == null) {
+      return const Result.failure(ReviewError(ReviewErrorCode.notFound, 'Мастер не найден.'));
+    }
+    final now = AppClock.now();
+    final review = MasterReview(
+      id: 'r-${Uuid.v4()}',
+      bookingId: b.id,
+      masterId: masterId,
+      masterName: shortPersonName(master.name),
+      salonId: b.salonId,
+      serviceName: b.serviceName,
+      authorId: clientId,
+      authorName: shortPersonName(clientName),
+      rating: rating,
+      tags: tags,
+      comment: comment.trim(),
+      createdAt: now,
+    );
+    reviews.put(review);
+    _store.replace(
+      b.copyWith(
+        reviewId: review.id,
+        reviewRating: review.rating,
+        reviewTags: review.tags,
+        reviewComment: review.comment,
+        reviewDate: now,
+      ),
+    );
+    if (masterId == this.masterId) {
+      MasterCabinetStore().addNotification(
+        MasterNotification(
+          title: 'Новый отзыв: $rating ★',
+          body: 'Автор: ${review.authorName} · ${b.serviceName}',
+          timeAgo: 'Только что',
         ),
       );
     }
-    final updated = b.copyWith(
-      reviewRating: rating,
-      reviewTags: tags,
-      reviewComment: comment,
-      reviewDate: AppClock.now(),
-    );
-    _store.replace(updated);
-    notifyListeners();
+    _reviewsChanged();
+    return Result.success(review);
+  }
+
+  /// Отзывы салона: отзывы его мастеров; у салона без мастеров в каталоге — общие отзывы (мок)
+  /// [BACKEND NOTE]: GET /api/v1/salons/:id/reviews
+  List<MasterReview> salonReviews(String salonId, {int limit = ReviewRules.pageSize}) {
+    if (MastersRepository().getMastersForSalon(salonId).isEmpty) {
+      return ReviewStore.legacySalonReviews(salonId).take(limit).toList();
+    }
+    return reviews.forSalon(salonId, limit: limit);
+  }
+
+  /// Правка своего отзыва, пока открыто окно в 7 дней после визита.
+  /// [BACKEND NOTE]: PATCH /api/v1/reviews/:id  body: { rating, tags, comment }
+  Result<MasterReview, ReviewError> editReview({
+    required String reviewId,
+    required int rating,
+    required List<String> tags,
+    required String comment,
+  }) {
+    final review = reviews.byId(reviewId);
+    if (review == null) return const Result.failure(ReviewError(ReviewErrorCode.notFound, 'Отзыв не найден.'));
+    final b = _store.byId(review.bookingId);
+    if (review.authorId != clientId || b == null) {
+      return const Result.failure(ReviewError(ReviewErrorCode.notAuthor, 'Править можно только свой отзыв.'));
+    }
+    if (!b.isReviewWindowOpen) {
+      return const Result.failure(
+        ReviewError(ReviewErrorCode.windowClosed, 'Отзыв можно изменить в течение $reviewWindowDays дней после визита.'),
+      );
+    }
+    final invalid = _validateReview(rating, tags, comment);
+    if (invalid != null) return Result.failure(invalid);
+
+    final now = AppClock.now();
+    final updated = review.copyWith(rating: rating, tags: tags, comment: comment.trim(), editedAt: now);
+    reviews.put(updated);
+    _store.replace(b.copyWith(reviewRating: updated.rating, reviewTags: updated.tags, reviewComment: updated.comment));
+    _reviewsChanged();
+    return Result.success(updated);
+  }
+
+  /// Публичный ответ мастера на отзыв о нём: один ответ, его можно править.
+  /// [BACKEND NOTE]: PUT /api/v1/reviews/:id/reply  body: { text }
+  Result<MasterReview, ReviewError> replyToReview({required String reviewId, required String text, String? asMasterId}) {
+    final review = reviews.byId(reviewId);
+    if (review == null) return const Result.failure(ReviewError(ReviewErrorCode.notFound, 'Отзыв не найден.'));
+    if (review.masterId != (asMasterId ?? masterId)) {
+      return const Result.failure(ReviewError(ReviewErrorCode.notYourReview, 'Отвечать можно только на отзывы о вас.'));
+    }
+    final body = text.trim();
+    if (body.isEmpty) return const Result.failure(ReviewError(ReviewErrorCode.textRequired, 'Напишите ответ.'));
+    if (body.length > ReviewRules.maxReplyLength) {
+      return const Result.failure(ReviewError(ReviewErrorCode.tooLong, 'Ответ не длиннее ${ReviewRules.maxReplyLength} символов.'));
+    }
+    if (ContactsInText.found(body)) {
+      return const Result.failure(ReviewError(ReviewErrorCode.contactsInText, 'Уберите из ответа контакты и ссылки.'));
+    }
+    final updated = review.copyWith(reply: ReviewReply(text: body, createdAt: AppClock.now()));
+    reviews.put(updated);
+    _reviewsChanged();
     return Result.success(updated);
   }
 

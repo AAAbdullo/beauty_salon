@@ -3,6 +3,7 @@ import '../../core/l10n/app_text.dart';
 import 'package:flutter/services.dart';
 import '../../core/data/app_scope.dart';
 import '../../core/data/repositories/catalog_repository.dart';
+import '../../core/models/master_review.dart';
 import '../../core/services/masters_repository.dart';
 import '../../core/services/salons_repository.dart';
 import '../../core/theme/app_theme.dart';
@@ -14,6 +15,7 @@ import '../../core/widgets/cards/app_card.dart';
 import '../../core/widgets/sheets/app_sheet.dart';
 import '../../core/widgets/states/async_screen.dart';
 import '../../core/widgets/states/not_found_screen.dart';
+import '../reviews/review_widgets.dart';
 import 'photo_viewer.dart';
 import '../../core/l10n/app_locale.dart';
 
@@ -97,7 +99,7 @@ class _SalonDetailViewState extends State<_SalonDetailView> with SingleTickerPro
   late final SalonModel _salon;
   late final List<MasterServiceItem> _services;
   late final List<MasterProfileModel> _masters;
-  late final List<MasterReviewItem> _reviews;
+  late final List<MasterReview> _reviews;
   late final List<String> _photos;
   int _photoIndex = 0;
 
@@ -632,35 +634,12 @@ class _SalonDetailViewState extends State<_SalonDetailView> with SingleTickerPro
           ),
         ),
         const SizedBox(height: 10),
-        ..._reviews.map(
-          (r) => Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: AppCard(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(r.authorName, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-                      Row(
-                        children: [
-                          const Icon(Icons.star, color: AppColors.gold, size: 14),
-                          const SizedBox(width: 2),
-                          Text('${r.rating}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-                        ],
-                      ),
-                    ],
-                  ),
-                  Text(r.date, style: TextStyle(fontSize: 10, color: AppColors.muted)),
-                  const SizedBox(height: 6),
-                  Text(r.comment, style: TextStyle(fontSize: 12, color: AppColors.ink, height: 1.35)),
-                ],
-              ),
-            ),
+        if (_reviews.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            child: Text('Отзывов пока нет', style: TextStyle(color: AppColors.muted, fontSize: 13)),
           ),
-        ),
+        for (final r in _reviews) ReviewCard(review: r, showMaster: true),
       ],
     );
   }

@@ -447,6 +447,7 @@ void main() {
       // Платёж отвечает не мгновенно, но использует тот же «сервер» удержаний
       final payDeps = AppDependencies(
         auth: deps.auth,
+        reviews: deps.reviews,
         catalog: deps.catalog,
         slots: deps.slots,
         bookings: deps.bookings,

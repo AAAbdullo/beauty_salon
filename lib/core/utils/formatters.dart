@@ -46,6 +46,16 @@ class Formatters {
     return '${date.day} ${monthsShort[date.month - 1]}$yearSuffix';
   }
 
+  /// Давность для отзывов: «сегодня», «3 дня назад», «12 окт» (дальше недели — дата)
+  static String relativeDay(DateTime date, {DateTime? now}) {
+    final today = _dayOnly(now ?? AppClock.now());
+    final diff = today.difference(_dayOnly(date)).inDays;
+    if (diff <= 0) return 'сегодня';
+    if (diff < 7) return '${plural(diff, 'день', 'дня', 'дней')} назад';
+    final yearSuffix = date.year != today.year ? ' ${date.year}' : '';
+    return '${date.day} ${monthsShort[date.month - 1]}$yearSuffix';
+  }
+
   /// Время «HH:mm»
   static String time(DateTime date) =>
       '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';

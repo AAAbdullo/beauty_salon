@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart' hide Text;
 import '../../core/l10n/app_text.dart';
 import '../../core/data/app_scope.dart';
+import '../../core/data/repository_exception.dart';
+import '../../core/models/master_review.dart';
 import '../../core/services/masters_repository.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/buttons/app_gradient_button.dart';
@@ -10,6 +12,7 @@ import '../../core/widgets/cards/app_card.dart';
 import '../../core/widgets/sheets/app_sheet.dart';
 import '../../core/widgets/states/async_screen.dart';
 import '../../core/widgets/states/not_found_screen.dart';
+import '../reviews/review_widgets.dart';
 import 'photo_viewer.dart';
 import '../../core/l10n/app_locale.dart';
 
@@ -89,6 +92,61 @@ class _MasterProfileViewState extends State<_MasterProfileView> with SingleTicke
     _tabController = TabController(length: 3, vsync: this);
     _master = widget.master;
     _appState.addListener(_onStateChanged);
+    _loadReviews();
+  }
+
+  // --- Отзывы: сводка и список страницами по 20 (свежие сверху)
+  ReviewSummary? _summary;
+  final List<MasterReview> _reviews = [];
+  String? _nextCursor;
+  bool _reviewsLoading = true;
+  bool _loadingMore = false;
+  String? _reviewsError;
+
+  Future<void> _loadReviews() async {
+    setState(() {
+      _reviewsLoading = true;
+      _reviewsError = null;
+    });
+    try {
+      final repo = AppScope.read(context).reviews;
+      final summary = await repo.masterSummary(_master.id);
+      final page = await repo.masterReviews(_master.id);
+      if (!mounted) return;
+      setState(() {
+        _summary = summary;
+        _reviews
+          ..clear()
+          ..addAll(page.items);
+        _nextCursor = page.nextCursor;
+        _reviewsLoading = false;
+      });
+    } on RepositoryException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _reviewsLoading = false;
+        _reviewsError = e.message;
+      });
+    }
+  }
+
+  Future<void> _loadMoreReviews() async {
+    final cursor = _nextCursor;
+    if (cursor == null || _loadingMore) return;
+    setState(() => _loadingMore = true);
+    try {
+      final page = await AppScope.read(context).reviews.masterReviews(_master.id, cursor: cursor);
+      if (!mounted) return;
+      setState(() {
+        _reviews.addAll(page.items);
+        _nextCursor = page.nextCursor;
+        _loadingMore = false;
+      });
+    } on RepositoryException catch (e) {
+      if (!mounted) return;
+      setState(() => _loadingMore = false);
+      showAppSnack(context, e.message);
+    }
   }
 
   void _onStateChanged() {
@@ -260,7 +318,7 @@ class _MasterProfileViewState extends State<_MasterProfileView> with SingleTicke
                   const Icon(Icons.star, color: AppColors.primary, size: 16),
                   const SizedBox(width: 4),
                   Text(
-                    '${_master.rating}',
+                    _master.reviewsCount == 0 ? '—' : '${_master.rating}',
                     style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: AppColors.primaryText),
                   ),
                   Text(' (${_master.reviewsCount})', style: TextStyle(color: AppColors.muted, fontSize: 11)),
@@ -489,37 +547,44 @@ class _MasterProfileViewState extends State<_MasterProfileView> with SingleTicke
 
   // 3. Вкладка Отзывы
   Widget _buildReviewsList() {
+    final summary = _summary;
+    if (_reviewsLoading) {
+      return const SliverToBoxAdapter(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 24),
+          child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+        ),
+      );
+    }
+    if (_reviewsError != null || summary == null) {
+      return SliverToBoxAdapter(
+        child: Column(
+          children: [
+            Text(_reviewsError ?? 'Не удалось загрузить данные. Попробуйте ещё раз.', textAlign: TextAlign.center),
+            TextButton(onPressed: _loadReviews, child: const Text('Повторить')),
+          ],
+        ),
+      );
+    }
     return SliverList(
-      delegate: SliverChildBuilderDelegate((context, index) {
-        final r = _master.reviews[index];
-        return Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          child: AppCard(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(r.authorName, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-                    Row(
-                      children: [
-                        const Icon(Icons.star, color: AppColors.gold, size: 14),
-                        const SizedBox(width: 2),
-                        Text('${r.rating}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-                      ],
-                    ),
-                  ],
-                ),
-                Text(r.date, style: TextStyle(fontSize: 10, color: AppColors.muted)),
-                const SizedBox(height: 6),
-                Text(r.comment, style: TextStyle(fontSize: 12, color: AppColors.ink, height: 1.3)),
-              ],
+      delegate: SliverChildListDelegate([
+        ReviewSummaryCard(summary: summary),
+        const SizedBox(height: 10),
+        if (_reviews.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            child: Center(
+              child: Text('Отзывов пока нет', style: TextStyle(color: AppColors.muted, fontSize: 13)),
             ),
           ),
-        );
-      }, childCount: _master.reviews.length),
+        for (final r in _reviews) ReviewCard(review: r),
+        if (_nextCursor != null)
+          Center(
+            child: _loadingMore
+                ? const Padding(padding: EdgeInsets.all(8), child: CircularProgressIndicator(color: AppColors.primary))
+                : TextButton(onPressed: _loadMoreReviews, child: const Text('Показать ещё')),
+          ),
+      ]),
     );
   }
 

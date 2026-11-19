@@ -80,6 +80,7 @@ void main() {
     final payments = base.payments as MockPaymentsRepository;
     final deps = AppDependencies(
       auth: base.auth,
+      reviews: base.reviews,
       catalog: base.catalog,
       slots: base.slots,
       bookings: base.bookings,
@@ -112,6 +113,7 @@ void main() {
     final payments = base.payments as MockPaymentsRepository;
     final deps = AppDependencies(
       auth: base.auth,
+      reviews: base.reviews,
       catalog: base.catalog,
       slots: base.slots,
       bookings: base.bookings,

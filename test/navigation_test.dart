@@ -151,6 +151,7 @@ void main() {
       final bookingNet = MockNetwork();
       final deps = AppDependencies(
         auth: base.auth,
+        reviews: base.reviews,
         catalog: base.catalog,
         slots: base.slots,
         bookings: MockBookingsRepository(slots: base.slots as MockSlotsRepository, network: bookingNet),

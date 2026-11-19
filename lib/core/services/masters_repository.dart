@@ -15,7 +15,9 @@ class MasterProfileModel {
   final String avatarAsset;
   final List<String> portfolioImages;
   final List<MasterServiceItem> services;
-  final List<MasterReviewItem> reviews;
+  /// Начальные отзывы мока: «сервер» превращает их в настоящие отзывы (id, дата, оценка).
+  /// Разница между [reviewsCount] и числом этих отзывов — «старые» отзывы вне списка (мок).
+  final List<MasterReviewSeed> reviewSeeds;
 
   const MasterProfileModel({
     required this.id,
@@ -30,7 +32,7 @@ class MasterProfileModel {
     this.avatarAsset = 'assets/images/masters/master_alena.jpg',
     required this.portfolioImages,
     required this.services,
-    required this.reviews,
+    required this.reviewSeeds,
   });
 
   /// Короткое имя («Алена») — только для отображения. Ключом мастера служит [id].
@@ -38,6 +40,23 @@ class MasterProfileModel {
 
   /// Мастер оказывает услугу с таким id
   bool offers(String serviceId) => services.any((s) => s.id == serviceId);
+
+  /// Копия с пересчитанным рейтингом и числом отзывов (из сводки отзывов)
+  MasterProfileModel withRating({required double rating, required int reviewsCount}) => MasterProfileModel(
+    id: id,
+    name: name,
+    salonId: salonId,
+    salonName: salonName,
+    specialty: specialty,
+    rating: rating,
+    reviewsCount: reviewsCount,
+    experienceYears: experienceYears,
+    about: about,
+    avatarAsset: avatarAsset,
+    portfolioImages: portfolioImages,
+    services: services,
+    reviewSeeds: reviewSeeds,
+  );
 }
 
 class MasterServiceItem {
@@ -59,13 +78,16 @@ class MasterServiceItem {
   String get duration => '$durationMinutes мин';
 }
 
-class MasterReviewItem {
+/// Начальный отзыв мока
+class MasterReviewSeed {
   final String authorName;
-  final double rating;
-  final String date;
+  final int rating;
+
+  /// Сколько дней назад оставлен
+  final int daysAgo;
   final String comment;
 
-  const MasterReviewItem({required this.authorName, required this.rating, required this.date, required this.comment});
+  const MasterReviewSeed({required this.authorName, required this.rating, required this.daysAgo, required this.comment});
 }
 
 /// Репозиторий профиля мастера (МОК-ДАННЫЕ)
@@ -127,23 +149,23 @@ class MastersRepository {
           sumPrice: 60000,
         ),
       ],
-      reviews: [
-        MasterReviewItem(
+      reviewSeeds: [
+        MasterReviewSeed(
           authorName: 'Малика У.',
-          rating: 5.0,
-          date: 'Вчера',
+          rating: 5,
+          daysAgo: 1,
           comment: 'Алена — лучший мастер города! Маникюр держится 4 недели без сколов. Очень аккуратная и вежливая.',
         ),
-        MasterReviewItem(
+        MasterReviewSeed(
           authorName: 'Диана К.',
-          rating: 5.0,
-          date: '3 дня назад',
+          rating: 5,
+          daysAgo: 3,
           comment: 'Идеальный френч, стерильные инструменты открывали прямо при мне. Однозначно рекомендую!',
         ),
-        MasterReviewItem(
+        MasterReviewSeed(
           authorName: 'Шахло М.',
-          rating: 4.8,
-          date: '10 октября',
+          rating: 5,
+          daysAgo: 40,
           comment: 'Очень быстро и качественно. Салон Nur Beauty как всегда на высоте.',
         ),
       ],
@@ -180,11 +202,11 @@ class MastersRepository {
           sumPrice: 170000,
         ),
       ],
-      reviews: [
-        MasterReviewItem(
+      reviewSeeds: [
+        MasterReviewSeed(
           authorName: 'Зарина Т.',
-          rating: 5.0,
-          date: 'Неделю назад',
+          rating: 5,
+          daysAgo: 6,
           comment: 'Бровки естественные, без черных перетемнений. Спасибо Сабине!',
         ),
       ],
@@ -227,11 +249,11 @@ class MastersRepository {
           sumPrice: 110000,
         ),
       ],
-      reviews: [
-        MasterReviewItem(
+      reviewSeeds: [
+        MasterReviewSeed(
           authorName: 'Нилуфар Х.',
-          rating: 5.0,
-          date: '2 дня назад',
+          rating: 5,
+          daysAgo: 2,
           comment: 'Цвет волос получился именно такой, как на фото из Pinterest! Дилноза — супер профи.',
         ),
       ],
@@ -258,11 +280,11 @@ class MastersRepository {
           sumPrice: 200000,
         ),
       ],
-      reviews: [
-        MasterReviewItem(
+      reviewSeeds: [
+        MasterReviewSeed(
           authorName: 'Елена П.',
-          rating: 5.0,
-          date: 'Вчера',
+          rating: 5,
+          daysAgo: 1,
           comment: 'Кожа после процедуры сияет! Очень деликатный подход.',
         ),
       ],
