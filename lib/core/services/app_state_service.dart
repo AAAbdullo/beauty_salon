@@ -13,6 +13,7 @@ import 'booking_seed.dart';
 import 'booking_store.dart';
 import 'master_cabinet_store.dart';
 import 'masters_repository.dart';
+import 'portfolio_store.dart';
 import 'review_store.dart';
 import 'slot_service.dart';
 
@@ -20,6 +21,7 @@ import 'slot_service.dart';
 export '../models/booking_error.dart';
 export '../models/booking_item.dart';
 export '../models/master_review.dart';
+export '../models/portfolio_work.dart';
 
 /// Результат проверки QR-кода визита мастером
 class VisitQrResult {
@@ -109,6 +111,9 @@ class AppStateService extends ChangeNotifier {
   /// Отзывы о мастерах (мок «сервера»); пересоздаются вместе с записями при выходе из аккаунта
   late ReviewStore reviews;
 
+  /// Портфолио мастеров (мок «сервера»); при выходе из аккаунта пересоздаётся
+  late PortfolioStore portfolio;
+
   /// Использованные nonce QR-кодов (мок серверной защиты от повторного предъявления одного кода)
   late Set<String> _usedQrNonces;
 
@@ -137,6 +142,7 @@ class AppStateService extends ChangeNotifier {
     _favoriteMasterIds = {'m-001', 'm-002'};
 
     reviews = ReviewStore.seed(masters: MastersRepository().getMasters(), bookings: seedBookings());
+    portfolio = PortfolioStore.seed(masters: MastersRepository().getMasters());
 
     masterId = 'm-002';
     masterName = 'Sabina Nur';

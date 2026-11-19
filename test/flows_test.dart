@@ -448,6 +448,7 @@ void main() {
       final payDeps = AppDependencies(
         auth: deps.auth,
         reviews: deps.reviews,
+        portfolio: deps.portfolio,
         catalog: deps.catalog,
         slots: deps.slots,
         bookings: deps.bookings,

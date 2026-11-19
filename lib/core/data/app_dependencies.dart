@@ -5,6 +5,7 @@ import 'mock/mock_catalog_repository.dart';
 import 'mock/mock_master_cabinet_repository.dart';
 import 'mock/mock_network.dart';
 import 'mock/mock_payments_repository.dart';
+import 'mock/mock_portfolio_repository.dart';
 import 'mock/mock_reviews_repository.dart';
 import 'mock/mock_slots_repository.dart';
 import 'mock/mock_subscription_repository.dart';
@@ -14,6 +15,7 @@ import 'repositories/bookings_repository.dart';
 import 'repositories/catalog_repository.dart';
 import 'repositories/master_cabinet_repository.dart';
 import 'repositories/payments_repository.dart';
+import 'repositories/portfolio_repository.dart';
 import 'repositories/reviews_repository.dart';
 import 'repositories/slots_repository.dart';
 import 'repositories/subscription_repository.dart';
@@ -28,6 +30,7 @@ class AppDependencies {
   final SlotsRepository slots;
   final BookingsRepository bookings;
   final ReviewsRepository reviews;
+  final PortfolioRepository portfolio;
   final PaymentsRepository payments;
   final SubscriptionRepository subscription;
   final VisitQrRepository visitQr;
@@ -43,6 +46,7 @@ class AppDependencies {
     required this.slots,
     required this.bookings,
     required this.reviews,
+    required this.portfolio,
     required this.payments,
     required this.subscription,
     required this.visitQr,
@@ -62,6 +66,7 @@ class AppDependencies {
       slots: slots,
       bookings: MockBookingsRepository(slots: slots, network: net, payments: payments),
       reviews: MockReviewsRepository(network: net, auth: auth),
+      portfolio: MockPortfolioRepository(network: net, auth: auth),
       payments: payments,
       subscription: MockSubscriptionRepository(network: net, payments: payments),
       visitQr: MockVisitQrRepository(network: net),

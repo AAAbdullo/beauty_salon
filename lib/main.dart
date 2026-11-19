@@ -515,6 +515,8 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
       _loggingOut = false;
     }
     if (!mounted) return;
+    // Загруженные файлы портфолио удаляются в фоне: выход не ждёт диск, а сбой очистки его не отменяет
+    unawaited(_deps.appState.portfolio.clearFiles().catchError((Object _) {}));
     _deps.appState.resetSession();
     setState(() {
       _clearPages(); // экраны записи при этом освобождают удержания слотов

@@ -152,6 +152,7 @@ void main() {
       final deps = AppDependencies(
         auth: base.auth,
         reviews: base.reviews,
+        portfolio: base.portfolio,
         catalog: base.catalog,
         slots: base.slots,
         bookings: MockBookingsRepository(slots: base.slots as MockSlotsRepository, network: bookingNet),

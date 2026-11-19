@@ -107,6 +107,7 @@ void main() {
     return AppDependencies(
       auth: base.auth,
       reviews: base.reviews,
+      portfolio: base.portfolio,
       catalog: base.catalog,
       slots: base.slots,
       bookings: base.bookings,
