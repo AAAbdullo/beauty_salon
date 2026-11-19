@@ -17,6 +17,7 @@ class MasterAccountScreen extends StatefulWidget {
   final VoidCallback onOpenSchedule;
   final VoidCallback onOpenEarnings;
   final VoidCallback onOpenScanner;
+  final VoidCallback onOpenReviews;
   final VoidCallback onOpenSettings;
   final VoidCallback onLogout;
 
@@ -25,6 +26,7 @@ class MasterAccountScreen extends StatefulWidget {
     required this.onOpenSchedule,
     required this.onOpenEarnings,
     required this.onOpenScanner,
+    required this.onOpenReviews,
     required this.onOpenSettings,
     required this.onLogout,
   });
@@ -215,6 +217,8 @@ class _MasterAccountScreenState extends State<MasterAccountScreen> {
                         _tile(Icons.qr_code_scanner, 'Сканер визитов', widget.onOpenScanner),
                         _divider(),
                         _tile(Icons.bar_chart_outlined, 'Доход и выплаты', widget.onOpenEarnings),
+                        _divider(),
+                        _tile(Icons.star_outline_rounded, 'Отзывы', widget.onOpenReviews),
                         _divider(),
                         _tile(Icons.help_outline, 'Поддержка', () => ProfileSheets.support(context)),
                         _divider(),

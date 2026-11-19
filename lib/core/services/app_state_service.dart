@@ -742,15 +742,6 @@ class AppStateService extends ChangeNotifier {
       createdAt: now,
     );
     reviews.put(review);
-    _store.replace(
-      b.copyWith(
-        reviewId: review.id,
-        reviewRating: review.rating,
-        reviewTags: review.tags,
-        reviewComment: review.comment,
-        reviewDate: now,
-      ),
-    );
     if (masterId == this.masterId) {
       MasterCabinetStore().addNotification(
         MasterNotification(
@@ -760,6 +751,15 @@ class AppStateService extends ChangeNotifier {
         ),
       );
     }
+    _store.replace(
+      b.copyWith(
+        reviewId: review.id,
+        reviewRating: review.rating,
+        reviewTags: review.tags,
+        reviewComment: review.comment,
+        reviewDate: now,
+      ),
+    );
     _reviewsChanged();
     return Result.success(review);
   }
