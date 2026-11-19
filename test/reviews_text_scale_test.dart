@@ -9,6 +9,7 @@ import 'package:beauty_salons/core/data/mock/mock_network.dart';
 import 'package:beauty_salons/core/services/app_state_service.dart';
 import 'package:beauty_salons/core/utils/clock.dart';
 import 'package:beauty_salons/features/master_cabinet/profile/master_account_screen.dart';
+import 'package:beauty_salons/features/master_cabinet/portfolio/master_portfolio_screen.dart';
 import 'package:beauty_salons/features/master_cabinet/reviews/master_reviews_screen.dart';
 import 'package:beauty_salons/main.dart';
 
@@ -94,6 +95,20 @@ void main() {
     );
     await tapVisible(tester, find.text('Ответить'));
     expect(find.text('Ответ на отзыв'), findsOneWidget);
+    await disposeTree(tester);
+  });
+
+  testWidgets('мастер (2,0): «Мои работы» и лист добавления работы', (tester) async {
+    await pumpApp(tester, 'master');
+    await tapVisible(tester, find.text('Профиль').last);
+    final accountList = find.descendant(of: find.byType(MasterAccountScreen), matching: find.byType(Scrollable)).first;
+    await tester.scrollUntilVisible(find.text('Мои работы'), 300, scrollable: accountList);
+    await tester.drag(accountList, const Offset(0, -250)); // выше нижней панели, которая перекрывает край списка
+    await settle(tester);
+    await tapVisible(tester, find.text('Мои работы'), frames: 12);
+    expect(find.byType(MasterPortfolioScreen), findsOneWidget);
+    await tapVisible(tester, find.text('+ Добавить работу'));
+    expect(find.text('Выбрать из галереи'), findsOneWidget);
     await disposeTree(tester);
   });
 }

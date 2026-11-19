@@ -208,10 +208,7 @@ class PortfolioStore {
     }
     if (_works.where((w) => w.masterId == masterId).length >= PortfolioRules.maxWorks) {
       return const Result.failure(
-        PortfolioError(
-          PortfolioErrorCode.limitReached,
-          'В портфолио уже ${PortfolioRules.maxWorks} работ. Удалите старые, чтобы добавить новую.',
-        ),
+        PortfolioError(PortfolioErrorCode.limitReached, PortfolioRules.limitReachedMessage),
       );
     }
     final service = _service(masterId, serviceId);

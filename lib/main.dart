@@ -22,6 +22,7 @@ import 'features/profile_settings/settings_screen.dart';
 import 'features/favorites/favorites_screen.dart';
 import 'features/notifications/notifications_screen.dart';
 import 'features/master_cabinet/clients/master_client_profile_screen.dart';
+import 'features/master_cabinet/portfolio/master_portfolio_screen.dart';
 import 'features/master_cabinet/reviews/master_reviews_screen.dart';
 import 'features/master_cabinet/dashboard/master_dashboard_screen.dart';
 import 'features/master_cabinet/schedule/master_schedule_screen.dart';
@@ -657,6 +658,8 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
         return MasterClientProfileScreen(clientId: page.clientId!, onBack: _pop);
       case _PageKind.masterReviews:
         return MasterReviewsScreen(onBack: _pop);
+      case _PageKind.masterPortfolio:
+        return MasterPortfolioScreen(onBack: _pop);
       case _PageKind.booking:
         return BookingScreen(
           salonId: page.salonId!,
@@ -780,6 +783,7 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
         onOpenEarnings: () => _goToMasterTab(3, returnTo: 4),
         onOpenScanner: () => _goToMasterTab(2, returnTo: 4),
         onOpenReviews: () => _push(_Page(_PageKind.masterReviews)),
+        onOpenPortfolio: () => _push(_Page(_PageKind.masterPortfolio)),
         onOpenSettings: () => _push(_Page(_PageKind.settings)),
         onLogout: _logout,
       ),
@@ -819,7 +823,7 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
   }
 }
 
-enum _PageKind { salon, master, booking, payment, favorites, notifications, settings, clientProfile, masterReviews }
+enum _PageKind { salon, master, booking, payment, favorites, notifications, settings, clientProfile, masterReviews, masterPortfolio }
 
 /// Страница внутреннего стека со своими параметрами. Ключ уникален: состояние страницы живёт, пока она в стеке.
 class _Page {

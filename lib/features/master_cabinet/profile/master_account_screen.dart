@@ -18,6 +18,7 @@ class MasterAccountScreen extends StatefulWidget {
   final VoidCallback onOpenEarnings;
   final VoidCallback onOpenScanner;
   final VoidCallback onOpenReviews;
+  final VoidCallback onOpenPortfolio;
   final VoidCallback onOpenSettings;
   final VoidCallback onLogout;
 
@@ -27,6 +28,7 @@ class MasterAccountScreen extends StatefulWidget {
     required this.onOpenEarnings,
     required this.onOpenScanner,
     required this.onOpenReviews,
+    required this.onOpenPortfolio,
     required this.onOpenSettings,
     required this.onLogout,
   });
@@ -213,6 +215,8 @@ class _MasterAccountScreenState extends State<MasterAccountScreen> {
                     child: Column(
                       children: [
                         _tile(Icons.access_time, 'Рабочий график', widget.onOpenSchedule),
+                        _divider(),
+                        _tile(Icons.photo_library_outlined, 'Мои работы', widget.onOpenPortfolio),
                         _divider(),
                         _tile(Icons.qr_code_scanner, 'Сканер визитов', widget.onOpenScanner),
                         _divider(),

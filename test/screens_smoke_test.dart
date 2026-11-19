@@ -17,6 +17,7 @@ import 'package:beauty_salons/features/favorites/favorites_screen.dart';
 import 'package:beauty_salons/features/master_cabinet/dashboard/master_dashboard_screen.dart';
 import 'package:beauty_salons/features/master_cabinet/earnings/master_earnings_screen.dart';
 import 'package:beauty_salons/features/master_cabinet/profile/master_account_screen.dart';
+import 'package:beauty_salons/features/master_cabinet/portfolio/master_portfolio_screen.dart';
 import 'package:beauty_salons/features/master_cabinet/reviews/master_reviews_screen.dart';
 import 'package:beauty_salons/features/master_cabinet/schedule/master_schedule_screen.dart';
 import 'package:beauty_salons/features/my_bookings/my_bookings_screen.dart';
@@ -99,11 +100,13 @@ void main() {
     'Master schedule': () => MasterScheduleScreen(onBack: noop),
     'Master earnings': () => MasterEarningsScreen(onBack: noop),
     'Master reviews': () => MasterReviewsScreen(onBack: noop),
+    'Master portfolio': () => MasterPortfolioScreen(onBack: noop),
     'Master account': () => MasterAccountScreen(
       onOpenSchedule: noop,
       onOpenEarnings: noop,
       onOpenScanner: noop,
       onOpenReviews: noop,
+      onOpenPortfolio: noop,
       onOpenSettings: noop,
       onLogout: noop,
     ),

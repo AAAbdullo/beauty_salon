@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'helpers/fake_portfolio_files.dart';
+
 import 'package:beauty_salons/core/data/mock/mock_auth_repository.dart';
 import 'package:beauty_salons/core/data/mock/mock_network.dart';
 import 'package:beauty_salons/core/data/mock/mock_portfolio_repository.dart';
@@ -8,30 +10,6 @@ import 'package:beauty_salons/core/services/masters_repository.dart';
 import 'package:beauty_salons/core/services/portfolio_store.dart';
 import 'package:beauty_salons/core/utils/clock.dart';
 import 'package:beauty_salons/core/utils/result.dart';
-
-/// Файлы без диска: размеры задаются в тесте, копии и удаления запоминаются
-class FakeFiles implements PortfolioFiles {
-  final Map<String, int> sizes = {'photo.jpg': 1024};
-  final List<String> deleted = [];
-  var cleared = false;
-  var _n = 0;
-
-  @override
-  Future<int?> sizeOf(String path) async => sizes[path];
-
-  @override
-  Future<String> copyIn(String sourcePath) async {
-    final target = '/app/portfolio/copy_${_n++}.jpg';
-    sizes[target] = sizes[sourcePath]!;
-    return target;
-  }
-
-  @override
-  Future<void> delete(String path) async => deleted.add(path);
-
-  @override
-  Future<void> deleteAll() async => cleared = true;
-}
 
 /// Портфолио мастера: правила «сервера» (лимит 30, закрепление до 3, услуга из своего списка, подпись, файл, согласие).
 /// Мастер демо-кабинета — Sabina (m-002): две работы из сидов и две услуги (m-002-s1 брови, m-002-s2 ресницы).
