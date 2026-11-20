@@ -230,6 +230,13 @@ class PortfolioStore {
       );
     }
     final path = await _files.copyIn(localPath);
+    // Пока шло копирование, параллельный add мог занять последнее место: проверяем лимит ещё раз
+    if (_works.where((w) => w.masterId == masterId).length >= PortfolioRules.maxWorks) {
+      await _files.delete(path);
+      return const Result.failure(
+        PortfolioError(PortfolioErrorCode.limitReached, PortfolioRules.limitReachedMessage),
+      );
+    }
     if (consentAccepted) _consentGiven = true;
     final work = PortfolioWork(
       id: 'w-${Uuid.v4()}',

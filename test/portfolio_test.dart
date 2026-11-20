@@ -86,6 +86,19 @@ void main() {
   });
 
   group('Лимиты', () {
+    test('два параллельных добавления при 29 работах: одно проходит, второе limitReached, лишний файл удалён', () async {
+      for (var i = (await repo.myWorks()).length; i < PortfolioRules.maxWorks - 1; i++) {
+        expect((await add()).isSuccess, isTrue);
+      }
+      expect(await repo.myWorks(), hasLength(29));
+      files.deleted.clear();
+      final results = await Future.wait([add(), add()]);
+      expect(results.where((r) => r.isSuccess), hasLength(1));
+      expect(results.where((r) => codeOf(r) == PortfolioErrorCode.limitReached), hasLength(1));
+      expect(await repo.myWorks(), hasLength(30));
+      expect(files.deleted, hasLength(1));
+    });
+
     test('30 работ на мастера, на 31-й — ошибка; после удаления снова можно', () async {
       for (var i = (await repo.myWorks()).length; i < PortfolioRules.maxWorks; i++) {
         expect((await add()).isSuccess, isTrue, reason: 'работа $i');
