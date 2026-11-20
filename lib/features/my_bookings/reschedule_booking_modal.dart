@@ -1,18 +1,27 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
+import 'package:flutter/material.dart' hide Text;
+import '../../core/l10n/app_text.dart';
+import '../../core/data/app_dependencies.dart';
+import '../../core/data/app_scope.dart';
+import '../../core/data/repository_exception.dart';
 import '../../core/services/app_state_service.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/clock.dart';
+import '../../core/utils/formatters.dart';
+import '../../core/utils/result.dart';
+import '../../core/utils/slot_pricing.dart';
+import '../../core/utils/uuid.dart';
+import '../../core/widgets/states/async_screen.dart';
 
 /// Модальное окно переноса времени записи (ТЗ M-10)
 class RescheduleBookingModal extends StatefulWidget {
   final BookingItem booking;
 
-  const RescheduleBookingModal({
-    super.key,
-    required this.booking,
-  });
+  const RescheduleBookingModal({super.key, required this.booking});
 
-  static Future<bool?> show(BuildContext context, BookingItem booking) {
-    return showModalBottomSheet<bool>(
+  /// Возвращает обновлённую запись, если перенос выполнен; `null` — закрыли без переноса
+  static Future<BookingItem?> show(BuildContext context, BookingItem booking) {
+    return showModalBottomSheet<BookingItem>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -26,70 +35,130 @@ class RescheduleBookingModal extends StatefulWidget {
 
 class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
   late int _selectedDayIndex;
-  late String _selectedTime;
-  final _appState = AppStateService();
+  DateTime? _selectedStart;
+  String? _error;
+  late final AppDependencies _deps;
 
   late final List<Map<String, dynamic>> _days;
-  final List<String> _availableSlots = [
-    '09:30',
-    '11:00',
-    '12:30',
-    '14:00',
-    '15:30',
-    '17:00',
-    '18:30',
-    '20:00',
-  ];
 
-  static const _weekDaysRu = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
-  static const _monthNamesRu = [
-    'янв', 'фев', 'мар', 'апр', 'май', 'июн',
-    'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'
-  ];
+  // Свободные слоты по дням (ключ — дата без времени) и состояние загрузки
+  Map<DateTime, List<DateTime>> _slotsByDay = {};
+  bool _loadingSlots = true;
+  Object? _slotsError;
+
+  // Ключ идемпотентности попытки переноса: двойной тап не перенесёт запись (и не пересчитает кредиты) дважды
+  String _requestKey = Uuid.v4();
+  bool _submitting = false;
 
   @override
   void initState() {
     super.initState();
+    _deps = AppScope.read(context);
     _selectedDayIndex = 0;
-    _selectedTime = _availableSlots[1]; // по умолчанию второй слот
 
     // Генерируем 7 ближайших дней
-    final now = DateTime.now();
+    final now = AppClock.now();
     _days = List.generate(7, (i) {
-      final d = now.add(Duration(days: i));
-      final dayName = i == 0
-          ? 'Сегодня'
-          : (i == 1 ? 'Завтра' : _weekDaysRu[d.weekday - 1]);
-      final dateNumber = '${d.day}';
-      final formatted = '$dayName, ${d.day} ${_monthNamesRu[d.month - 1]}';
-      return {
-        'day': dayName,
-        'date': dateNumber,
-        'formatted': formatted,
-        'dateObj': d,
-      };
+      final d = DateTime(now.year, now.month, now.day + i);
+      final dayName = i == 0 ? 'Сегодня' : (i == 1 ? 'Завтра' : Formatters.weekDaysShort[d.weekday - 1]);
+      return {'day': dayName, 'date': '${d.day}', 'dateObj': d};
     });
+    unawaited(_loadSlots());
   }
 
-  void _confirmReschedule() {
-    final selectedDayStr = _days[_selectedDayIndex]['formatted'] as String;
+  Future<void> _loadSlots() async {
+    final b = widget.booking;
+    setState(() {
+      _loadingSlots = true;
+      _slotsError = null;
+    });
+    try {
+      // Слоты у того же мастера; сама переносимая запись время не занимает
+      final result = await _deps.slots.availableSlotsForDays(
+        salonId: b.salonId,
+        masterId: b.masterId,
+        serviceId: b.serviceId,
+        days: [for (final d in _days) d['dateObj'] as DateTime],
+        durationMinutes: b.durationMinutes,
+        excludeBookingId: b.id,
+      );
+      if (!mounted) return;
+      setState(() {
+        _slotsByDay = result;
+        _loadingSlots = false;
+        final free = List.generate(_days.length, (i) => i).where((i) => _slotsForDay(i).isNotEmpty);
+        if (_slotsForDay(_selectedDayIndex).isEmpty && free.isNotEmpty) _selectedDayIndex = free.first;
+      });
+    } on RepositoryException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadingSlots = false;
+        _slotsError = e;
+      });
+    }
+  }
 
-    // [BACKEND NOTE]: В будущем здесь будет вызов REST API NestJS:
-    // PATCH /api/v1/bookings/${widget.booking.id}/reschedule
-    // body: { "newDate": selectedDayStr, "newTime": _selectedTime }
-    _appState.rescheduleBooking(
-      bookingId: widget.booking.id,
-      newDate: selectedDayStr,
-      newTime: _selectedTime,
-    );
+  List<DateTime> _slotsForDay(int dayIndex) {
+    final d = _days[dayIndex]['dateObj'] as DateTime;
+    final slots = _slotsByDay[DateTime(d.year, d.month, d.day)] ?? const <DateTime>[];
+    return slots.where((slot) => slot != widget.booking.startsAt).toList();
+  }
 
-    Navigator.pop(context, true);
+  /// Как изменится цена при оплате кредитами: ×1.2 для вечерних слотов (k_slot)
+  String? _priceNote(DateTime start) {
+    final b = widget.booking;
+    if (!b.isPaidWithCredits) return null;
+    final newCredits = SlotPricing.credits(b.baseCredits, start);
+    if (newCredits == b.credits) return null;
+    final diff = newCredits - b.credits;
+    return diff > 0
+        ? 'Стоимость слота: $newCredits кр. — будет списана доплата $diff кр.'
+        : 'Стоимость слота: $newCredits кр. — ${diff.abs()} кр. вернутся на баланс.';
+  }
+
+  Future<void> _confirmReschedule() async {
+    final start = _selectedStart;
+    if (start == null || _submitting) return;
+
+    setState(() {
+      _submitting = true;
+      _error = null;
+    });
+    try {
+      // [BACKEND NOTE]: PATCH /api/v1/bookings/${widget.booking.id}/reschedule  body: { "starts_at": ISO-8601 }
+      final result = await _deps.bookings.reschedule(
+        bookingId: widget.booking.id,
+        newStartsAt: start,
+        idempotencyKey: _requestKey,
+      );
+      if (!mounted) return;
+      switch (result) {
+        case Success(:final value):
+          Navigator.pop(context, value);
+        case Failure(:final error):
+          // Окно остаётся открытым: показываем причину и обновляем слоты; следующая попытка — новый запрос
+          setState(() {
+            _submitting = false;
+            _error = error.message;
+            _selectedStart = null;
+            _requestKey = Uuid.v4();
+          });
+          unawaited(_loadSlots());
+      }
+    } on RepositoryException catch (e) {
+      // Связь оборвалась: ключ сохраняется, повторный тап не перенесёт запись дважды
+      if (!mounted) return;
+      setState(() {
+        _submitting = false;
+        _error = e.message;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
@@ -97,7 +166,7 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
         top: 16,
         left: 20,
         right: 20,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 28,
+        bottom: MediaQuery.viewInsetsOf(context).bottom + MediaQuery.paddingOf(context).bottom + 20,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -108,10 +177,7 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
             child: Container(
               width: 40,
               height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(2),
-              ),
+              decoration: BoxDecoration(color: AppColors.handle, borderRadius: BorderRadius.circular(2)),
             ),
           ),
           const SizedBox(height: 16),
@@ -120,27 +186,20 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Column(
+              Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     'Перенос записи',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.ink,
-                    ),
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.ink),
                   ),
                   SizedBox(height: 2),
-                  Text(
-                    'Выберите новую дату и свободный слот',
-                    style: TextStyle(fontSize: 12, color: AppColors.muted),
-                  ),
+                  Text('Выберите новую дату и свободный слот', style: TextStyle(fontSize: 12, color: AppColors.muted)),
                 ],
               ),
               IconButton(
                 onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.close, color: AppColors.muted),
+                icon: Icon(Icons.close, color: AppColors.muted),
               ),
             ],
           ),
@@ -153,17 +212,14 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
             decoration: BoxDecoration(
               color: AppColors.background,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFF3DCE8)),
+              border: Border.all(color: AppColors.line),
             ),
             child: Row(
               children: [
                 Container(
                   width: 42,
                   height: 42,
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryTint,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  decoration: BoxDecoration(color: AppColors.primaryTint, borderRadius: BorderRadius.circular(12)),
                   child: const Icon(Icons.spa_outlined, color: AppColors.primary, size: 22),
                 ),
                 const SizedBox(width: 12),
@@ -180,16 +236,12 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
                       const SizedBox(height: 2),
                       Text(
                         '${widget.booking.salonName} · ${widget.booking.masterName}',
-                        style: const TextStyle(color: AppColors.muted, fontSize: 11),
+                        style: TextStyle(color: AppColors.muted, fontSize: 11),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         'Сейчас: ${widget.booking.date}, ${widget.booking.time}',
-                        style: const TextStyle(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 11,
-                        ),
+                        style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 11),
                       ),
                     ],
                   ),
@@ -201,7 +253,7 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
           const SizedBox(height: 20),
 
           // Выбор новой даты
-          const Text(
+          Text(
             'Выберите дату',
             style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: AppColors.ink),
           ),
@@ -216,7 +268,11 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
                 final d = _days[index];
                 final isSelected = _selectedDayIndex == index;
                 return GestureDetector(
-                  onTap: () => setState(() => _selectedDayIndex = index),
+                  onTap: () => setState(() {
+                    _selectedDayIndex = index;
+                    _selectedStart = null;
+                    _error = null;
+                  }),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
                     width: 54,
@@ -224,7 +280,7 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
                       color: isSelected ? AppColors.primary : AppColors.surface,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: isSelected ? AppColors.primary : const Color(0xFFE5E5EA),
+                        color: isSelected ? AppColors.primary : AppColors.handle,
                         width: isSelected ? 1.5 : 1,
                       ),
                       boxShadow: isSelected
@@ -233,7 +289,7 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
                                 color: AppColors.primary.withValues(alpha: 0.3),
                                 blurRadius: 8,
                                 offset: const Offset(0, 3),
-                              )
+                              ),
                             ]
                           : null,
                     ),
@@ -268,59 +324,93 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
           const SizedBox(height: 20),
 
           // Выбор времени
-          const Text(
+          Text(
             'Свободное время',
             style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: AppColors.ink),
           ),
           const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _availableSlots.map((slot) {
-              final isSelected = _selectedTime == slot;
-              return GestureDetector(
-                onTap: () => setState(() => _selectedTime = slot),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: isSelected ? AppColors.primaryTint : AppColors.surface,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: isSelected ? AppColors.primary : const Color(0xFFE5E5EA),
-                      width: isSelected ? 1.5 : 1,
+          if (_loadingSlots || _slotsError != null)
+            AsyncSection(
+              isLoading: _loadingSlots,
+              error: _slotsError,
+              onRetry: () => unawaited(_loadSlots()),
+              minHeight: 72,
+              child: const SizedBox.shrink(),
+            )
+          else if (_slotsForDay(_selectedDayIndex).isEmpty)
+            Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                'На этот день свободного времени нет. Выберите другую дату.',
+                style: TextStyle(fontSize: 13, color: AppColors.muted),
+              ),
+            )
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _slotsForDay(_selectedDayIndex).map((slot) {
+                final isSelected = _selectedStart == slot;
+                return GestureDetector(
+                  onTap: _submitting
+                      ? null
+                      : () => setState(() {
+                          _selectedStart = slot;
+                          _error = null;
+                          _requestKey = Uuid.v4();
+                        }),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: isSelected ? AppColors.primaryTint : AppColors.surface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isSelected ? AppColors.primary : AppColors.handle,
+                        width: isSelected ? 1.5 : 1,
+                      ),
+                    ),
+                    child: Text(
+                      Formatters.time(slot),
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                        color: isSelected ? AppColors.primaryText : AppColors.ink,
+                      ),
                     ),
                   ),
-                  child: Text(
-                    slot,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                      color: isSelected ? AppColors.primaryText : AppColors.ink,
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
+                );
+              }).toList(),
+            ),
+          if (_selectedStart != null && _priceNote(_selectedStart!) != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              _priceNote(_selectedStart!)!,
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primaryText),
+            ),
+          ],
+          if (_error != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              _error!,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primary),
+            ),
+          ],
 
           const SizedBox(height: 16),
 
           // Пояснение правила отмены / переноса
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF3F8FF),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Row(
+            decoration: BoxDecoration(color: AppColors.soft(const Color(0xFFF3F8FF)), borderRadius: BorderRadius.circular(10)),
+            child: Row(
               children: [
-                Icon(Icons.info_outline, size: 16, color: Color(0xFF007AFF)),
+                Icon(Icons.info_outline, size: 16, color: AppColors.onSoft(const Color(0xFF007AFF))),
                 SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Перенос записи выполняется бесплатно. Ваши кредиты сохраняются.',
-                    style: TextStyle(fontSize: 11, color: Color(0xFF0051A8)),
+                    'Перенос бесплатный, если до визита больше 2 часов. Оплата сохраняется; для кредитов цена пересчитывается по новому времени.',
+                    style: TextStyle(fontSize: 11, color: AppColors.onSoft(const Color(0xFF0051A8))),
                   ),
                 ),
               ],
@@ -334,19 +424,17 @@ class _RescheduleBookingModalState extends State<RescheduleBookingModal> {
             width: double.infinity,
             height: 48,
             child: ElevatedButton(
-              onPressed: _confirmReschedule,
+              onPressed: _selectedStart == null || _submitting || _loadingSlots ? null : _confirmReschedule,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 elevation: 0,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               ),
               child: Text(
-                'Перенести на ${_days[_selectedDayIndex]['day']}, $_selectedTime',
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
-                ),
+                _selectedStart == null
+                    ? 'Выберите время'
+                    : 'Перенести на ${_days[_selectedDayIndex]['day']}, ${Formatters.time(_selectedStart!)}',
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white),
               ),
             ),
           ),

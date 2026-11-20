@@ -5,6 +5,7 @@
 class MasterProfileModel {
   final String id;
   final String name;
+  final String salonId;
   final String salonName;
   final String specialty;
   final double rating;
@@ -14,11 +15,14 @@ class MasterProfileModel {
   final String avatarAsset;
   final List<String> portfolioImages;
   final List<MasterServiceItem> services;
-  final List<MasterReviewItem> reviews;
+  /// Начальные отзывы мока: «сервер» превращает их в настоящие отзывы (id, дата, оценка).
+  /// Разница между [reviewsCount] и числом этих отзывов — «старые» отзывы вне списка (мок).
+  final List<MasterReviewSeed> reviewSeeds;
 
   const MasterProfileModel({
     required this.id,
     required this.name,
+    required this.salonId,
     required this.salonName,
     required this.specialty,
     required this.rating,
@@ -28,36 +32,62 @@ class MasterProfileModel {
     this.avatarAsset = 'assets/images/masters/master_alena.jpg',
     required this.portfolioImages,
     required this.services,
-    required this.reviews,
+    required this.reviewSeeds,
   });
+
+  /// Короткое имя («Алена») — только для отображения. Ключом мастера служит [id].
+  String get shortName => name.split(' ').first;
+
+  /// Мастер оказывает услугу с таким id
+  bool offers(String serviceId) => services.any((s) => s.id == serviceId);
+
+  /// Копия с пересчитанным рейтингом и числом отзывов (из сводки отзывов)
+  MasterProfileModel withRating({required double rating, required int reviewsCount}) => MasterProfileModel(
+    id: id,
+    name: name,
+    salonId: salonId,
+    salonName: salonName,
+    specialty: specialty,
+    rating: rating,
+    reviewsCount: reviewsCount,
+    experienceYears: experienceYears,
+    about: about,
+    avatarAsset: avatarAsset,
+    portfolioImages: portfolioImages,
+    services: services,
+    reviewSeeds: reviewSeeds,
+  );
 }
 
 class MasterServiceItem {
+  final String id;
   final String name;
-  final String duration;
+  final int durationMinutes;
   final int creditsPrice;
   final int sumPrice;
 
   const MasterServiceItem({
+    required this.id,
     required this.name,
-    required this.duration,
+    required this.durationMinutes,
     required this.creditsPrice,
     required this.sumPrice,
   });
+
+  /// Подпись длительности для отображения: «60 мин»
+  String get duration => '$durationMinutes мин';
 }
 
-class MasterReviewItem {
+/// Начальный отзыв мока
+class MasterReviewSeed {
   final String authorName;
-  final double rating;
-  final String date;
+  final int rating;
+
+  /// Сколько дней назад оставлен
+  final int daysAgo;
   final String comment;
 
-  const MasterReviewItem({
-    required this.authorName,
-    required this.rating,
-    required this.date,
-    required this.comment,
-  });
+  const MasterReviewSeed({required this.authorName, required this.rating, required this.daysAgo, required this.comment});
 }
 
 /// Репозиторий профиля мастера (МОК-ДАННЫЕ)
@@ -72,9 +102,10 @@ class MastersRepository {
 
   // МОК-ДАННЫЕ: Профили мастеров
   final Map<String, MasterProfileModel> _mockMasters = {
-    'Алена': const MasterProfileModel(
+    'm-001': const MasterProfileModel(
       id: 'm-001',
       name: 'Алена Смирнова',
+      salonId: 's-001',
       salonName: 'Nur Beauty',
       specialty: 'Топ-мастер маникюра и педикюра',
       rating: 4.9,
@@ -90,54 +121,59 @@ class MastersRepository {
       ],
       services: [
         MasterServiceItem(
+          id: 'm-001-s1',
           name: 'Комбинированный маникюр + гель-лак',
-          duration: '60 мин',
+          durationMinutes: 60,
           creditsPrice: 34,
           sumPrice: 150000,
         ),
         MasterServiceItem(
+          id: 'm-001-s2',
           name: 'Smart-педикюр с обработкой стопы',
-          duration: '75 мин',
+          durationMinutes: 75,
           creditsPrice: 42,
           sumPrice: 190000,
         ),
         MasterServiceItem(
+          id: 'm-001-s3',
           name: 'Снятие + Укрепление ногтей гелем',
-          duration: '45 мин',
+          durationMinutes: 45,
           creditsPrice: 20,
           sumPrice: 90000,
         ),
         MasterServiceItem(
+          id: 'm-001-s4',
           name: 'Френч / Кастомный дизайн ногтей',
-          duration: '30 мин',
+          durationMinutes: 30,
           creditsPrice: 15,
           sumPrice: 60000,
         ),
       ],
-      reviews: [
-        MasterReviewItem(
+      reviewSeeds: [
+        MasterReviewSeed(
           authorName: 'Малика У.',
-          rating: 5.0,
-          date: 'Вчера',
+          rating: 5,
+          daysAgo: 1,
           comment: 'Алена — лучший мастер города! Маникюр держится 4 недели без сколов. Очень аккуратная и вежливая.',
         ),
-        MasterReviewItem(
+        MasterReviewSeed(
           authorName: 'Диана К.',
-          rating: 5.0,
-          date: '3 дня назад',
+          rating: 5,
+          daysAgo: 3,
           comment: 'Идеальный френч, стерильные инструменты открывали прямо при мне. Однозначно рекомендую!',
         ),
-        MasterReviewItem(
+        MasterReviewSeed(
           authorName: 'Шахло М.',
-          rating: 4.8,
-          date: '10 октября',
+          rating: 5,
+          daysAgo: 40,
           comment: 'Очень быстро и качественно. Салон Nur Beauty как всегда на высоте.',
         ),
       ],
     ),
-    'Сабина': const MasterProfileModel(
+    'm-002': const MasterProfileModel(
       id: 'm-002',
       name: 'Сабина Рахимова',
+      salonId: 's-001',
       salonName: 'Nur Beauty',
       specialty: 'Бровист & Ламимейкер',
       rating: 4.8,
@@ -152,68 +188,80 @@ class MastersRepository {
       ],
       services: [
         MasterServiceItem(
+          id: 'm-002-s1',
           name: 'Архитектура бровей + окрашивание',
-          duration: '45 мин',
+          durationMinutes: 45,
           creditsPrice: 24,
           sumPrice: 110000,
         ),
         MasterServiceItem(
+          id: 'm-002-s2',
           name: 'Ламинирование ресниц с ботоксом',
-          duration: '60 мин',
+          durationMinutes: 60,
           creditsPrice: 38,
           sumPrice: 170000,
         ),
       ],
-      reviews: [
-        MasterReviewItem(
+      reviewSeeds: [
+        MasterReviewSeed(
           authorName: 'Зарина Т.',
-          rating: 5.0,
-          date: 'Неделю назад',
+          rating: 5,
+          daysAgo: 6,
           comment: 'Бровки естественные, без черных перетемнений. Спасибо Сабине!',
         ),
       ],
     ),
-    'Дилноза': const MasterProfileModel(
+    'm-003': const MasterProfileModel(
       id: 'm-003',
       name: 'Дилноза Каримова',
+      salonId: 's-003',
       salonName: 'Mira Hair',
       specialty: 'Топ-стилист по волосам',
       rating: 4.9,
       reviewsCount: 145,
       experienceYears: 7,
       avatarAsset: 'assets/images/masters/master_dilnoza.jpg',
-      about:
-          'Колорист-эксперт: аиртач, балаяж, сложное окрашивание, авторские женские стрижки и салонный уход.',
+      about: 'Колорист-эксперт: аиртач, балаяж, сложное окрашивание, авторские женские стрижки и салонный уход.',
       portfolioImages: [
         'assets/images/portfolio/portfolio_hair_1.jpg',
         'assets/images/portfolio/portfolio_brows_1.jpg',
       ],
       services: [
         MasterServiceItem(
+          id: 'm-003-s1',
           name: 'Женская стрижка + брашинг',
-          duration: '60 мин',
+          durationMinutes: 60,
           creditsPrice: 32,
           sumPrice: 140000,
         ),
         MasterServiceItem(
+          id: 'm-003-s2',
           name: 'Сложное окрашивание Balayage',
-          duration: '180 мин',
+          durationMinutes: 180,
           creditsPrice: 85,
           sumPrice: 420000,
         ),
+        MasterServiceItem(
+          id: 'm-003-s3',
+          name: 'Женская стрижка',
+          durationMinutes: 45,
+          creditsPrice: 26,
+          sumPrice: 110000,
+        ),
       ],
-      reviews: [
-        MasterReviewItem(
+      reviewSeeds: [
+        MasterReviewSeed(
           authorName: 'Нилуфар Х.',
-          rating: 5.0,
-          date: '2 дня назад',
+          rating: 5,
+          daysAgo: 2,
           comment: 'Цвет волос получился именно такой, как на фото из Pinterest! Дилноза — супер профи.',
         ),
       ],
     ),
-    'Мадина': const MasterProfileModel(
+    'm-004': const MasterProfileModel(
       id: 'm-004',
       name: 'Мадина Умарова',
+      salonId: 's-001',
       salonName: 'Nur Beauty',
       specialty: 'Косметолог-эстетист',
       rating: 4.9,
@@ -222,60 +270,22 @@ class MastersRepository {
       avatarAsset: 'assets/images/masters/master_madina.jpg',
       about:
           'Медицинское образование. Уходовые процедуры, ультразвуковая чистка, безинъекционная мезотерапия и пилинги.',
-      portfolioImages: [
-        'assets/images/portfolio/portfolio_brows_1.jpg',
-      ],
+      portfolioImages: ['assets/images/portfolio/portfolio_brows_1.jpg'],
       services: [
         MasterServiceItem(
+          id: 'm-004-s1',
           name: 'Комбинированная чистка лица',
-          duration: '90 мин',
+          durationMinutes: 90,
           creditsPrice: 45,
           sumPrice: 200000,
         ),
       ],
-      reviews: [
-        MasterReviewItem(
+      reviewSeeds: [
+        MasterReviewSeed(
           authorName: 'Елена П.',
-          rating: 5.0,
-          date: 'Вчера',
+          rating: 5,
+          daysAgo: 1,
           comment: 'Кожа после процедуры сияет! Очень деликатный подход.',
-        ),
-      ],
-    ),
-    'Тимур': const MasterProfileModel(
-      id: 'm-005',
-      name: 'Тимур Алиев',
-      salonName: 'Elite Barber & Style',
-      specialty: 'Топ-барбер',
-      rating: 4.8,
-      reviewsCount: 110,
-      experienceYears: 6,
-      avatarAsset: 'assets/images/masters/master_timur.jpg',
-      about:
-          'Классические и трендовые мужские стрижки, королевское бритье опасной бритвой, камуфляж седины и оформление бороды.',
-      portfolioImages: [
-        'assets/images/portfolio/portfolio_hair_1.jpg',
-      ],
-      services: [
-        MasterServiceItem(
-          name: 'Мужская стрижка + мытье + стайлинг',
-          duration: '45 мин',
-          creditsPrice: 26,
-          sumPrice: 110000,
-        ),
-        MasterServiceItem(
-          name: 'Моделирование бороды и усов',
-          duration: '30 мин',
-          creditsPrice: 18,
-          sumPrice: 80000,
-        ),
-      ],
-      reviews: [
-        MasterReviewItem(
-          authorName: 'Сардор Б.',
-          rating: 5.0,
-          date: 'Вчера',
-          comment: 'Четкие контуры, стрижка держит форму даже через 3 недели. Отличный барбер.',
         ),
       ],
     ),
@@ -287,37 +297,13 @@ class MastersRepository {
     return _mockMasters.values.toList();
   }
 
-  MasterProfileModel getMaster(String name) {
-    if (_mockMasters.containsKey(name)) {
-      return _mockMasters[name]!;
-    }
-    // Фоллбэк если мастер другой
-    return MasterProfileModel(
-      id: 'm-default',
-      name: name,
-      salonName: 'Nur Beauty',
-      specialty: 'Стилист-эксперт',
-      rating: 4.8,
-      reviewsCount: 65,
-      experienceYears: 5,
-      about: 'Профессиональный мастер индустрии красоты с международным опытом.',
-      portfolioImages: ['web/icons/Icon-192.png'],
-      services: const [
-        MasterServiceItem(
-          name: 'Комплексная услуга эксперта',
-          duration: '60 мин',
-          creditsPrice: 35,
-          sumPrice: 160000,
-        ),
-      ],
-      reviews: const [
-        MasterReviewItem(
-          authorName: 'Клиент Go\'zallik',
-          rating: 5.0,
-          date: 'Недавно',
-          comment: 'Очень довольна качеством обслуживания!',
-        ),
-      ],
-    );
+  /// Мастера конкретного салона
+  /// [BACKEND NOTE]: GET /api/v1/salons/:id/masters
+  List<MasterProfileModel> getMastersForSalon(String salonId) {
+    return _mockMasters.values.where((m) => m.salonId == salonId).toList();
   }
+
+  /// Мастер по id; `null`, если такого нет — подставлять «похожего» нельзя.
+  /// [BACKEND NOTE]: GET /api/v1/masters/:id
+  MasterProfileModel? getMasterById(String id) => _mockMasters[id];
 }

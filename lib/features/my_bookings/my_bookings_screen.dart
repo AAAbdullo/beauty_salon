@@ -1,20 +1,33 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import '../../core/l10n/app_text.dart';
 import '../../core/services/app_state_service.dart';
+import '../../core/data/app_scope.dart';
+import '../../core/data/repository_exception.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/models/booking_rules.dart';
+import '../../core/utils/formatters.dart';
+import '../../core/utils/result.dart';
+import '../../core/utils/uuid.dart';
 import '../../core/widgets/badges/app_status_badge.dart';
 import '../../core/widgets/buttons/app_pill_button.dart';
 import '../../core/widgets/cards/app_card.dart';
+import '../../core/widgets/sheets/app_sheet.dart';
 import '../client_qr/client_qr_modal.dart';
 import 'leave_review_modal.dart';
 import 'reschedule_booking_modal.dart';
+import '../../core/l10n/app_locale.dart';
 
 class MyBookingsScreen extends StatefulWidget {
   final VoidCallback onBookNew;
+  final ValueChanged<String>? onOpenSalon;
 
-  const MyBookingsScreen({
-    super.key,
-    required this.onBookNew,
-  });
+  /// «Назад» (например, в профиль). Если не задан, кнопки нет: экран открыт из нижней панели
+  final VoidCallback? onBack;
+
+  /// 0 — Активные, 1 — Прошедшие, 2 — Отменённые
+  final int initialTab;
+
+  const MyBookingsScreen({super.key, required this.onBookNew, this.onOpenSalon, this.onBack, this.initialTab = 0});
 
   @override
   State<MyBookingsScreen> createState() => _MyBookingsScreenState();
@@ -22,12 +35,12 @@ class MyBookingsScreen extends StatefulWidget {
 
 class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final _appState = AppStateService();
+  late final _appState = AppScope.read(context).appState;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 3, vsync: this, initialIndex: widget.initialTab.clamp(0, 2));
     _appState.addListener(_onStateChanged);
   }
 
@@ -46,9 +59,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
     final diff = booking.timeUntilAppointment;
     final int hours = diff.isNegative ? 0 : diff.inHours;
     final int minutes = diff.isNegative ? 0 : (diff.inMinutes % 60);
-    final remainingStr = diff.isNegative
-        ? 'время визита уже наступило'
-        : '$hours ч $minutes мин';
+    final remainingStr = diff.isNegative ? 'время визита уже наступило' : '$hours ч $minutes мин';
 
     // Строгое правило сервиса: отмена запрещена, если до визита осталось менее 2 часов (< 120 минут)
     if (!booking.canCancel) {
@@ -69,7 +80,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 'По правилам сервиса отмена визита разрешена строго не позднее чем за 2 часа до начала записи.',
                 style: TextStyle(fontSize: 13, color: AppColors.ink, height: 1.4),
               ),
@@ -77,7 +88,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFFECEF),
+                  color: AppColors.soft(const Color(0xFFFFECEF)),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: Colors.redAccent.withValues(alpha: 0.2)),
                 ),
@@ -88,7 +99,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
                     Expanded(
                       child: Text(
                         'До вашего приёма осталось: $remainingStr (менее 2 часов). Запись зафиксирована за мастером, списание подтверждено.',
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.primaryText),
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.primaryText),
                       ),
                     ),
                   ],
@@ -103,7 +114,10 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Понятно', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              child: const Text(
+                'Понятно',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
             ),
           ],
         ),
@@ -111,40 +125,69 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
       return;
     }
 
-    // Если осталось >= 2 часов (120 минут)
+    // Если осталось >= 2 часов (120 минут). Ключ идемпотентности привязан к этому диалогу:
+    // двойной тап по «Отменить» не вернёт кредиты дважды.
+    final cancelKey = Uuid.v4();
+    var submitting = false;
+    final refundNote = switch (booking.paymentMethod) {
+      PaymentMethods.credits => 'На баланс вернутся ${booking.credits} кр.',
+      PaymentMethods.online =>
+        booking.paidAmount == null
+            ? 'Оплата вернётся на карту полностью.'
+            : 'Оплата ${Formatters.formatSum(booking.paidAmount!)} вернётся на карту полностью.',
+      _ => 'Оплата не списывалась — запись просто отменится.',
+    };
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('Отменить запись?', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
         content: Text(
-          'До визита осталось $hours ч $minutes мин (более 2 часов).\n\nПри отмене ${booking.paymentMethod == "Кредиты" ? "вам полностью вернутся ${booking.credits} кредитов на баланс." : "деньги вернутся полностью."}',
-          style: const TextStyle(fontSize: 13, color: AppColors.muted, height: 1.4),
+          'До визита осталось $hours ч $minutes мин.\n\n$refundNote',
+          style: TextStyle(fontSize: 13, color: AppColors.muted, height: 1.4),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Назад', style: TextStyle(color: AppColors.muted)),
+            child: Text('Назад', style: TextStyle(color: AppColors.muted)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFFECEF),
+              backgroundColor: AppColors.soft(const Color(0xFFFFECEF)),
               elevation: 0,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
-            onPressed: () {
-              final ok = _appState.cancelBooking(booking.id);
+            onPressed: () async {
+              if (submitting) return; // повторный тап
+              submitting = true;
               Navigator.pop(ctx);
-              if (ok) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    backgroundColor: AppColors.ink,
-                    content: Text('Запись отменена. Кредиты успешно возвращены на баланс.'),
-                  ),
+              try {
+                final result = await AppScope.read(context).bookings.cancel(
+                  bookingId: booking.id,
+                  idempotencyKey: cancelKey,
                 );
+                if (!mounted) return;
+                switch (result) {
+                  case Success(:final value):
+                    showAppSnack(
+                      context,
+                      value.isPaidWithCredits
+                          ? 'Запись отменена. ${value.credits} кр. вернулись на баланс.'
+                          : value.paymentReceiptId != null
+                          ? 'Запись отменена. Оплата возвращается на карту.'
+                          : 'Запись отменена.',
+                    );
+                  case Failure(:final error):
+                    showAppSnack(context, error.message);
+                }
+              } on RepositoryException catch (e) {
+                if (mounted) showAppSnack(context, e.message);
               }
             },
-            child: const Text('Отменить и вернуть', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+            child: const Text(
+              'Отменить запись',
+              style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),
@@ -155,7 +198,13 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Мои записи', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.ink)),
+        leading: widget.onBack == null
+            ? null
+            : IconButton(icon: Icon(Icons.arrow_back, color: AppColors.ink), onPressed: widget.onBack),
+        title: Text(
+          'Мои записи',
+          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.ink),
+        ),
         centerTitle: false,
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -165,25 +214,19 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
             padding: const EdgeInsets.symmetric(horizontal: AppSizes.screenPadding),
             child: Container(
               height: 40,
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(20),
-              ),
+              decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(20)),
               child: TabBar(
                 controller: _tabController,
-                indicator: BoxDecoration(
-                  color: AppColors.primary,
-                  borderRadius: BorderRadius.circular(20),
-                ),
+                indicator: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(20)),
                 indicatorSize: TabBarIndicatorSize.tab,
                 dividerColor: Colors.transparent,
                 labelColor: Colors.white,
                 unselectedLabelColor: AppColors.muted,
                 labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
                 tabs: [
-                  Tab(text: 'Активные (${_appState.activeBookings.length})'),
-                  Tab(text: 'Прошедшие (${_appState.completedBookings.length})'),
-                  Tab(text: 'Отмененные (${_appState.cancelledBookings.length})'),
+                  Tab(text: tr('Активные (${_appState.activeBookings.length})')),
+                  Tab(text: tr('Прошедшие (${_appState.completedBookings.length})')),
+                  Tab(text: tr('Отмененные (${_appState.cancelledBookings.length})')),
                 ],
               ),
             ),
@@ -191,15 +234,43 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
         ),
       ),
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppGradients.page,
-        ),
+        decoration: BoxDecoration(gradient: AppGradients.page),
         child: TabBarView(
           controller: _tabController,
           children: [
             _buildBookingsList(_appState.activeBookings, isActiveTab: true),
             _buildBookingsList(_appState.completedBookings),
             _buildBookingsList(_appState.cancelledBookings),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// До какого момента можно отменить запись: за 2 часа до начала
+  String _cancelDeadlineLabel(BookingItem b) {
+    final deadline = b.startsAt.subtract(const Duration(minutes: BookingRules.freeCancelMinutes));
+    return '${Formatters.dayLabel(deadline)}, ${Formatters.time(deadline)}';
+  }
+
+  /// Пометка над списком активных записей: правило отмены и переноса
+  Widget _buildCancelRuleNote() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(color: AppColors.primaryTint, borderRadius: BorderRadius.circular(14)),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.info_outline, size: 18, color: AppColors.primary),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Отменить или перенести запись можно не позднее чем за 2 часа до её начала.',
+                style: TextStyle(fontSize: 12, height: 1.35, fontWeight: FontWeight.w600, color: AppColors.ink),
+              ),
+            ),
           ],
         ),
       ),
@@ -216,7 +287,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
             const SizedBox(height: 12),
             const Text('Записей не найдено', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
             const SizedBox(height: 6),
-            const Text('У вас пока нет визитов в этом разделе', style: TextStyle(fontSize: 12, color: AppColors.muted)),
+            Text('У вас пока нет визитов в этом разделе', style: TextStyle(fontSize: 12, color: AppColors.muted)),
             if (isActiveTab) ...[
               const SizedBox(height: 16),
               AppPillButton(
@@ -233,9 +304,12 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-      itemCount: items.length,
-      itemBuilder: (context, index) {
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+      itemCount: items.length + (isActiveTab ? 1 : 0),
+      itemBuilder: (context, rawIndex) {
+        // В «Активных» первой строкой — пометка про срок отмены
+        if (isActiveTab && rawIndex == 0) return _buildCancelRuleNote();
+        final index = isActiveTab ? rawIndex - 1 : rawIndex;
         final b = items[index];
         return Padding(
           padding: const EdgeInsets.only(bottom: 12),
@@ -247,47 +321,73 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(b.salonName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-                    if (b.status == 'active')
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: widget.onOpenSalon == null ? null : () => widget.onOpenSalon!(b.salonId),
+                        child: Text(
+                          b.salonName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    if (b.status == BookingStatus.active)
                       const AppStatusBadge(text: 'Подтверждено')
-                    else if (b.status == 'completed')
-                      AppStatusBadge(text: 'Завершено', backgroundColor: Colors.grey.shade200, textColor: AppColors.muted)
+                    else if (b.status == BookingStatus.completed)
+                      AppStatusBadge(
+                        text: 'Завершено',
+                        backgroundColor: AppColors.line,
+                        textColor: AppColors.muted,
+                      )
                     else
-                      const AppStatusBadge(text: 'Отменено', backgroundColor: Color(0xFFFFECEF), textColor: AppColors.primary),
+                      AppStatusBadge(
+                        text: 'Отменено',
+                        backgroundColor: AppColors.soft(const Color(0xFFFFECEF)),
+                        textColor: AppColors.primary,
+                      ),
                   ],
                 ),
                 const SizedBox(height: 4),
-                Text('${b.serviceName} · ${b.masterName}', style: const TextStyle(fontSize: 13, color: AppColors.muted)),
+                Text(
+                  '${b.serviceName} · ${b.masterName}',
+                  style: TextStyle(fontSize: 13, color: AppColors.muted),
+                ),
                 const SizedBox(height: 10),
                 Row(
                   children: [
                     const Icon(Icons.access_time, size: 14, color: AppColors.primary),
                     const SizedBox(width: 6),
-                    Text('${b.date}, ${b.time}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-                    const Spacer(),
+                    Expanded(
+                      child: Text(
+                        '${b.date}, ${b.time} · ${b.durationLabel}',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
                     Text(
-                      b.paymentMethod == 'Кредиты' ? '${b.credits} кр.' : '${b.sumPrice} сум',
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.primaryText),
+                      b.priceLabel,
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.primaryText),
                     ),
                   ],
                 ),
                 if (isActiveTab) ...[
-                  const Divider(height: 20, color: Color(0xFFF3DCE8)),
+                  Divider(height: 20, color: AppColors.line),
                   Row(
                     children: [
                       Expanded(
                         child: OutlinedButton.icon(
                           onPressed: () async {
-                            final res = await RescheduleBookingModal.show(context, b);
-                            if (res == true && context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  backgroundColor: AppColors.ink,
-                                  behavior: SnackBarBehavior.floating,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                  content: Text('Запись успешно перенесена на ${b.date}, ${b.time}'),
-                                ),
-                              );
+                            if (!b.canReschedule) {
+                              showAppSnack(context, 'Перенос недоступен: до визита меньше 2 часов.');
+                              return;
+                            }
+                            final moved = await RescheduleBookingModal.show(context, b);
+                            if (moved != null && context.mounted) {
+                              showAppSnack(context, 'Запись перенесена на ${moved.date}, ${moved.time}');
                             }
                           },
                           style: OutlinedButton.styleFrom(
@@ -296,13 +396,16 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
                             padding: const EdgeInsets.symmetric(vertical: 8),
                           ),
                           icon: const Icon(Icons.edit_calendar_outlined, size: 16, color: AppColors.primary),
-                          label: const Text('Перенести', style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w700)),
+                          label: const Text(
+                            'Перенести',
+                            style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w700),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: ElevatedButton.icon(
-                          onPressed: () => ClientQrModal.show(context, bookingTitle: b.serviceName, salonName: b.salonName),
+                          onPressed: () => ClientQrModal.show(context, booking: b),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primary,
                             elevation: 0,
@@ -310,7 +413,10 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
                             padding: const EdgeInsets.symmetric(vertical: 8),
                           ),
                           icon: const Icon(Icons.qr_code, size: 16, color: Colors.white),
-                          label: const Text('QR визита', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
+                          label: const Text(
+                            'QR визита',
+                            style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700),
+                          ),
                         ),
                       ),
                     ],
@@ -325,9 +431,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
                         color: b.canCancel ? AppColors.muted : AppColors.primary,
                       ),
                       label: Text(
-                        b.canCancel
-                            ? 'Отменить запись (доступно > 2 ч)'
-                            : 'Отмена заблокирована (< 2 ч до визита)',
+                        b.canCancel ? 'Отменить запись (до ${_cancelDeadlineLabel(b)})' : 'Отмена заблокирована (< 2 ч до визита)',
                         style: TextStyle(
                           color: b.canCancel ? AppColors.muted : AppColors.primaryText,
                           fontSize: 11,
@@ -336,15 +440,15 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
                       ),
                     ),
                   ),
-                ] else if (b.status == 'completed') ...[
-                  const Divider(height: 20, color: Color(0xFFF3DCE8)),
+                ] else if (b.status == BookingStatus.completed) ...[
+                  Divider(height: 20, color: AppColors.line),
                   if (b.reviewRating != null) ...[
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         color: AppColors.background,
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: const Color(0xFFF3DCE8)),
+                        border: Border.all(color: AppColors.line),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -352,16 +456,19 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
                           Row(
                             children: [
                               Row(
-                                children: List.generate(5, (sIndex) => Icon(
-                                  sIndex < (b.reviewRating ?? 0) ? Icons.star_rounded : Icons.star_outline_rounded,
-                                  size: 18,
-                                  color: const Color(0xFFFFA800),
-                                )),
+                                children: List.generate(
+                                  5,
+                                  (sIndex) => Icon(
+                                    sIndex < (b.reviewRating ?? 0) ? Icons.star_rounded : Icons.star_outline_rounded,
+                                    size: 18,
+                                    color: const Color(0xFFFFA800),
+                                  ),
+                                ),
                               ),
                               const SizedBox(width: 8),
                               Text(
                                 'Ваша оценка: ${b.reviewRating}.0',
-                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.ink),
+                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.ink),
                               ),
                             ],
                           ),
@@ -370,26 +477,72 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
                             Wrap(
                               spacing: 6,
                               runSpacing: 4,
-                              children: b.reviewTags!.map((tag) => Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: AppColors.surface,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: const Color(0xFFF3DCE8)),
-                                ),
-                                child: Text(tag, style: const TextStyle(fontSize: 10, color: AppColors.muted, fontWeight: FontWeight.w600)),
-                              )).toList(),
+                              children: b.reviewTags!
+                                  .map(
+                                    (tag) => Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.surface,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: AppColors.line),
+                                      ),
+                                      child: Text(
+                                        tag,
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          color: AppColors.muted,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
                             ),
                           ],
                           if (b.reviewComment != null && b.reviewComment!.isNotEmpty) ...[
                             const SizedBox(height: 8),
                             Text(
                               '«${b.reviewComment}»',
-                              style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: AppColors.ink),
+                              style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: AppColors.ink),
+                            ),
+                          ],
+                          // Пока окно открыто, отзыв можно изменить; потом он закрыт для правки
+                          if (b.isReviewWindowOpen) ...[
+                            const SizedBox(height: 4),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton.icon(
+                                onPressed: () async {
+                                  final res = await LeaveReviewModal.show(context, b);
+                                  if (res == true && context.mounted) showAppSnack(context, 'Отзыв изменён.');
+                                },
+                                icon: Icon(Icons.edit_outlined, size: 14, color: AppColors.primaryText),
+                                label: Text(
+                                  'Изменить',
+                                  style: TextStyle(
+                                    color: AppColors.primaryText,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
                             ),
                           ],
                         ],
                       ),
+                    ),
+                  ] else if (!b.isReviewWindowOpen) ...[
+                    Row(
+                      children: [
+                        Icon(Icons.info_outline, size: 14, color: AppColors.muted),
+                        SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'Отзыв можно оставить в течение 7 дней после визита',
+                            style: TextStyle(fontSize: 11, color: AppColors.muted),
+                          ),
+                        ),
+                      ],
                     ),
                   ] else ...[
                     SizedBox(
@@ -398,26 +551,19 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
                         onPressed: () async {
                           final res = await LeaveReviewModal.show(context, b);
                           if (res == true && context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                backgroundColor: AppColors.ink,
-                                behavior: SnackBarBehavior.floating,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                content: const Text('Спасибо за отзыв! Ваша оценка сохранена.'),
-                              ),
-                            );
+                            showAppSnack(context, 'Спасибо за отзыв! Ваша оценка сохранена.');
                           }
                         },
                         style: OutlinedButton.styleFrom(
                           side: const BorderSide(color: Color(0xFFFFA800)),
-                          backgroundColor: const Color(0xFFFFF9E6),
+                          backgroundColor: AppColors.soft(const Color(0xFFFFF9E6)),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                           padding: const EdgeInsets.symmetric(vertical: 8),
                         ),
                         icon: const Icon(Icons.star_rounded, size: 18, color: Color(0xFFFFA800)),
-                        label: const Text(
+                        label: Text(
                           'Оставить отзыв о визите',
-                          style: TextStyle(color: Color(0xFFD48200), fontSize: 12, fontWeight: FontWeight.w700),
+                          style: TextStyle(color: AppColors.onSoft(const Color(0xFFD48200)), fontSize: 12, fontWeight: FontWeight.w700),
                         ),
                       ),
                     ),

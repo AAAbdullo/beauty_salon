@@ -1,7 +1,13 @@
+import '../../core/data/app_scope.dart';
+import '../../core/data/repositories/auth_repository.dart';
+import '../../core/data/repository_exception.dart';
+import '../../core/utils/result.dart';
 import 'dart:async';
-import 'package:flutter/material.dart';
-import '../../core/services/app_state_service.dart';
+import 'package:flutter/material.dart' hide Text;
+import '../../core/l10n/app_text.dart';
+import 'package:flutter/services.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/formatters.dart';
 import '../../core/widgets/buttons/app_gradient_button.dart';
 import '../../core/widgets/inputs/app_text_field.dart';
 
@@ -10,7 +16,8 @@ import '../../core/widgets/inputs/app_text_field.dart';
 /// Шаг 2: Ввод SMS-кода с таймером 00:45
 /// Шаг 3: Заполнение анкеты (Имя, Фамилия, Дата рождения, Пол)
 class OnboardingRegistrationScreen extends StatefulWidget {
-  final VoidCallback onCompleted;
+  /// Анкета заполнена: завершить регистрацию на «сервере» (номер уже подтверждён по SMS)
+  final Future<void> Function(PhoneVerification verification, RegistrationProfile profile) onCompleted;
   final VoidCallback onBackToLogin;
 
   const OnboardingRegistrationScreen({
@@ -36,6 +43,10 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
   int _timerSeconds = 45;
   Timer? _countdownTimer;
   String? _otpError;
+  bool _otpBusy = false;
+
+  // Номер, подтверждённый по SMS: без него анкету не принимают
+  PhoneVerification? _verification;
 
   // Шаг 3: Анкета
   final _firstNameController = TextEditingController(text: 'Азиза');
@@ -43,11 +54,6 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
   final _birthDateController = TextEditingController(text: '14.05.1998');
   String _selectedGender = 'Женский';
   String? _profileError;
-
-  @override
-  void initState() {
-    super.initState();
-  }
 
   @override
   void dispose() {
@@ -65,10 +71,14 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
     super.dispose();
   }
 
-  void _startTimer() {
+  void _startTimer([int seconds = 45]) {
     _countdownTimer?.cancel();
-    setState(() => _timerSeconds = 45);
+    setState(() => _timerSeconds = seconds);
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
       if (_timerSeconds > 0) {
         setState(() => _timerSeconds--);
       } else {
@@ -77,17 +87,26 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
     });
   }
 
-  void _submitPhone() {
-    final raw = _phoneController.text.replaceAll(' ', '');
-    if (raw.length < 9) {
+  String get _fullPhone => '+998 ${_phoneController.text.trim()}';
+
+  Future<void> _submitPhone() async {
+    final raw = _phoneController.text.replaceAll(RegExp(r'\D'), '');
+    if (raw.length != UzPhoneInputFormatter.digitsCount) {
       setState(() => _phoneError = 'Введите корректный 9-значный номер');
       return;
     }
+    FocusScope.of(context).unfocus();
+    final challenge = await _requestOtp((message) => setState(() => _phoneError = message));
+    if (challenge == null || !mounted) return;
+    for (final c in _otpControllers) {
+      c.clear();
+    }
     setState(() {
       _phoneError = null;
+      _otpError = null;
       _currentStep = 2;
     });
-    _startTimer();
+    _startTimer(challenge.resendAfter.inSeconds);
     // Фокус на первое поле SMS
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_otpFocusNodes[0].canRequestFocus) {
@@ -96,28 +115,88 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
     });
   }
 
-  void _submitOtp() {
+  /// Запросить SMS-код; при отказе сервера [onError] получает причину, при обрыве связи — её же
+  Future<OtpChallenge?> _requestOtp(void Function(String message) onError) async {
+    try {
+      final result = await AppScope.read(context).auth.requestOtp(phone: _fullPhone);
+      if (!mounted) return null;
+      switch (result) {
+        case Success(:final value):
+          return value;
+        case Failure(:final error):
+          onError(error.message);
+          return null;
+      }
+    } on RepositoryException catch (e) {
+      if (mounted) onError(e.message);
+      return null;
+    }
+  }
+
+  Future<void> _resendOtp() async {
+    final challenge = await _requestOtp((message) => setState(() => _otpError = message));
+    if (challenge == null || !mounted) return;
+    for (final c in _otpControllers) {
+      c.clear();
+    }
+    setState(() => _otpError = null);
+    _startTimer(challenge.resendAfter.inSeconds);
+    _otpFocusNodes[0].requestFocus();
+  }
+
+  Future<void> _submitOtp() async {
+    if (_otpBusy) return; // код приходит из автозаполнения и по кнопке: проверяем один раз
     final code = _otpControllers.map((c) => c.text).join();
     if (code.length < 4) {
       setState(() => _otpError = 'Введите 4-значный код из SMS');
       return;
     }
-    setState(() {
-      _otpError = null;
-      _currentStep = 3;
-    });
+    FocusScope.of(context).unfocus();
+    // Вернулись с анкеты на шаг SMS: этот номер уже подтверждён, повторно проверять код нельзя (он одноразовый)
+    if (_verification?.phone == _fullPhone) {
+      _countdownTimer?.cancel();
+      setState(() {
+        _otpError = null;
+        _currentStep = 3;
+      });
+      return;
+    }
+    _otpBusy = true;
+    try {
+      final result = await AppScope.read(context).auth.verifyOtp(phone: _fullPhone, code: code);
+      if (!mounted) return;
+      switch (result) {
+        case Success(:final value):
+          _countdownTimer?.cancel();
+          setState(() {
+            _verification = value;
+            _otpError = null;
+            _currentStep = 3;
+          });
+        case Failure(:final error):
+          for (final c in _otpControllers) {
+            c.clear();
+          }
+          setState(() => _otpError = error.message);
+          _otpFocusNodes[0].requestFocus();
+      }
+    } on RepositoryException catch (e) {
+      if (mounted) setState(() => _otpError = e.message);
+    } finally {
+      _otpBusy = false;
+    }
   }
 
   Future<void> _selectBirthDate() async {
     final picked = await showDatePicker(
       context: context,
-      initialDate: DateTime(1998, 5, 14),
+      initialDate: _parseBirthDate() ?? DateTime(1998, 5, 14),
       firstDate: DateTime(1940),
       lastDate: DateTime.now(),
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
+            colorScheme: ColorScheme.light(
               primary: AppColors.primary,
               onPrimary: Colors.white,
               onSurface: AppColors.ink,
@@ -137,33 +216,62 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
     }
   }
 
-  void _submitProfile() {
+  DateTime? _parseBirthDate() {
+    final parts = _birthDateController.text.split('.');
+    if (parts.length != 3) return null;
+    final d = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    final y = int.tryParse(parts[2]);
+    if (d == null || m == null || y == null) return null;
+    final date = DateTime(y, m, d);
+    return date.isAfter(DateTime.now()) ? null : date;
+  }
+
+  void _showSocialUnavailable(String provider) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.snackBackground,
+          content: Text('Вход через $provider появится после подключения сервера. Используйте номер телефона.'),
+        ),
+      );
+  }
+
+  Future<void> _submitProfile() async {
     final first = _firstNameController.text.trim();
     final last = _lastNameController.text.trim();
+    final verification = _verification;
     if (first.isEmpty) {
       setState(() => _profileError = 'Пожалуйста, введите ваше имя');
       return;
     }
-
-    final fullName = last.isNotEmpty ? '$first $last' : first;
-    final phone = '+998 ${_phoneController.text.trim()}';
-
-    // Обновляем синглтон состояния
-    AppStateService().updateClientProfile(
-      name: fullName,
-      phone: phone,
-      birthDate: _birthDateController.text,
-      gender: _selectedGender,
+    if (verification == null) {
+      // Сюда не попасть без SMS-шага; на случай возврата назад по стеку — вернуть на проверку номера
+      setState(() {
+        _profileError = null;
+        _currentStep = 1;
+      });
+      return;
+    }
+    setState(() => _profileError = null);
+    await widget.onCompleted(
+      verification,
+      RegistrationProfile(
+        phone: _fullPhone,
+        firstName: first,
+        lastName: last,
+        birthDate: _birthDateController.text,
+        gender: _selectedGender,
+      ),
     );
-
-    widget.onCompleted();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: AppGradients.page,
         ),
         child: SafeArea(
@@ -191,7 +299,7 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: AppColors.ink),
+            icon: Icon(Icons.arrow_back_ios_new, size: 20, color: AppColors.ink),
             onPressed: () {
               if (_currentStep > 1) {
                 setState(() => _currentStep--);
@@ -202,7 +310,7 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
           ),
           Text(
             'Шаг $_currentStep из 3',
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.muted),
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.muted),
           ),
           TextButton(
             onPressed: widget.onBackToLogin,
@@ -253,17 +361,17 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 20),
-        const Text(
+        Text(
           'Регистрация',
           style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: AppColors.ink),
         ),
         const SizedBox(height: 8),
-        const Text(
+        Text(
           'Введите ваш номер телефона для входа в приложение и получения кода подтверждения',
           style: TextStyle(fontSize: 14, color: AppColors.muted),
         ),
         const SizedBox(height: 32),
-        const Text('Номер телефона', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink)),
+        Text('Номер телефона', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink)),
         const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
@@ -288,7 +396,7 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
                     bottomLeft: Radius.circular(28),
                   ),
                 ),
-                child: const Row(
+                child: Row(
                   children: [
                     Text('🇺🇿', style: TextStyle(fontSize: 16)),
                     SizedBox(width: 6),
@@ -300,7 +408,11 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
                 child: TextField(
                   controller: _phoneController,
                   keyboardType: TextInputType.phone,
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.ink),
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _submitPhone(),
+                  inputFormatters: const [UzPhoneInputFormatter()],
+                  autofillHints: const [AutofillHints.telephoneNumberNational],
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.ink),
                   decoration: const InputDecoration(
                     hintText: '90 123 45 67',
                     border: InputBorder.none,
@@ -321,7 +433,7 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
           onPressed: _submitPhone,
         ),
         const SizedBox(height: 32),
-        const Center(
+        Center(
           child: Text('Или продолжить через', style: TextStyle(fontSize: 12, color: AppColors.muted)),
         ),
         const SizedBox(height: 16),
@@ -340,19 +452,25 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
   }
 
   Widget _buildSocialButton(IconData icon, String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
+    return Material(
+      color: AppColors.surface,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.black.withValues(alpha: 0.08)),
+        side: BorderSide(color: Colors.black.withValues(alpha: 0.08)),
       ),
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: AppColors.ink),
-          const SizedBox(width: 6),
-          Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-        ],
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => _showSocialUnavailable(label),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(
+            children: [
+              Icon(icon, size: 18, color: AppColors.ink),
+              const SizedBox(width: 6),
+              Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -365,15 +483,22 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 20),
-        const Text(
+        Text(
           'Код подтверждения',
           style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: AppColors.ink),
         ),
         const SizedBox(height: 8),
         Text(
           'Мы отправили 4-значный SMS-код на номер +998 ${_phoneController.text}',
-          style: const TextStyle(fontSize: 14, color: AppColors.muted),
+          style: TextStyle(fontSize: 14, color: AppColors.muted),
         ),
+        if (AppScope.read(context).auth case final DemoOtpHint hint) ...[
+          const SizedBox(height: 6),
+          Text(
+            'Демо-режим: код из SMS — ${hint.demoOtpCode}',
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primary),
+          ),
+        ],
         const SizedBox(height: 36),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -399,20 +524,40 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
                     focusNode: _otpFocusNodes[index],
                     keyboardType: TextInputType.number,
                     textAlign: TextAlign.center,
-                    maxLength: 1,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    autofillHints: index == 0 ? const [AutofillHints.oneTimeCode] : null,
                     style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.primary),
                     decoration: const InputDecoration(
                       counterText: '',
                       border: InputBorder.none,
                     ),
                     onChanged: (val) {
+                      // Вставка/автозаполнение всего кода в одно поле — раскладываем по ячейкам
+                      if (val.length > 1) {
+                        final digits = val.split('');
+                        for (var i = 0; i < 4; i++) {
+                          final src = index + i < 4 ? i : -1;
+                          if (src >= 0 && src < digits.length) {
+                            _otpControllers[index + i].text = digits[src];
+                          }
+                        }
+                        setState(() {});
+                        final filled = _otpControllers.every((c) => c.text.isNotEmpty);
+                        if (filled) {
+                          _submitOtp();
+                        } else {
+                          final next = (index + digits.length).clamp(0, 3);
+                          _otpFocusNodes[next].requestFocus();
+                        }
+                        return;
+                      }
                       setState(() {});
                       if (val.isNotEmpty && index < 3) {
                         _otpFocusNodes[index + 1].requestFocus();
                       } else if (val.isEmpty && index > 0) {
                         _otpFocusNodes[index - 1].requestFocus();
                       }
-                      if (index == 3 && val.isNotEmpty) {
+                      if (val.isNotEmpty && _otpControllers.every((c) => c.text.isNotEmpty)) {
                         _submitOtp();
                       }
                     },
@@ -431,10 +576,10 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
           child: _timerSeconds > 0
               ? Text(
                   'Отправить код повторно через $timerText',
-                  style: const TextStyle(fontSize: 13, color: AppColors.muted, fontWeight: FontWeight.w600),
+                  style: TextStyle(fontSize: 13, color: AppColors.muted, fontWeight: FontWeight.w600),
                 )
               : TextButton(
-                  onPressed: _startTimer,
+                  onPressed: _resendOtp,
                   child: const Text(
                     'Отправить код повторно',
                     style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 14),
@@ -456,70 +601,59 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 16),
-        const Text(
+        Text(
           'Заполните анкету',
           style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: AppColors.ink),
         ),
         const SizedBox(height: 6),
-        const Text(
+        Text(
           'Расскажите немного о себе, чтобы салоны и мастера обращались к вам правильно',
           style: TextStyle(fontSize: 14, color: AppColors.muted),
         ),
         const SizedBox(height: 24),
 
-        // Аватар
+        // Аватар (загрузка фото появится вместе с бэкендом — пока без кнопки камеры,
+        // чтобы не показывать нерабочее действие)
         Center(
-          child: Stack(
-            children: [
-              Container(
-                width: 86,
-                height: 86,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppColors.primaryTint,
-                  border: Border.all(color: AppColors.primary, width: 2),
-                ),
-                child: const Icon(Icons.person, size: 50, color: AppColors.primary),
-              ),
-              Positioned(
-                bottom: 0,
-                right: 0,
-                child: Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: const BoxDecoration(
-                    color: AppColors.primary,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.camera_alt, color: Colors.white, size: 16),
-                ),
-              ),
-            ],
+          child: Container(
+            width: 86,
+            height: 86,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppColors.primaryTint,
+              border: Border.all(color: AppColors.primary, width: 2),
+            ),
+            child: const Icon(Icons.person, size: 50, color: AppColors.primary),
           ),
         ),
         const SizedBox(height: 24),
 
         // Имя
-        const Text('Имя', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink)),
+        Text('Имя', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink)),
         const SizedBox(height: 6),
         AppTextField(
           controller: _firstNameController,
           hintText: 'Ваше имя',
+          textInputAction: TextInputAction.next,
+          textCapitalization: TextCapitalization.words,
           prefixIcon: const Icon(Icons.badge_outlined, color: AppColors.primary),
         ),
         const SizedBox(height: 14),
 
         // Фамилия
-        const Text('Фамилия', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink)),
+        Text('Фамилия', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink)),
         const SizedBox(height: 6),
         AppTextField(
           controller: _lastNameController,
           hintText: 'Ваша фамилия (необязательно)',
+          textInputAction: TextInputAction.done,
+          textCapitalization: TextCapitalization.words,
           prefixIcon: const Icon(Icons.person_outline, color: AppColors.primary),
         ),
         const SizedBox(height: 14),
 
         // Дата рождения
-        const Text('Дата рождения', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink)),
+        Text('Дата рождения', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink)),
         const SizedBox(height: 6),
         AppTextField(
           controller: _birthDateController,
@@ -527,24 +661,15 @@ class _OnboardingRegistrationScreenState extends State<OnboardingRegistrationScr
           readOnly: true,
           onTap: _selectBirthDate,
           prefixIcon: const Icon(Icons.calendar_today_outlined, color: AppColors.primary),
-          suffixIcon: const Icon(Icons.edit_calendar, color: AppColors.muted, size: 20),
+          suffixIcon: Icon(Icons.edit_calendar, color: AppColors.muted, size: 20),
         ),
         const SizedBox(height: 18),
 
         // Пол
-        const Text('Пол', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink)),
+        Text('Пол', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink)),
         const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: _buildGenderChoice('Женский', Icons.female),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildGenderChoice('Мужской', Icons.male),
-            ),
-          ],
-        ),
+        // Пока приложение только для женщин: единственный вариант
+        _buildGenderChoice('Женский', Icons.female),
 
         if (_profileError != null) ...[
           const SizedBox(height: 12),

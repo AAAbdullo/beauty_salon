@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import '../../l10n/app_text.dart';
 import '../../theme/app_theme.dart';
 
 /// Мягкая розовая кнопка («Записаться», «Применить») со спецификацией ~83×27 dp

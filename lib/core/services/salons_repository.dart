@@ -1,5 +1,6 @@
 import 'package:yandex_mapkit/yandex_mapkit.dart';
 import '../models/salon_filter_params.dart';
+import 'masters_repository.dart';
 
 /// Модель салона красоты с полным набором атрибутов по ТЗ
 class SalonModel {
@@ -41,6 +42,38 @@ class SalonModel {
     this.imageAsset = 'assets/images/salons/salon_nur_beauty.jpg',
   });
 
+  /// Копия с пересчитанным рейтингом и числом отзывов (по отзывам мастеров салона)
+  SalonModel withRating({required double rating, required int reviewsCount}) => SalonModel(
+    id: id,
+    name: name,
+    district: district,
+    address: address,
+    services: services,
+    rating: rating,
+    reviewsCount: reviewsCount,
+    distance: distance,
+    workingHours: workingHours,
+    onlyWomen: onlyWomen,
+    homeVisit: homeVisit,
+    creditsAccepted: creditsAccepted,
+    availableToday: availableToday,
+    minPriceSum: minPriceSum,
+    minCredits: minCredits,
+    point: point,
+    imageAsset: imageAsset,
+  );
+
+  /// Числовая часть id («s-007» → 7)
+  int get _index => int.tryParse(id.replaceAll(RegExp(r'\D'), '')) ?? 0;
+
+  /// Телефон салона (мок до появления поля в API)
+  String get phone =>
+      '+998 71 200 ${_index.toString().padLeft(2, '0')} ${(_index * 37 % 100).toString().padLeft(2, '0')}';
+
+  /// Цена «от …» для карточек: в кредитах, если салон их принимает, иначе в сумах
+  String get minPriceLabel =>
+      creditsAccepted && minCredits > 0 ? 'от $minCredits кр.' : 'от ${(minPriceSum / 1000).round()} тыс. сум';
+
   /// Для будущего парсинга из JSON ответа бэкенда
   factory SalonModel.fromJson(Map<String, dynamic> json) {
     return SalonModel(
@@ -59,10 +92,7 @@ class SalonModel {
       availableToday: json['available_today'] as bool? ?? true,
       minPriceSum: json['min_price_sum'] as int,
       minCredits: json['min_credits'] as int,
-      point: Point(
-        latitude: (json['lat'] as num).toDouble(),
-        longitude: (json['lng'] as num).toDouble(),
-      ),
+      point: Point(latitude: (json['lat'] as num).toDouble(), longitude: (json['lng'] as num).toDouble()),
     );
   }
 }
@@ -154,6 +184,7 @@ class SalonsRepository {
       minPriceSum: 220000,
       minCredits: 50,
       point: Point(latitude: 41.299000, longitude: 69.268000),
+      imageAsset: 'assets/images/salons/salon_glow_and_go.jpg',
     ),
     SalonModel(
       id: 's-005',
@@ -172,6 +203,7 @@ class SalonsRepository {
       minPriceSum: 100000,
       minCredits: 0,
       point: Point(latitude: 41.332000, longitude: 69.289000),
+      imageAsset: 'assets/images/salons/salon_zara_beauty_lab.jpg',
     ),
     SalonModel(
       id: 's-006',
@@ -190,6 +222,7 @@ class SalonsRepository {
       minPriceSum: 130000,
       minCredits: 30,
       point: Point(latitude: 41.285000, longitude: 69.215000),
+      imageAsset: 'assets/images/salons/salon_chilonzor_grace.jpg',
     ),
     SalonModel(
       id: 's-007',
@@ -208,25 +241,7 @@ class SalonsRepository {
       minPriceSum: 160000,
       minCredits: 36,
       point: Point(latitude: 41.301500, longitude: 69.278500),
-    ),
-    SalonModel(
-      id: 's-008',
-      name: 'Elite Barber & Style',
-      district: 'Алмазарский',
-      address: 'ул. Себзар, 33',
-      services: 'Стрижки · Борода · Укладка',
-      rating: 4.7,
-      reviewsCount: 118,
-      distance: '3,8 км',
-      workingHours: 'Открыто до 21:00',
-      onlyWomen: false,
-      homeVisit: false,
-      creditsAccepted: true,
-      availableToday: true,
-      minPriceSum: 110000,
-      minCredits: 26,
-      point: Point(latitude: 41.339000, longitude: 69.245000),
-      imageAsset: 'assets/images/salons/salon_elite_barber.jpg',
+      imageAsset: 'assets/images/salons/salon_bella_donna.jpg',
     ),
     SalonModel(
       id: 's-009',
@@ -245,6 +260,7 @@ class SalonsRepository {
       minPriceSum: 140000,
       minCredits: 32,
       point: Point(latitude: 41.229000, longitude: 69.221000),
+      imageAsset: 'assets/images/salons/salon_aura_spa.jpg',
     ),
     SalonModel(
       id: 's-010',
@@ -263,6 +279,7 @@ class SalonsRepository {
       minPriceSum: 95000,
       minCredits: 22,
       point: Point(latitude: 41.289000, longitude: 69.178000),
+      imageAsset: 'assets/images/salons/salon_estetika_uchtepa.jpg',
     ),
   ];
 
@@ -280,11 +297,86 @@ class SalonsRepository {
     'Учтепинский',
   ];
 
-  /// Получение отфильтрованных салонов
-  List<SalonModel> getSalons([SalonFilterParams? params]) {
-    if (params == null) return List.unmodifiable(_mockSalons);
+  /// Салон по id; `null`, если такого нет — подставлять другой салон нельзя.
+  /// [BACKEND NOTE]: GET /api/v1/catalog/salons/:id
+  SalonModel? getSalonById(String id) {
+    for (final s in _mockSalons) {
+      if (s.id == id) return s;
+    }
+    return null;
+  }
 
-    return _mockSalons.where((s) {
+  // Шаблоны услуг по категориям — для салонов, у которых в моках нет мастеров.
+  // (название, длительность в минутах, коэффициент к минимальной цене салона)
+  static const Map<String, (String, int, double)> _serviceTemplates = {
+    'Маникюр': ('Маникюр классический', 60, 1.0),
+    'Педикюр': ('Педикюр классический', 90, 1.3),
+    'Брови': ('Коррекция и окрашивание бровей', 40, 0.7),
+    'Макияж': ('Дневной макияж', 60, 1.2),
+    'Стрижки': ('Женская стрижка', 45, 1.0),
+    'Окрашивание': ('Окрашивание волос', 120, 2.2),
+    'Укладка': ('Укладка', 40, 0.8),
+    'Косметология': ('Чистка лица', 90, 1.4),
+    'Уход': ('Уходовая процедура для лица', 60, 1.1),
+    'Ресницы': ('Ламинирование ресниц', 60, 1.0),
+    'Ногти': ('Маникюр + гель-лак', 75, 1.2),
+    'Массаж': ('Массаж спины', 60, 1.3),
+    'Спа': ('SPA-программа', 90, 1.6),
+    'Уход за волосами': ('Восстанавливающий уход за волосами', 60, 1.0),
+  };
+
+  /// Услуги салона: услуги его мастеров, а если мастеров нет — из категорий салона.
+  /// [BACKEND NOTE]: GET /api/v1/salons/:id/services
+  List<MasterServiceItem> getSalonServices(String salonId) {
+    final masters = MastersRepository().getMastersForSalon(salonId);
+    if (masters.isNotEmpty) {
+      final seen = <String>{};
+      return [
+        for (final m in masters)
+          for (final service in m.services)
+            if (seen.add(service.name)) service,
+      ];
+    }
+
+    final salon = getSalonById(salonId);
+    if (salon == null) return const [];
+    final baseCredits = salon.minCredits > 0 ? salon.minCredits : 0;
+    final categories = salon.services.split('·').map((raw) => raw.trim()).where((c) => c.isNotEmpty).toList();
+    return List.generate(categories.length, (index) {
+      final category = categories[index];
+      final template = _serviceTemplates[category] ?? (category, 60, 1.0);
+      return MasterServiceItem(
+        id: '${salon.id}-c${index + 1}',
+        name: template.$1,
+        durationMinutes: template.$2,
+        creditsPrice: (baseCredits * template.$3).round(),
+        sumPrice: ((salon.minPriceSum * template.$3) / 10000).round() * 10000,
+      );
+    });
+  }
+
+  /// Фото салона: фасад/интерьер + работы мастеров
+  List<String> getSalonPhotos(String salonId) {
+    final salon = getSalonById(salonId);
+    final masters = MastersRepository().getMastersForSalon(salonId);
+    final photos = <String>{?salon?.imageAsset, for (final m in masters) ...m.portfolioImages};
+    if (photos.length < 3) {
+      photos.addAll(const [
+        'assets/images/portfolio/portfolio_manicure_1.jpg',
+        'assets/images/portfolio/portfolio_hair_1.jpg',
+        'assets/images/portfolio/portfolio_brows_1.jpg',
+      ]);
+    }
+    return photos.toList();
+  }
+
+  /// Получение отфильтрованных салонов
+  /// [enrich] подставляет пересчитанный рейтинг до фильтрации: фильтр «рейтинг от» работает по свежим данным.
+  List<SalonModel> getSalons([SalonFilterParams? params, SalonModel Function(SalonModel)? enrich]) {
+    final source = enrich == null ? _mockSalons : _mockSalons.map(enrich).toList();
+    if (params == null) return List.unmodifiable(source);
+
+    return source.where((s) {
       // 1. Фильтр по району
       if (params.district != null && s.district != params.district) {
         return false;

@@ -2,17 +2,27 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import '../../core/l10n/app_text.dart';
 import 'package:yandex_mapkit/yandex_mapkit.dart';
+import '../../core/data/app_dependencies.dart';
+import '../../core/data/app_scope.dart';
+import '../../core/data/repository_exception.dart';
 import '../../core/models/salon_filter_params.dart';
+import '../../core/services/location_permission_service.dart';
 import '../../core/services/salons_repository.dart';
+import '../../core/services/turn_announcement.dart';
 import '../../core/services/voice_guidance_service.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/formatters.dart';
 import '../../core/widgets/badges/app_status_badge.dart';
 import '../../core/widgets/buttons/app_gradient_button.dart';
 import '../../core/widgets/buttons/app_pill_button.dart';
 import '../../core/widgets/cards/app_card.dart';
+import '../../core/widgets/sheets/app_sheet.dart';
+import '../../core/widgets/ticker_mode_listener.dart';
 import '../client_home/search_filter_modal.dart';
+import '../../core/l10n/app_locale.dart';
 
 /// Генератор стилизованных векторных пинов салонов для карты Yandex MapKit
 class SalonPinHelper {
@@ -64,7 +74,7 @@ class SalonPinHelper {
 
   static IconData getIconForServices(String services) {
     final lower = services.toLowerCase();
-    if (lower.contains('стрижк') || lower.contains('укладк') || lower.contains('бород')) {
+    if (lower.contains('стрижк') || lower.contains('укладк')) {
       return Icons.content_cut;
     } else if (lower.contains('маникюр') || lower.contains('педикюр') || lower.contains('ногт')) {
       return Icons.brush;
@@ -86,11 +96,7 @@ class SalonPinHelper {
       return _cache[key]!;
     }
 
-    final bytes = await _renderPinBytes(
-      icon: icon,
-      color: color,
-      isSelected: isSelected,
-    );
+    final bytes = await _renderPinBytes(icon: icon, color: color, isSelected: isSelected);
     final descriptor = BitmapDescriptor.fromBytes(bytes);
     _cache[key] = descriptor;
     return descriptor;
@@ -118,11 +124,7 @@ class SalonPinHelper {
     final pinPath = Path();
     pinPath.moveTo(48, 108);
     pinPath.cubicTo(18, 78, 12, 58, 12, 42);
-    pinPath.arcToPoint(
-      const Offset(84, 42),
-      radius: const Radius.circular(36),
-      clockwise: true,
-    );
+    pinPath.arcToPoint(const Offset(84, 42), radius: const Radius.circular(36), clockwise: true);
     pinPath.cubicTo(84, 58, 78, 78, 48, 108);
     pinPath.close();
 
@@ -135,11 +137,7 @@ class SalonPinHelper {
     final innerPath = Path();
     innerPath.moveTo(48, 102);
     innerPath.cubicTo(22, 74, 18, 56, 18, 42);
-    innerPath.arcToPoint(
-      const Offset(78, 42),
-      radius: const Radius.circular(30),
-      clockwise: true,
-    );
+    innerPath.arcToPoint(const Offset(78, 42), radius: const Radius.circular(30), clockwise: true);
     innerPath.cubicTo(78, 56, 74, 74, 48, 102);
     innerPath.close();
 
@@ -154,18 +152,10 @@ class SalonPinHelper {
     final textPainter = TextPainter(textDirection: TextDirection.ltr);
     textPainter.text = TextSpan(
       text: String.fromCharCode(icon.codePoint),
-      style: TextStyle(
-        fontSize: 24,
-        fontFamily: icon.fontFamily,
-        package: icon.fontPackage,
-        color: color,
-      ),
+      style: TextStyle(fontSize: 24, fontFamily: icon.fontFamily, package: icon.fontPackage, color: color),
     );
     textPainter.layout();
-    textPainter.paint(
-      canvas,
-      Offset(48 - textPainter.width / 2, 42 - textPainter.height / 2),
-    );
+    textPainter.paint(canvas, Offset(48 - textPainter.width / 2, 42 - textPainter.height / 2));
 
     final picture = pictureRecorder.endRecording();
     final image = await picture.toImage(width.toInt(), height.toInt());
@@ -175,30 +165,23 @@ class SalonPinHelper {
 }
 
 class SalonsMapScreen extends StatefulWidget {
-  final Function(String salonName) onSelectSalon;
+  final ValueChanged<String> onSelectSalon; // id салона
   final VoidCallback onBack;
-  final String? initialSalonName;
+  final String? initialSalonId;
 
-  const SalonsMapScreen({
-    super.key,
-    required this.onSelectSalon,
-    required this.onBack,
-    this.initialSalonName,
-  });
+  const SalonsMapScreen({super.key, required this.onSelectSalon, required this.onBack, this.initialSalonId});
 
   @override
   State<SalonsMapScreen> createState() => _SalonsMapScreenState();
 }
 
 class _SalonsMapScreenState extends State<SalonsMapScreen> {
-  final SalonsRepository _repository = SalonsRepository();
+  late final AppDependencies _deps;
+  final LocationPermissionService _locationPermission = LocationPermissionService();
   YandexMapController? _mapController;
 
   // Локация пользователя (по умолчанию: сквер Амира Темура в центре Ташкента)
-  Point _userLocation = const Point(
-    latitude: 41.311081,
-    longitude: 69.279737,
-  );
+  Point _userLocation = const Point(latitude: 41.311081, longitude: 69.279737);
 
   bool _isRealGpsActive = false;
 
@@ -218,7 +201,11 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
   SalonFilterParams _filterParams = const SalonFilterParams();
 
   // Список салонов для отображения
-  late List<SalonModel> _salons;
+  // Салоны приходят из каталога асинхронно
+  List<SalonModel> _salons = const [];
+  bool _salonsLoading = true;
+  Object? _salonsError;
+  int _salonsRequestId = 0;
 
   // Выбранный салон (для мини-окна)
   SalonModel? _selectedSalon;
@@ -242,10 +229,19 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
 
   final VoiceGuidanceService _voiceGuidance = VoiceGuidanceService();
 
+  /// Последняя озвученная подсказка поворота: не повторяем её на каждом тике GPS
+  TurnAnnouncement? _lastTurnAnnouncement;
+
   // Режим активной 3D навигации (как в Яндекс Навигаторе)
+  static const double _sheetInitialExtent = 0.30;
+  final DraggableScrollableController _sheetController = DraggableScrollableController();
   bool _isNavigating = false;
+
+  /// Во время навигации камера следует за пользователем. Как только пользователь сам двинул карту
+  /// (жест), слежение выключается, пока он не нажмёт кнопку возврата в панели навигации.
+  bool _followUser = true;
   int _navStepIndex = 0;
-  Timer? _navSimulationTimer;
+  Timer? _navTrackingTimer;
   double _currentSpeedKmh = 0.0;
   double _currentHeading = 0.0;
   String _nextManeuverText = 'Двигайтесь по улице';
@@ -253,26 +249,86 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
   IconData _nextManeuverIcon = Icons.straight;
   List<Point> _currentRoutePoints = [];
 
-  final List<MapObject> _mapObjects = [];
+  List<MapObject> _mapObjects = const [];
+  int _refreshGeneration = 0;
+
+  // Реальное сопровождение: позиция берётся у слоя геолокации Yandex MapKit (GPS устройства)
+  Point? _lastFix;
+  DateTime? _lastFixAt;
+  bool _trackingBusy = false;
+  int _offRouteStreak = 0;
+  DateTime? _lastRerouteAt;
+  static const _arrivalRadiusMeters = 40.0;
+  static const _offRouteMeters = 60.0;
+  static const _rerouteCooldown = Duration(seconds: 20);
+
+  // Номер текущего запроса маршрута: ответ устаревшего запроса (переключили «пешком»/«авто», выбрали
+  // другой салон, сбросили маршрут) игнорируется и не перезаписывает новый маршрут
+  int _routeRequestId = 0;
 
   @override
   void initState() {
     super.initState();
-    _salons = _repository.getSalons(_filterParams);
+    _deps = AppScope.read(context);
+    _deps.appState.reviewChanges.addListener(_refreshRatings);
+    unawaited(_loadSalons(selectInitial: true));
+  }
 
-    if (widget.initialSalonName != null) {
-      final found = _salons.where((s) => s.name == widget.initialSalonName).toList();
-      if (found.isNotEmpty) {
-        _selectedSalon = found.first;
-      }
+  /// Отзыв оставили или изменили: рейтинги в карточках перечитываются, карта и выбор салона не сбрасываются
+  Future<void> _refreshRatings() async {
+    try {
+      final salons = await _deps.catalog.getSalons(_filterParams);
+      if (!mounted) return;
+      setState(() {
+        _salons = salons;
+        final selected = _selectedSalon;
+        if (selected != null) {
+          _selectedSalon = salons.where((s) => s.id == selected.id).firstOrNull ?? selected;
+        }
+      });
+    } on RepositoryException {
+      // Остаются прежние числа
     }
+  }
 
-    _refreshMapObjects();
+  /// Загрузка салонов по текущим фильтрам. Ответ на устаревший запрос отбрасывается.
+  Future<void> _loadSalons({bool selectInitial = false}) async {
+    final requestId = ++_salonsRequestId;
+    setState(() {
+      _salonsLoading = true;
+      _salonsError = null;
+    });
+    try {
+      final salons = await _deps.catalog.getSalons(_filterParams);
+      if (!mounted || requestId != _salonsRequestId) return;
+      setState(() {
+        _salons = salons;
+        _salonsLoading = false;
+        if (selectInitial && widget.initialSalonId != null) {
+          final found = salons.where((s) => s.id == widget.initialSalonId);
+          if (found.isNotEmpty) _selectedSalon = found.first;
+        }
+      });
+      await _refreshMapObjects();
+      // Пришли с «На карте» из карточки салона — показываем его, когда данные загрузились
+      final focus = _selectedSalon;
+      if (selectInitial && focus != null && _mapController != null) {
+        await _zoomToPoint(focus.point, zoom: 15.5);
+      }
+    } on RepositoryException catch (e) {
+      if (!mounted || requestId != _salonsRequestId) return;
+      setState(() {
+        _salonsLoading = false;
+        _salonsError = e;
+      });
+    }
   }
 
   @override
   void dispose() {
-    _navSimulationTimer?.cancel();
+    _deps.appState.reviewChanges.removeListener(_refreshRatings);
+    _sheetController.dispose();
+    _navTrackingTimer?.cancel();
     _voiceGuidance.stop();
     _drivingSession?.close();
     _pedestrianSession?.close();
@@ -280,23 +336,24 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
   }
 
   /// Обновление списка пинов и объектов на карте
+  ///
+  /// Метод вызывают параллельно (таймер навигации, тап по пину, GPS, маршрут), а внутри есть `await`.
+  /// Поэтому новый список собирается локально и подставляется целиком, а результат устаревшего вызова
+  /// отбрасывается (счётчик поколений): карта никогда не получает полусобранный список или дубли id.
   Future<void> _refreshMapObjects() async {
-    _mapObjects.clear();
+    final generation = ++_refreshGeneration;
+    final next = <MapObject>[];
 
     // 1. Пин текущей геолокации пользователя (гарантированное отображение векторного Retina-пина)
     final userPin = await SalonPinHelper.getUserLocationPin();
-    _mapObjects.add(
+    if (!mounted || generation != _refreshGeneration) return;
+    next.add(
       PlacemarkMapObject(
         mapId: const MapObjectId('user_location_marker'),
         point: _userLocation,
         opacity: 1.0,
         zIndex: 10.0,
-        icon: PlacemarkIcon.single(
-          PlacemarkIconStyle(
-            image: userPin,
-            scale: 0.85,
-          ),
-        ),
+        icon: PlacemarkIcon.single(PlacemarkIconStyle(image: userPin, scale: 0.85)),
       ),
     );
 
@@ -309,8 +366,9 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
         color: isSelected ? AppColors.primaryDeep : AppColors.primary,
         isSelected: isSelected,
       );
+      if (!mounted || generation != _refreshGeneration) return;
 
-      _mapObjects.add(
+      next.add(
         PlacemarkMapObject(
           mapId: MapObjectId('salon_${salon.id}'),
           point: salon.point,
@@ -319,30 +377,26 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
           onTap: (PlacemarkMapObject self, Point point) {
             _onSalonPinTapped(salon);
           },
-          icon: PlacemarkIcon.single(
-            PlacemarkIconStyle(
-              image: pinDescriptor,
-              scale: isSelected ? 0.95 : 0.75,
-            ),
-          ),
+          icon: PlacemarkIcon.single(PlacemarkIconStyle(image: pinDescriptor, scale: isSelected ? 0.95 : 0.75)),
         ),
       );
     }
 
     // 3. Линии маршрутов (основной и альтернативный)
     if (_alternativeRoutePolyline != null) {
-      _mapObjects.add(_alternativeRoutePolyline!);
+      next.add(_alternativeRoutePolyline!);
     }
     if (_primaryRoutePolyline != null) {
-      _mapObjects.add(_primaryRoutePolyline!);
+      next.add(_primaryRoutePolyline!);
     }
 
     // 4. Финишная отметка маршрута
     if (_routeFinishPlacemark != null) {
-      _mapObjects.add(_routeFinishPlacemark!);
+      next.add(_routeFinishPlacemark!);
     }
 
-    if (mounted) setState(() {});
+    if (!mounted || generation != _refreshGeneration) return;
+    setState(() => _mapObjects = next);
   }
 
   /// Тап по пину салона на карте
@@ -355,36 +409,68 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
     _zoomToPoint(salon.point, zoom: 15.2);
   }
 
+  /// Слой геолокации до первого GPS-фикса отдаёт точку (0, 0) — «позиции ещё нет». Её нельзя
+  /// принимать за положение пользователя: маршрут от (0, 0) Яндекс не строит и отвечает «Network error».
+  bool _isUsablePoint(Point? p) => p != null && (p.latitude.abs() > 0.0001 || p.longitude.abs() > 0.0001);
+
+  /// Свежая позиция пользователя от слоя геолокации или `null`, если GPS-фикса ещё нет
+  Future<Point?> _freshUserPoint() async {
+    try {
+      final target = (await _mapController?.getUserCameraPosition())?.target;
+      return _isUsablePoint(target) ? target : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Центрирование и анимация камеры
   Future<void> _zoomToPoint(Point point, {double zoom = 15.5}) async {
     if (_mapController == null) return;
     await _mapController!.moveCamera(
-      CameraUpdate.newCameraPosition(
-        CameraPosition(target: point, zoom: zoom),
-      ),
-      animation: const MapAnimation(
-        type: MapAnimationType.smooth,
-        duration: 0.6,
-      ),
+      CameraUpdate.newCameraPosition(CameraPosition(target: point, zoom: zoom)),
+      animation: const MapAnimation(type: MapAnimationType.smooth, duration: 0.6),
     );
   }
 
+  /// Можно ли пользоваться геолокацией: включена настройка и есть разрешение системы.
+  /// Системное окно разрешения показывается здесь, при открытии карты, а не при запуске приложения.
+  /// [showFeedback] — объяснить пользователю, почему геолокация недоступна (только по кнопке).
+  Future<bool> _ensureLocationAccess({required bool showFeedback}) async {
+    if (!AppScope.read(context).appState.useLocationEnabled) {
+      if (showFeedback && mounted) {
+        showAppSnack(context, 'Геолокация выключена в настройках приложения («Показывать салоны рядом со мной»).');
+      }
+      return false;
+    }
+    // Открытие карты спрашивает только впервые; повторный запрос после отказа — по явной кнопке пользователя
+    var status = await _locationPermission.status();
+    if (status == LocationPermissionStatus.notDetermined ||
+        (showFeedback && status == LocationPermissionStatus.denied)) {
+      status = await _locationPermission.request();
+    }
+    if (status == LocationPermissionStatus.granted) return true;
+    if (showFeedback && mounted && status != LocationPermissionStatus.unsupported) {
+      showAppSnack(context, 'Нет доступа к геолокации. Разрешите его в настройках телефона.');
+    }
+    return false;
+  }
+
   /// Определение реальной геопозиции пользователя через Yandex MapKit UserLocation
-  Future<void> _detectAndCenterRealLocation() async {
+  /// [showFeedback] — сообщать, если геопозицию определить не удалось (только по кнопке)
+  Future<void> _detectAndCenterRealLocation({bool showFeedback = true}) async {
     if (_mapController == null) return;
+    if (!await _ensureLocationAccess(showFeedback: showFeedback)) return;
+    if (!mounted) return;
 
     try {
-      await _mapController!.toggleUserLayer(
-        visible: true,
-        headingEnabled: true,
-        autoZoomEnabled: false,
-      );
+      await _mapController!.toggleUserLayer(visible: true, headingEnabled: true, autoZoomEnabled: false);
     } catch (_) {}
 
     for (int attempt = 0; attempt < 6; attempt++) {
       try {
-        final userPos = await _mapController!.getUserCameraPosition();
-        if (userPos != null) {
+        final userPos = await _mapController?.getUserCameraPosition();
+        if (!mounted) return;
+        if (userPos != null && _isUsablePoint(userPos.target)) {
           setState(() {
             _userLocation = userPos.target;
             _isRealGpsActive = true;
@@ -395,18 +481,17 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
         }
       } catch (_) {}
       await Future.delayed(const Duration(milliseconds: 500));
+      if (!mounted) return;
     }
 
     // Если всё еще null (в симуляторе или пока GPS ищет сигнал)
     await _zoomToPoint(_userLocation, zoom: 15.0);
     await _refreshMapObjects();
-    if (!mounted) return;
+    if (!mounted || !showFeedback) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text(
-          'Геолокация: центрировано на Ташкенте. В симуляторе iOS: Features -> Location -> Custom Location (41.311, 69.279).',
-        ),
-        duration: Duration(seconds: 4),
+        content: Text('Не удалось определить местоположение — показываем центр Ташкента.'),
+        duration: Duration(seconds: 3),
       ),
     );
   }
@@ -420,10 +505,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
     final minLon = math.min(p1.longitude, p2.longitude);
     final maxLon = math.max(p1.longitude, p2.longitude);
 
-    final center = Point(
-      latitude: (minLat + maxLat) / 2,
-      longitude: (minLon + maxLon) / 2,
-    );
+    final center = Point(latitude: (minLat + maxLat) / 2, longitude: (minLon + maxLon) / 2);
 
     final dLat = (maxLat - minLat).abs();
     final dLon = (maxLon - minLon).abs();
@@ -443,18 +525,16 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
     }
 
     await _mapController!.moveCamera(
-      CameraUpdate.newCameraPosition(
-        CameraPosition(target: center, zoom: zoom),
-      ),
-      animation: const MapAnimation(
-        type: MapAnimationType.smooth,
-        duration: 0.8,
-      ),
+      CameraUpdate.newCameraPosition(CameraPosition(target: center, zoom: zoom)),
+      animation: const MapAnimation(type: MapAnimationType.smooth, duration: 0.8),
     );
   }
 
   /// Построение маршрутов по официальной документации Yandex MapKit (map_routing & map_routes)
   Future<void> _buildRouteToSalon(SalonModel salon, {required bool isWalking}) async {
+    final requestId = ++_routeRequestId;
+    bool isStale() => !mounted || requestId != _routeRequestId;
+
     // 1. Отменяем и закрываем предыдущую сессию по документации Yandex MapKit
     await _drivingSession?.cancel();
     await _drivingSession?.close();
@@ -463,11 +543,17 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
     await _pedestrianSession?.cancel();
     await _pedestrianSession?.close();
     _pedestrianSession = null;
+    if (isStale()) return;
 
     setState(() {
       _isBuildingRoute = true;
       _isWalkingRoute = isWalking;
     });
+
+    // Старт маршрута — реальная позиция, если GPS-фикс есть; иначе последняя известная (по умолчанию центр Ташкента)
+    final fresh = await _freshUserPoint();
+    if (isStale()) return;
+    if (fresh != null) _userLocation = fresh;
 
     List<Point> primaryPoints = [];
     List<Point> alternativePoints = [];
@@ -487,15 +573,19 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
           fitnessOptions: const FitnessOptions(avoidSteep: false, avoidStairs: false),
           timeOptions: TimeOptions(departureTime: DateTime.now()),
         );
+        if (isStale()) {
+          // Запрос уже не нужен: сессию, пришедшую с опозданием, закрываем и ничего не рисуем
+          unawaited(sessionWithResult.$1.close());
+          return;
+        }
         _pedestrianSession = sessionWithResult.$1;
         final result = await sessionWithResult.$2;
+        if (isStale()) return;
 
         if (result.error != null) {
           debugPrint('YandexPedestrian error: ${result.error}');
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Маршрут пешком: ${result.error}')),
-            );
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Маршрут пешком: ${result.error}')));
           }
         } else if (result.routes != null && result.routes!.isNotEmpty) {
           final first = result.routes!.first;
@@ -522,15 +612,18 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
             avoidanceFlags: DrivingAvoidanceFlags(),
           ),
         );
+        if (isStale()) {
+          unawaited(sessionWithResult.$1.close());
+          return;
+        }
         _drivingSession = sessionWithResult.$1;
         final result = await sessionWithResult.$2;
+        if (isStale()) return;
 
         if (result.error != null) {
           debugPrint('YandexDriving error: ${result.error}');
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Маршрут на авто: ${result.error}')),
-            );
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Маршрут на авто: ${result.error}')));
           }
         } else if (result.routes != null && result.routes!.isNotEmpty) {
           final first = result.routes![0];
@@ -548,12 +641,13 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
     } catch (e) {
       debugPrint('Routing exception: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка построения маршрута Yandex MapKit: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Ошибка построения маршрута Yandex MapKit: $e')));
       }
     }
 
+    if (isStale()) return;
     if (primaryPoints.isEmpty) {
       setState(() {
         _isBuildingRoute = false;
@@ -595,17 +689,13 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
       color: AppColors.primaryDeep,
       isSelected: true,
     );
+    if (isStale()) return;
 
     final finishPlacemark = PlacemarkMapObject(
       mapId: const MapObjectId('route_finish_placemark'),
       point: salon.point,
       zIndex: 12.0,
-      icon: PlacemarkIcon.single(
-        PlacemarkIconStyle(
-          image: finishIcon,
-          scale: 0.95,
-        ),
-      ),
+      icon: PlacemarkIcon.single(PlacemarkIconStyle(image: finishIcon, scale: 0.95)),
     );
 
     setState(() {
@@ -621,6 +711,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
     });
 
     await _refreshMapObjects();
+    if (isStale()) return;
     await _fitRouteBounds(_userLocation, salon.point);
   }
 
@@ -632,12 +723,8 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
     final tempDuration = _primaryRouteDuration;
 
     setState(() {
-      _primaryRoutePolyline = _primaryRoutePolyline!.copyWith(
-        polyline: _alternativeRoutePolyline!.polyline,
-      );
-      _alternativeRoutePolyline = _alternativeRoutePolyline!.copyWith(
-        polyline: tempPolyline,
-      );
+      _primaryRoutePolyline = _primaryRoutePolyline!.copyWith(polyline: _alternativeRoutePolyline!.polyline);
+      _alternativeRoutePolyline = _alternativeRoutePolyline!.copyWith(polyline: tempPolyline);
       _primaryRouteDuration = _alternativeRouteDuration;
       _alternativeRouteDuration = tempDuration;
       _currentRoutePoints = _primaryRoutePolyline!.polyline.points;
@@ -648,6 +735,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
 
   /// Сброс текущего маршрута
   void _clearRoute() {
+    _routeRequestId++; // запрос маршрута, который ещё идёт, больше не нужен
     _stopNavigationMode(isCompleted: false);
     _drivingSession?.close();
     _drivingSession = null;
@@ -655,6 +743,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
     _pedestrianSession = null;
 
     setState(() {
+      _isBuildingRoute = false;
       _primaryRoutePolyline = null;
       _alternativeRoutePolyline = null;
       _routeFinishPlacemark = null;
@@ -678,8 +767,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
     final dLon = lon2 - lon1;
 
     final y = math.sin(dLon) * math.cos(lat2);
-    final x = math.cos(lat1) * math.sin(lat2) -
-        math.sin(lat1) * math.cos(lat2) * math.cos(dLon);
+    final x = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(lat2) * math.cos(dLon);
     final radians = math.atan2(y, x);
     return (radians * 180.0 / math.pi + 360.0) % 360.0;
   }
@@ -689,7 +777,8 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
     const earthRadius = 6371000.0; // метры
     final dLat = (p2.latitude - p1.latitude) * math.pi / 180.0;
     final dLon = (p2.longitude - p1.longitude) * math.pi / 180.0;
-    final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+    final a =
+        math.sin(dLat / 2) * math.sin(dLat / 2) +
         math.cos(p1.latitude * math.pi / 180.0) *
             math.cos(p2.latitude * math.pi / 180.0) *
             math.sin(dLon / 2) *
@@ -698,89 +787,159 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
     return earthRadius * c;
   }
 
-  /// Запуск режима активной 3D навигации (как в Яндекс Навигаторе)
-  void _startNavigationMode() {
-    if (_currentRoutePoints.isEmpty) return;
+  /// Запуск режима активной 3D навигации по РЕАЛЬНОЙ геопозиции устройства.
+  /// Позиция берётся у слоя геолокации MapKit и опрашивается раз в секунду; без GPS-фикса навигация не стартует.
+  /// (В симуляторе iOS: Features → Location → City Run / Freeway Drive — позиция будет двигаться.)
+  Future<void> _startNavigationMode() async {
+    if (_currentRoutePoints.isEmpty || _isNavigating) return;
+    if (!await _ensureLocationAccess(showFeedback: true)) return;
+    final controller = _mapController;
+    if (controller == null || !mounted) return;
+
+    CameraPosition? fix;
+    try {
+      fix = await controller.getUserCameraPosition();
+    } catch (_) {}
+    if (!mounted) return;
+    if (fix == null || !_isUsablePoint(fix.target)) {
+      showAppSnack(context, 'Не удаётся определить ваше местоположение. Включите GPS и выйдите на открытое место.');
+      return;
+    }
+
+    final start = fix.target;
+    final startIndex = _locateOnRoute(start, from: 0, window: _currentRoutePoints.length).index;
+    // Начальный азимут: курс устройства, а если его нет — направление на следующую точку маршрута
+    var heading = fix.azimuth;
+    if (heading == 0.0 && startIndex + 1 < _currentRoutePoints.length) {
+      heading = _calculateBearing(start, _currentRoutePoints[startIndex + 1]);
+    }
 
     setState(() {
+      _userLocation = start;
+      _isRealGpsActive = true;
       _isNavigating = true;
-      _navStepIndex = 0;
-      _currentSpeedKmh = _isWalkingRoute ? 4.8 : 38.0;
+      _followUser = true;
+      _navStepIndex = startIndex;
+      _currentHeading = heading;
+      _currentSpeedKmh = 0.0;
+      _offRouteStreak = 0;
     });
+    _lastFix = start;
+    _lastFixAt = DateTime.now();
 
-    // 1. Начальный азимут
-    double initialHeading = 0.0;
-    if (_currentRoutePoints.length > 1) {
-      initialHeading = _calculateBearing(_userLocation, _currentRoutePoints[1]);
-    }
-    _currentHeading = initialHeading;
-
-    // 2. Опускаем камеру за пользователем в 3D ракурс (tilt: 55.0, zoom: 17.8)
-    _mapController?.moveCamera(
-      CameraUpdate.newCameraPosition(
-        CameraPosition(
-          target: _userLocation,
-          zoom: 17.8,
-          tilt: 55.0,
-          azimuth: initialHeading,
-        ),
+    unawaited(
+      controller.moveCamera(
+        CameraUpdate.newCameraPosition(CameraPosition(target: start, zoom: 17.8, tilt: 55.0, azimuth: heading)),
+        animation: const MapAnimation(type: MapAnimationType.smooth, duration: 1.2),
       ),
-      animation: const MapAnimation(type: MapAnimationType.smooth, duration: 1.2),
     );
+    _lastTurnAnnouncement = null;
+    _voiceGuidance.speak('Маршрут построен');
+    _updateNextManeuver(_navStepIndex);
 
-    // 3. Голосовое оповещение на старте
-    _voiceGuidance.speak(
-      _isWalkingRoute
-          ? 'Маршрут пешком построен. Двигайтесь прямо.'
-          : 'Маршрут построен. Поехали! Двигайтесь прямо.',
-    );
+    _navTrackingTimer?.cancel();
+    _navTrackingTimer = Timer.periodic(const Duration(seconds: 1), (_) => unawaited(_trackPosition()));
+  }
 
-    _updateNextManeuver(0);
+  /// Ближайшая к [point] точка маршрута в окне [window] точек начиная с [from] и расстояние до неё
+  ({int index, double distance}) _locateOnRoute(Point point, {required int from, required int window}) {
+    var bestIndex = from.clamp(0, _currentRoutePoints.length - 1);
+    var bestDistance = double.infinity;
+    final end = math.min(_currentRoutePoints.length, from + window);
+    for (var i = from; i < end; i++) {
+      final d = _calculateDistanceMeters(point, _currentRoutePoints[i]);
+      if (d < bestDistance) {
+        bestDistance = d;
+        bestIndex = i;
+      }
+    }
+    return (index: bestIndex, distance: bestDistance);
+  }
 
-    // 4. Таймер симуляции движения по маршруту со слежением камеры
-    _navSimulationTimer?.cancel();
-    _navSimulationTimer = Timer.periodic(const Duration(milliseconds: 1400), (timer) {
-      if (!mounted || !_isNavigating) {
-        timer.cancel();
+  /// Один шаг сопровождения: реальная позиция → скорость, курс, прогресс по маршруту, прибытие, уход с маршрута
+  Future<void> _trackPosition() async {
+    if (!mounted || !_isNavigating || _trackingBusy) return;
+    _trackingBusy = true;
+    try {
+      final fix = await _mapController?.getUserCameraPosition();
+      if (!mounted || !_isNavigating || fix == null || !_isUsablePoint(fix.target)) {
+        return; // нет фикса — остаёмся на последней точке
+      }
+      final point = fix.target;
+      final now = DateTime.now();
+
+      var speed = _currentSpeedKmh;
+      var heading = _currentHeading;
+      final previous = _lastFix;
+      final previousAt = _lastFixAt;
+      if (previous != null && previousAt != null) {
+        final meters = _calculateDistanceMeters(previous, point);
+        final seconds = now.difference(previousAt).inMilliseconds / 1000.0;
+        if (seconds > 0.2) {
+          final instant = meters / seconds * 3.6;
+          speed = _currentSpeedKmh * 0.5 + instant * 0.5; // сглаживание шума GPS
+        }
+        // Курс меняем только при заметном перемещении: на месте GPS «дрожит»
+        if (meters >= 3.0) heading = _calculateBearing(previous, point);
+      }
+      _lastFix = point;
+      _lastFixAt = now;
+
+      // Прогресс по маршруту: ищем ближайшую точку впереди (и немного позади — из-за шума GPS)
+      final from = math.max(0, _navStepIndex - 3);
+      final located = _locateOnRoute(point, from: from, window: 60);
+      final destination = _selectedSalon?.point;
+      final toDestination = destination == null ? double.infinity : _calculateDistanceMeters(point, destination);
+
+      setState(() {
+        _userLocation = point;
+        _isRealGpsActive = true;
+        _currentHeading = heading;
+        _currentSpeedKmh = speed < 1.0 ? 0.0 : speed;
+        if (located.index > _navStepIndex) _navStepIndex = located.index;
+      });
+
+      if (toDestination <= _arrivalRadiusMeters) {
+        _voiceGuidance.speak('Вы прибыли в салон ${_selectedSalon?.name ?? ""}');
+        _stopNavigationMode(isCompleted: true);
         return;
       }
 
-      if (_navStepIndex < _currentRoutePoints.length - 1) {
-        _navStepIndex++;
-        final nextPoint = _currentRoutePoints[_navStepIndex];
-        final nextHeading = _calculateBearing(_userLocation, nextPoint);
-
-        final rand = (math.Random().nextDouble() - 0.5) * 4.0;
-        final baseSpeed = _isWalkingRoute ? 4.8 : 38.0;
-        final newSpeed = math.max(0.0, baseSpeed + rand);
-
-        setState(() {
-          _userLocation = nextPoint;
-          _currentHeading = nextHeading;
-          _currentSpeedKmh = newSpeed;
-        });
-
-        // Камера непрерывно следует по направлению движения в 3D
-        _mapController?.moveCamera(
-          CameraUpdate.newCameraPosition(
-            CameraPosition(
-              target: _userLocation,
-              zoom: 17.8,
-              tilt: 55.0,
-              azimuth: nextHeading,
-            ),
+      // Камера следует за пользователем в 3D, пока он сам не сдвинул карту
+      if (_followUser) {
+        unawaited(
+          _mapController?.moveCamera(
+            CameraUpdate.newCameraPosition(CameraPosition(target: point, zoom: 17.8, tilt: 55.0, azimuth: heading)),
+            animation: const MapAnimation(type: MapAnimationType.smooth, duration: 1.0),
           ),
-          animation: const MapAnimation(type: MapAnimationType.smooth, duration: 1.0),
         );
-
-        _updateNextManeuver(_navStepIndex);
-        _refreshMapObjects();
-      } else {
-        timer.cancel();
-        _voiceGuidance.speak('Вы прибыли в салон ${_selectedSalon?.name ?? ""}');
-        _stopNavigationMode(isCompleted: true);
       }
-    });
+      _updateNextManeuver(_navStepIndex);
+      unawaited(_refreshMapObjects());
+
+      // Ушли с маршрута: несколько подряд измерений далеко от линии — перестраиваем от текущей позиции
+      _offRouteStreak = located.distance > _offRouteMeters ? _offRouteStreak + 1 : 0;
+      final cooledDown = _lastRerouteAt == null || now.difference(_lastRerouteAt!) > _rerouteCooldown;
+      if (_offRouteStreak >= 4 && cooledDown && _selectedSalon != null) {
+        await _rerouteFromCurrentPosition(_selectedSalon!);
+      }
+    } catch (_) {
+      // Сбой одного опроса не должен останавливать навигацию
+    } finally {
+      _trackingBusy = false;
+    }
+  }
+
+  Future<void> _rerouteFromCurrentPosition(SalonModel salon) async {
+    _lastRerouteAt = DateTime.now();
+    _offRouteStreak = 0;
+    _voiceGuidance.speak('Вы отклонились от маршрута. Перестраиваю.');
+    await _buildRouteToSalon(salon, isWalking: _isWalkingRoute);
+    if (!mounted || !_isNavigating) return;
+    setState(() => _navStepIndex = 0);
+    _lastTurnAnnouncement = null;
+    _updateNextManeuver(0);
+    if (_followUser) _recenterNavigationCamera();
   }
 
   /// Обновление карточки следующего маневра и озвучки поворотов
@@ -819,10 +978,11 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
       _nextManeuverText = isRight ? 'Поворот направо' : 'Поворот налево';
 
       // Озвучка при приближении к повороту
-      if (distToTurn <= 160 && distToTurn > 100) {
-        _voiceGuidance.speak('Через 150 метров ${isRight ? "поверните направо" : "поверните налево"}');
-      } else if (distToTurn <= 40 && distToTurn > 10) {
-        _voiceGuidance.speak(isRight ? 'Поверните направо' : 'Поверните налево');
+      final toSpeak = announcementToSpeak(turnIndex: turnIndex, distanceMeters: distToTurn, last: _lastTurnAnnouncement);
+      if (toSpeak != null) {
+        _lastTurnAnnouncement = toSpeak;
+        final turn = isRight ? 'направо' : 'налево';
+        _voiceGuidance.speak(toSpeak.stage == TurnStage.far ? 'Через 150 метров поверните $turn' : 'Поверните $turn');
       }
     } else {
       _nextManeuverIcon = Icons.straight;
@@ -831,16 +991,12 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
     }
   }
 
-  /// Центрирование камеры в 3D ракурсе позади пользователя
+  /// Центрирование камеры в 3D ракурсе позади пользователя (и возврат к слежению за ним)
   void _recenterNavigationCamera() {
+    if (!_followUser && mounted) setState(() => _followUser = true);
     _mapController?.moveCamera(
       CameraUpdate.newCameraPosition(
-        CameraPosition(
-          target: _userLocation,
-          zoom: 17.8,
-          tilt: 55.0,
-          azimuth: _currentHeading,
-        ),
+        CameraPosition(target: _userLocation, zoom: 17.8, tilt: 55.0, azimuth: _currentHeading),
       ),
       animation: const MapAnimation(type: MapAnimationType.smooth, duration: 0.8),
     );
@@ -848,24 +1004,20 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
 
   /// Остановка режима навигации и сброс камеры в 2D обзор
   void _stopNavigationMode({bool isCompleted = false}) {
-    _navSimulationTimer?.cancel();
-    _navSimulationTimer = null;
+    _navTrackingTimer?.cancel();
+    _navTrackingTimer = null;
+    _lastTurnAnnouncement = null;
     _voiceGuidance.stop();
 
+    final lastPoint = _userLocation;
     setState(() {
       _isNavigating = false;
+      _followUser = true;
       _currentSpeedKmh = 0.0;
     });
 
     _mapController?.moveCamera(
-      CameraUpdate.newCameraPosition(
-        CameraPosition(
-          target: _userLocation,
-          zoom: 15.5,
-          tilt: 0.0,
-          azimuth: 0.0,
-        ),
-      ),
+      CameraUpdate.newCameraPosition(CameraPosition(target: lastPoint, zoom: 15.5, tilt: 0.0, azimuth: 0.0)),
       animation: const MapAnimation(type: MapAnimationType.smooth, duration: 1.0),
     );
 
@@ -889,10 +1041,9 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
       onApply: (params) {
         setState(() {
           _filterParams = params;
-          _salons = _repository.getSalons(_filterParams);
           _selectedCategoryIndex = 0;
         });
-        _refreshMapObjects();
+        unawaited(_loadSalons());
       },
     );
   }
@@ -907,127 +1058,155 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
         serviceCategory: category == 'Все' ? null : category,
         clearCategory: category == 'Все',
       );
-
-      _salons = _repository.getSalons(_filterParams);
     });
 
-    _refreshMapObjects();
+    unawaited(_loadSalons());
   }
 
   @override
   Widget build(BuildContext context) {
-    // Высота отступа с учетом FloatingBottomBar (высота 64 + отступы 16 + SafeArea)
-    final bottomNavOffset = MediaQuery.of(context).padding.bottom + 92.0;
+    // Нижний бар — штатный bottomNavigationBar, тело карты заканчивается над ним,
+    // поэтому нужен только небольшой отступ (+ системный, если бар скрыт).
+    final bottomNavOffset = MediaQuery.paddingOf(context).bottom + 12.0;
 
-    return Scaffold(
-      body: Stack(
-        children: [
-          // 1. Полноценная карта YandexMap с поддержкой UserLocationLayer
-          YandexMap(
-            mapObjects: _mapObjects,
-            onMapCreated: (YandexMapController controller) async {
-              _mapController = controller;
+    return TickerModeListener(
+      onChanged: _onVisibilityChanged,
+      child: Scaffold(
+        body: Stack(
+          children: [
+            // 1. Полноценная карта YandexMap с поддержкой UserLocationLayer
+            YandexMap(
+              nightModeEnabled: AppColors.isDark,
+              mapObjects: _mapObjects,
+              onMapCreated: (YandexMapController controller) async {
+                _mapController = controller;
 
-              // Автоматически включаем отображение пробок на карте
-              try {
-                await controller.toggleTrafficLayer(visible: true);
-              } catch (_) {}
+                // Автоматически включаем отображение пробок на карте
+                try {
+                  await controller.toggleTrafficLayer(visible: true);
+                } catch (_) {}
 
-              // Включаем нативный слой пользователя
-              try {
-                await controller.toggleUserLayer(
-                  visible: true,
-                  headingEnabled: true,
-                  autoZoomEnabled: false,
+                // Слой пользователя включаем, только если разрешена настройка и дано разрешение системы
+                final useLocation = await _ensureLocationAccess(showFeedback: false);
+                if (!mounted) return;
+
+                if (useLocation) {
+                  try {
+                    await controller.toggleUserLayer(visible: true, headingEnabled: true, autoZoomEnabled: false);
+                  } catch (_) {}
+                }
+
+                // Пришли с «На карте» из карточки салона — показываем этот салон, а не пользователя.
+                // Решаем по `initialSalonId`, а не по `_selectedSalon`: салоны могут ещё не загрузиться,
+                // и тогда камеру потом всё равно наведёт `_loadSalons`, когда данные придут.
+                final focus = _selectedSalon;
+                final openedForSalon = widget.initialSalonId != null;
+                if (focus != null || !openedForSalon) {
+                  await controller.moveCamera(
+                    CameraUpdate.newCameraPosition(
+                      CameraPosition(target: focus?.point ?? _userLocation, zoom: focus != null ? 15.5 : 13.5),
+                    ),
+                  );
+                }
+
+                if (useLocation && !openedForSalon) {
+                  _detectAndCenterRealLocation(showFeedback: false);
+                }
+              },
+              onCameraPositionChanged: (position, reason, finished) {
+                // Пользователь сам двигает карту во время навигации — перестаём тянуть камеру к нему
+                if (_isNavigating && _followUser && reason == CameraUpdateReason.gestures && mounted) {
+                  setState(() => _followUser = false);
+                }
+              },
+              onUserLocationAdded: (UserLocationView view) async {
+                if (mounted && _isUsablePoint(view.pin.point)) {
+                  setState(() {
+                    _userLocation = view.pin.point;
+                    _isRealGpsActive = true;
+                  });
+                  _refreshMapObjects();
+                }
+                return view.copyWith(
+                  pin: view.pin.copyWith(opacity: 1.0),
+                  arrow: view.arrow.copyWith(opacity: 1.0),
+                  accuracyCircle: view.accuracyCircle.copyWith(
+                    fillColor: AppColors.primary.withValues(alpha: 0.15),
+                    strokeColor: AppColors.primary.withValues(alpha: 0.5),
+                  ),
                 );
-              } catch (_) {}
-
-              await controller.moveCamera(
-                CameraUpdate.newCameraPosition(
-                  CameraPosition(target: _userLocation, zoom: 13.5),
-                ),
-              );
-
-              _detectAndCenterRealLocation();
-            },
-            onUserLocationAdded: (UserLocationView view) async {
-              if (mounted) {
-                setState(() {
-                  _userLocation = view.pin.point;
-                  _isRealGpsActive = true;
-                });
-                _refreshMapObjects();
-              }
-              return view.copyWith(
-                pin: view.pin.copyWith(opacity: 1.0),
-                arrow: view.arrow.copyWith(opacity: 1.0),
-                accuracyCircle: view.accuracyCircle.copyWith(
-                  fillColor: AppColors.primary.withValues(alpha: 0.15),
-                  strokeColor: AppColors.primary.withValues(alpha: 0.5),
-                ),
-              );
-            },
-          ),
-
-          // 2. Верхняя шапка с поиском и фильтрами (или HUD навигации)
-          if (!_isNavigating)
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: _buildHeader(context),
-            )
-          else
-            _buildNavigationTopHud(context),
-
-          // 3. Кнопка определения местоположения (поднята строго выше карточки салона)
-          if (!_isNavigating)
-            Positioned(
-              right: 16,
-              bottom: _selectedSalon != null
-                  ? (bottomNavOffset + (_primaryRoutePolyline != null ? 360.0 : 250.0))
-                  : 260.0,
-              child: _buildMapControls(),
+              },
             ),
 
-          // 4. Информационное МИНИ-ОКНО выбранного салона (плавает ровно над FloatingBottomBar)
-          if (!_isNavigating && _selectedSalon != null)
-            Positioned(
-              left: 16,
-              right: 16,
-              bottom: bottomNavOffset,
-              child: _buildSalonMiniWindow(_selectedSalon!),
-            ),
+            // 2. Верхняя шапка с поиском и фильтрами (или HUD навигации)
+            if (!_isNavigating)
+              Positioned(top: 0, left: 0, right: 0, child: _buildHeader(context))
+            else
+              _buildNavigationTopHud(context),
 
-          // 5. Нижний HUD навигатора со спидометром
-          if (_isNavigating)
-            _buildNavigationBottomHud(context),
+            // 3–4. Кнопка геопозиции и мини-окно выбранного салона: кнопка всегда лежит над карточкой
+            if (!_isNavigating && _selectedSalon != null)
+              Positioned(
+                left: 16,
+                right: 16,
+                bottom: bottomNavOffset,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [_buildMapControls(), const SizedBox(height: 12), _buildSalonMiniWindow(_selectedSalon!)],
+                ),
+              ),
 
-          // 6. Выдвижной нижний список (когда салон не выбран и нет навигации)
-          if (!_isNavigating && _selectedSalon == null)
-            _buildDraggableSalonsList(bottomNavOffset),
-        ],
+            // Кнопка геопозиции без выбранного салона: едет вместе с выдвижным списком
+            if (!_isNavigating && _selectedSalon == null)
+              Positioned.fill(
+                child: LayoutBuilder(
+                  builder: (context, box) => ListenableBuilder(
+                    listenable: _sheetController,
+                    builder: (context, _) {
+                      final extent = _sheetController.isAttached ? _sheetController.size : _sheetInitialExtent;
+                      // не выше верхней шапки и не ниже безопасной зоны
+                      final maxBottom = box.maxHeight - MediaQuery.paddingOf(context).top - 190;
+                      final bottom = (box.maxHeight * extent + 12).clamp(
+                        bottomNavOffset,
+                        maxBottom < bottomNavOffset ? bottomNavOffset : maxBottom,
+                      );
+                      return Stack(
+                        children: [Positioned(right: 16, bottom: bottom, child: _buildMapControls())],
+                      );
+                    },
+                  ),
+                ),
+              ),
+
+            // 5. Нижний HUD навигатора со спидометром
+            if (_isNavigating) _buildNavigationBottomHud(context),
+
+            // 6. Выдвижной нижний список (когда салон не выбран и нет навигации)
+            if (!_isNavigating && _selectedSalon == null) _buildDraggableSalonsList(bottomNavOffset),
+          ],
+        ),
       ),
     );
+  }
+
+  /// Вкладка карты скрыта (переключились на другую): навигацию, голос и опрос GPS останавливаем
+  void _onVisibilityChanged(bool visible) {
+    if (!visible && _isNavigating) _stopNavigationMode();
   }
 
   /// Верхняя панель навигации
   Widget _buildHeader(BuildContext context) {
     return Container(
-      padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top + 8,
-        left: 16,
-        right: 16,
-        bottom: 12,
-      ),
+      padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 8, left: 16, right: 16, bottom: 12),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            Colors.white.withValues(alpha: 0.96),
-            Colors.white.withValues(alpha: 0.88),
-            Colors.white.withValues(alpha: 0.0),
+            AppColors.background.withValues(alpha: 0.96),
+            AppColors.background.withValues(alpha: 0.88),
+            AppColors.background.withValues(alpha: 0.0),
           ],
         ),
       ),
@@ -1042,53 +1221,53 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                   shadowColor: Colors.black12,
                   elevation: 4,
                 ),
-                icon: const Icon(Icons.arrow_back, color: AppColors.ink),
+                icon: Icon(Icons.arrow_back, color: AppColors.ink),
                 onPressed: widget.onBack,
               ),
               Column(
                 children: [
-                  const Text(
+                  Text(
                     'Салоны рядом',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.ink,
-                    ),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink),
                   ),
-                  Row(
-                    children: [
-                      Text(
-                        _isRealGpsActive
-                            ? 'GPS активен (${_salons.length} салонов)'
-                            : 'Ташкент (${_salons.length} салонов)',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: _isRealGpsActive ? const Color(0xFF1AAA4C) : AppColors.primaryText,
+                  GestureDetector(
+                    // При ошибке тап по подзаголовку повторяет загрузку
+                    onTap: _salonsError != null ? () => unawaited(_loadSalons()) : null,
+                    behavior: HitTestBehavior.opaque,
+                    child: Row(
+                      children: [
+                        Text(
+                          _salonsLoading
+                              ? 'Загружаем салоны…'
+                              : _salonsError != null
+                              ? 'Не удалось загрузить · Повторить'
+                              : _isRealGpsActive
+                              ? 'GPS активен (${Formatters.plural(_salons.length, 'салон', 'салона', 'салонов')})'
+                              : 'Ташкент (${Formatters.plural(_salons.length, 'салон', 'салона', 'салонов')})',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: _isRealGpsActive ? const Color(0xFF1AAA4C) : AppColors.primaryText,
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 3),
-                      Icon(
-                        Icons.location_on,
-                        size: 13,
-                        color: _isRealGpsActive ? const Color(0xFF1AAA4C) : AppColors.primary,
-                      ),
-                    ],
+                        const SizedBox(width: 3),
+                        Icon(
+                          Icons.location_on,
+                          size: 13,
+                          color: _isRealGpsActive ? const Color(0xFF1AAA4C) : AppColors.primary,
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
               IconButton(
                 style: IconButton.styleFrom(
-                  backgroundColor: _filterParams.hasActiveFilters
-                      ? AppColors.primary
-                      : AppColors.surface,
+                  backgroundColor: _filterParams.hasActiveFilters ? AppColors.primary : AppColors.surface,
                   shadowColor: Colors.black12,
                   elevation: 4,
                 ),
-                icon: Icon(
-                  Icons.tune,
-                  color: _filterParams.hasActiveFilters ? Colors.white : AppColors.ink,
-                ),
+                icon: Icon(Icons.tune, color: _filterParams.hasActiveFilters ? Colors.white : AppColors.ink),
                 onPressed: _openFilters,
               ),
             ],
@@ -1111,13 +1290,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                     decoration: BoxDecoration(
                       color: isSelected ? AppColors.primary : AppColors.surface,
                       borderRadius: BorderRadius.circular(20),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Colors.black12,
-                          blurRadius: 4,
-                          offset: Offset(0, 1),
-                        ),
-                      ],
+                      boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 1))],
                     ),
                     child: Text(
                       _categories[index],
@@ -1143,7 +1316,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
       heroTag: 'my_location_btn',
       backgroundColor: AppColors.surface,
       elevation: 4,
-      onPressed: _detectAndCenterRealLocation,
+      onPressed: () => _detectAndCenterRealLocation(),
       child: const Icon(Icons.my_location, color: AppColors.primary, size: 22),
     );
   }
@@ -1159,13 +1332,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
         decoration: BoxDecoration(
           color: AppColors.surface,
           borderRadius: BorderRadius.circular(24),
-          boxShadow: const [
-            BoxShadow(
-              color: Colors.black26,
-              blurRadius: 20,
-              offset: Offset(0, 8),
-            ),
-          ],
+          boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 20, offset: Offset(0, 8))],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1182,6 +1349,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                     width: 50,
                     height: 50,
                     fit: BoxFit.cover,
+                    cacheWidth: 200,
                     errorBuilder: (_, _, _) => Container(
                       width: 50,
                       height: 50,
@@ -1197,11 +1365,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                     children: [
                       Text(
                         salon.name,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.ink,
-                        ),
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -1212,16 +1376,12 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                           const SizedBox(width: 4),
                           Text(
                             salon.rating.toString(),
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w800,
-                              fontSize: 13,
-                              color: AppColors.ink,
-                            ),
+                            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: AppColors.ink),
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            '(${salon.reviewsCount} отзывов)',
-                            style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                            '(${Formatters.reviews(salon.reviewsCount)})',
+                            style: TextStyle(fontSize: 12, color: AppColors.muted),
                           ),
                         ],
                       ),
@@ -1229,7 +1389,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.close, color: AppColors.muted, size: 20),
+                  icon: Icon(Icons.close, color: AppColors.muted, size: 20),
                   onPressed: () {
                     setState(() {
                       _selectedSalon = null;
@@ -1251,7 +1411,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                 Expanded(
                   child: Text(
                     '${salon.district} район · ${salon.address}',
-                    style: const TextStyle(fontSize: 12, color: AppColors.ink),
+                    style: TextStyle(fontSize: 12, color: AppColors.ink),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -1267,52 +1427,31 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
               runSpacing: 6,
               children: [
                 AppStatusBadge(text: salon.workingHours),
-                if (salon.creditsAccepted)
+                if (salon.creditsAccepted && salon.minCredits > 0)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryTint,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+                    decoration: BoxDecoration(color: AppColors.primaryTint, borderRadius: BorderRadius.circular(12)),
                     child: Text(
                       '💳 ${salon.minCredits} кр.',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.primaryText,
-                      ),
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.primaryText),
                     ),
                   ),
                 if (salon.onlyWomen)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF3E8FF),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Text(
+                    decoration: BoxDecoration(color: AppColors.soft(const Color(0xFFF3E8FF)), borderRadius: BorderRadius.circular(12)),
+                    child: Text(
                       '🌸 Faqat ayollar',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF7E22CE),
-                      ),
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.onSoft(const Color(0xFF7E22CE))),
                     ),
                   ),
                 if (salon.homeVisit)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE0F2FE),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Text(
+                    decoration: BoxDecoration(color: AppColors.soft(const Color(0xFFE0F2FE)), borderRadius: BorderRadius.circular(12)),
+                    child: Text(
                       '🚗 Uyga chiqish',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF0369A1),
-                      ),
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.onSoft(const Color(0xFF0369A1))),
                     ),
                   ),
               ],
@@ -1323,7 +1462,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
             // Услуги
             Text(
               salon.services,
-              style: const TextStyle(fontSize: 12, color: AppColors.muted),
+              style: TextStyle(fontSize: 12, color: AppColors.muted),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -1381,8 +1520,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                   color: AppColors.background,
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: (_isWalkingRoute ? const Color(0xFF247659) : AppColors.primary)
-                        .withValues(alpha: 0.25),
+                    color: (_isWalkingRoute ? const Color(0xFF247659) : AppColors.primary).withValues(alpha: 0.25),
                   ),
                 ),
                 child: Column(
@@ -1391,31 +1529,34 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Row(
-                          children: [
-                            Icon(
-                              _isWalkingRoute ? Icons.directions_walk : Icons.directions_car,
-                              size: 16,
-                              color: _isWalkingRoute ? const Color(0xFF247659) : AppColors.primary,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              _primaryRouteDuration ?? 'Маршрут построен',
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w800,
-                                color: AppColors.ink,
+                        Flexible(
+                          child: Row(
+                            children: [
+                              Icon(
+                                _isWalkingRoute ? Icons.directions_walk : Icons.directions_car,
+                                size: 16,
+                                color: _isWalkingRoute ? const Color(0xFF247659) : AppColors.primary,
                               ),
-                            ),
-                          ],
-                        ),
-                        Text(
-                          'Расстояние: ${_primaryRouteDistance ?? salon.distance}',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.muted,
+                              const SizedBox(width: 6),
+                              Flexible(
+                                child: Text(
+                                  _primaryRouteDuration ?? 'Маршрут построен',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppColors.ink,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          _primaryRouteDistance ?? salon.distance,
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.muted),
                         ),
                       ],
                     ),
@@ -1427,12 +1568,16 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                           children: [
                             const Icon(Icons.alt_route, size: 14, color: AppColors.primary),
                             const SizedBox(width: 4),
-                            Text(
-                              'Есть 2-й вариант (${_alternativeRouteDuration ?? ""}) · Нажмите чтобы переключить',
-                              style: const TextStyle(
-                                fontSize: 11,
-                                color: AppColors.primaryText,
-                                fontWeight: FontWeight.w600,
+                            Flexible(
+                              child: Text(
+                                '2-й вариант (${_alternativeRouteDuration ?? ""}) · нажмите, чтобы переключить',
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.primaryText,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
                           ],
@@ -1453,7 +1598,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                   Expanded(
                     flex: 4,
                     child: AppGradientButton(
-                      text: _isWalkingRoute ? '🚶 Пойти' : '🚗 Поехали',
+                      text: _isWalkingRoute ? 'Пойти' : 'Поехали',
                       icon: const Icon(Icons.navigation_rounded, color: Colors.white, size: 18),
                       height: 44,
                       onPressed: _startNavigationMode,
@@ -1463,7 +1608,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                   Expanded(
                     flex: 3,
                     child: OutlinedButton(
-                      onPressed: () => widget.onSelectSalon(salon.name),
+                      onPressed: () => widget.onSelectSalon(salon.id),
                       style: OutlinedButton.styleFrom(
                         side: const BorderSide(color: AppColors.primary, width: 1.5),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -1471,11 +1616,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                       ),
                       child: const Text(
                         'Записаться',
-                        style: TextStyle(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 13,
-                        ),
+                        style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w800, fontSize: 13),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -1487,7 +1628,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
               AppGradientButton(
                 text: 'Записаться в салон',
                 height: 44,
-                onPressed: () => widget.onSelectSalon(salon.name),
+                onPressed: () => widget.onSelectSalon(salon.id),
               ),
             ],
           ],
@@ -1509,9 +1650,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
           decoration: BoxDecoration(
             color: const Color(0xFF1E293B),
             borderRadius: BorderRadius.circular(22),
-            boxShadow: const [
-              BoxShadow(color: Colors.black38, blurRadius: 16, offset: Offset(0, 6)),
-            ],
+            boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 16, offset: Offset(0, 6))],
           ),
           child: Row(
             children: [
@@ -1541,11 +1680,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                     ),
                     Text(
                       _nextManeuverText,
-                      style: const TextStyle(
-                        color: Color(0xFF94A3B8),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
+                      style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.w600),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -1557,7 +1692,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                   _voiceGuidance.isMuted ? Icons.volume_off : Icons.volume_up,
                   color: _voiceGuidance.isMuted ? Colors.white38 : AppColors.gold,
                 ),
-                tooltip: _voiceGuidance.isMuted ? 'Включить озвучку' : 'Отключить озвучку',
+                tooltip: tr(_voiceGuidance.isMuted ? 'Включить озвучку' : 'Отключить озвучку'),
                 onPressed: () {
                   setState(() {
                     _voiceGuidance.toggleMute();
@@ -1569,7 +1704,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
               ),
               IconButton(
                 icon: const Icon(Icons.close, color: Colors.white70),
-                tooltip: 'Завершить маршрут',
+                tooltip: tr('Завершить маршрут'),
                 onPressed: () => _stopNavigationMode(isCompleted: false),
               ),
             ],
@@ -1590,11 +1725,9 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppColors.surface,
             borderRadius: BorderRadius.circular(24),
-            boxShadow: const [
-              BoxShadow(color: Colors.black26, blurRadius: 20, offset: Offset(0, 8)),
-            ],
+            boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 20, offset: Offset(0, 8))],
           ),
           child: Row(
             children: [
@@ -1604,22 +1737,20 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                 decoration: BoxDecoration(
                   color: AppColors.background,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFF3DCE8)),
+                  border: Border.all(color: AppColors.line),
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      _isWalkingRoute
-                          ? _currentSpeedKmh.toStringAsFixed(1)
-                          : _currentSpeedKmh.round().toString(),
+                      _isWalkingRoute ? _currentSpeedKmh.toStringAsFixed(1) : _currentSpeedKmh.round().toString(),
                       style: TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.w900,
                         color: _currentSpeedKmh > 60 ? Colors.redAccent : AppColors.ink,
                       ),
                     ),
-                    const Text(
+                    Text(
                       'км/ч',
                       style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.muted),
                     ),
@@ -1635,38 +1766,32 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                   children: [
                     Row(
                       children: [
-                        Text(
-                          _primaryRouteDuration ?? 'В пути',
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.ink,
+                        Flexible(
+                          child: Text(
+                            _primaryRouteDuration ?? 'В пути',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.ink),
                           ),
                         ),
                         const SizedBox(width: 6),
                         Container(
                           width: 4,
                           height: 4,
-                          decoration: const BoxDecoration(
-                            color: AppColors.muted,
-                            shape: BoxShape.circle,
-                          ),
+                          decoration: BoxDecoration(color: AppColors.muted, shape: BoxShape.circle),
                         ),
                         const SizedBox(width: 6),
                         Text(
                           _primaryRouteDistance ?? '',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.muted,
-                          ),
+                          maxLines: 1,
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.muted),
                         ),
                       ],
                     ),
                     const SizedBox(height: 3),
                     Text(
                       'Цель: ${_selectedSalon?.name ?? "Салон"}',
-                      style: const TextStyle(fontSize: 12, color: AppColors.primaryText, fontWeight: FontWeight.w700),
+                      style: TextStyle(fontSize: 12, color: AppColors.primaryText, fontWeight: FontWeight.w700),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -1674,15 +1799,15 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                 ),
               ),
               const SizedBox(width: 8),
-              // Кнопка центрирования камеры в 3D
+              // Кнопка возврата камеры к пользователю (в 3D). Если карту двигали вручную — подсвечена
               IconButton.filledTonal(
                 style: IconButton.styleFrom(
-                  backgroundColor: AppColors.primaryTint,
-                  foregroundColor: AppColors.primary,
+                  backgroundColor: _followUser ? AppColors.primaryTint : AppColors.primary,
+                  foregroundColor: _followUser ? AppColors.primary : Colors.white,
                 ),
                 onPressed: _recenterNavigationCamera,
-                icon: const Icon(Icons.navigation_outlined, size: 22),
-                tooltip: 'По центру в 3D',
+                icon: Icon(_followUser ? Icons.navigation_outlined : Icons.my_location, size: 22),
+                tooltip: tr(_followUser ? 'По центру в 3D' : 'Вернуться к моему положению'),
               ),
             ],
           ),
@@ -1711,18 +1836,9 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
         decoration: BoxDecoration(
           color: isActive ? activeColor : AppColors.background,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isActive ? activeColor : Colors.black12,
-            width: 1.5,
-          ),
+          border: Border.all(color: isActive ? activeColor : Colors.black12, width: 1.5),
           boxShadow: isActive
-              ? [
-                  BoxShadow(
-                    color: activeColor.withValues(alpha: 0.28),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ]
+              ? [BoxShadow(color: activeColor.withValues(alpha: 0.28), blurRadius: 8, offset: const Offset(0, 2))]
               : null,
         ),
         child: Row(
@@ -1734,17 +1850,11 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                 height: 14,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    isActive ? Colors.white : activeColor,
-                  ),
+                  valueColor: AlwaysStoppedAnimation<Color>(isActive ? Colors.white : activeColor),
                 ),
               )
             else
-              Icon(
-                icon,
-                size: 17,
-                color: isActive ? Colors.white : AppColors.ink,
-              ),
+              Icon(icon, size: 17, color: isActive ? Colors.white : AppColors.ink),
             const SizedBox(width: 6),
             Text(
               label,
@@ -1763,21 +1873,16 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
   /// Выдвижной нижний лист со списком салонов
   Widget _buildDraggableSalonsList(double bottomNavOffset) {
     return DraggableScrollableSheet(
-      initialChildSize: 0.30,
+      controller: _sheetController,
+      initialChildSize: _sheetInitialExtent,
       minChildSize: 0.14,
       maxChildSize: 0.82,
       builder: (context, scrollController) {
         return Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: AppColors.surface,
             borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black26,
-                blurRadius: 15,
-                offset: Offset(0, -3),
-              ),
-            ],
+            boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 15, offset: Offset(0, -3))],
           ),
           child: ListView.builder(
             controller: scrollController,
@@ -1790,10 +1895,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                     width: 42,
                     height: 5,
                     margin: const EdgeInsets.only(bottom: 14),
-                    decoration: BoxDecoration(
-                      color: Colors.black12,
-                      borderRadius: BorderRadius.circular(3),
-                    ),
+                    decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(3)),
                   ),
                 );
               }
@@ -1815,10 +1917,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                             Expanded(
                               child: Text(
                                 salon.name,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w800,
-                                ),
+                                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -1829,10 +1928,7 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                                 const SizedBox(width: 4),
                                 Text(
                                   salon.rating.toString(),
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 13,
-                                  ),
+                                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
                                 ),
                               ],
                             ),
@@ -1841,14 +1937,14 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                         const SizedBox(height: 4),
                         Text(
                           salon.services,
-                          style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                          style: TextStyle(fontSize: 12, color: AppColors.muted),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 4),
                         Text(
                           '${salon.distance} · ${salon.district} район',
-                          style: const TextStyle(fontSize: 12, color: AppColors.ink),
+                          style: TextStyle(fontSize: 12, color: AppColors.ink),
                         ),
                         const SizedBox(height: 10),
                         Row(
@@ -1858,20 +1954,13 @@ class _SalonsMapScreenState extends State<SalonsMapScreen> {
                             Row(
                               children: [
                                 IconButton(
-                                  icon: const Icon(
-                                    Icons.directions_outlined,
-                                    color: AppColors.primary,
-                                    size: 20,
-                                  ),
+                                  icon: const Icon(Icons.directions_outlined, color: AppColors.primary, size: 20),
                                   onPressed: () {
                                     _onSalonPinTapped(salon);
                                     _buildRouteToSalon(salon, isWalking: false);
                                   },
                                 ),
-                                AppPillButton(
-                                  text: 'Записаться',
-                                  onPressed: () => widget.onSelectSalon(salon.name),
-                                ),
+                                AppPillButton(text: 'Записаться', onPressed: () => widget.onSelectSalon(salon.id)),
                               ],
                             ),
                           ],

@@ -4,30 +4,67 @@ import 'package:google_fonts/google_fonts.dart';
 /// Токены дизайна Go'zallik. Источник: gozallik_design_spec.md.
 /// Цвета светлой темы измерены по присланным экранам; тёмная тема предложена.
 class AppColors {
+  /// Включена ли тёмная палитра. Меняется только через [AppAppearance]; после смены дерево виджетов перестраивается.
+  static bool isDark = false;
+
+  static Color _p(Color light, Color dark) => isDark ? dark : light;
+
   // Бренд
   static const primary = Color(0xFFE4178C);
   static const primaryBright = Color(0xFFED1785);
   static const primaryDeep = Color(0xFFC5238A);
-  static const primaryText = Color(0xFFC61A70);
-  static const primaryTint = Color(0xFFFCEAF4);
+  static Color get primaryText => _p(const Color(0xFFC61A70), const Color(0xFFFF5CB3));
+  static Color get primaryTint => _p(lightPrimaryTint, darkPrimaryTint);
 
   // Поверхности и текст
-  static const background = Color(0xFFFBF6FA);
-  static const surface = Color(0xFFFFFFFF);
-  static const ink = Color(0xFF0C0C10);
-  static const muted = Color(0xFF8F8E96);
+  static Color get background => _p(lightBackground, darkBackground);
+  static Color get surface => _p(lightSurface, darkSurface);
+  static Color get ink => _p(lightInk, darkInk);
+  static Color get muted => _p(lightMuted, darkMuted);
+
+  /// Фон уведомлений (SnackBar): тёмный в обеих темах, текст на нём светлый
+  static Color get snackBackground => _p(lightInk, darkLine);
+
+  /// Разделители и контуры карточек
+  static Color get line => _p(lightLine, darkLine);
+
+  /// Нейтральные элементы: «ручка» шторки, неактивные точки
+  static Color get handle => _p(const Color(0xFFE5DCE2), const Color(0xFF4A4057));
+
+  /// Подложка нижней панели навигации (совпадает с низом [AppGradients.page])
+  static Color get barBackground => _p(const Color(0xFFFEFAFD), const Color(0xFF191320));
 
   // Статусы
-  static const successBg = Color(0xFFDFF9F2);
-  static const successText = Color(0xFF247659);
+  static Color get successBg => _p(const Color(0xFFDFF9F2), darkSuccessBg);
+  static Color get successText => _p(const Color(0xFF247659), darkSuccessText);
   static const success = Color(0xFF1AAA4C);
   static const gold = Color(0xFFF7BF52);
+
+  /// Светлая подложка акцентного цвета ([light] — цвет из светлой темы); в тёмной — приглушённый оттенок.
+  static Color soft(Color light) =>
+      isDark ? Color.alphaBlend(light.withValues(alpha: 0.20), darkSurface) : light;
+
+  /// Цвет текста/иконки на [soft]-подложке: в тёмной теме осветляется, чтобы читался.
+  static Color onSoft(Color light) {
+    if (!isDark) return light;
+    final hsl = HSLColor.fromColor(light);
+    return hsl.withLightness(hsl.lightness < 0.72 ? 0.72 : hsl.lightness).toColor();
+  }
+
+  // Светлая палитра. Это константы, а не геттеры: `lightTheme` собирается один раз и не должен зависеть от
+  // того, в какой теме запущено приложение (иначе после старта в тёмной теме «светлая» получала тёмные цвета).
+  static const lightBackground = Color(0xFFFBF6FA);
+  static const lightSurface = Color(0xFFFFFFFF);
+  static const lightInk = Color(0xFF0C0C10);
+  static const lightMuted = Color(0xFF8F8E96);
+  static const lightPrimaryTint = Color(0xFFFCEAF4);
+  static const lightLine = Color(0xFFF3DCE8);
 
   // Тёмная тема (предложено, не измерено)
   static const darkBackground = Color(0xFF14101A);
   static const darkSurface = Color(0xFF211A2B);
   static const darkLine = Color(0xFF3A3045);
-  static const darkInk = Color(0xFFF1EBF7);
+  static const darkInk = Color(0xFFE6DEEC);
   static const darkMuted = Color(0xFFB3A8C0);
   static const darkPrimaryTint = Color(0xFF3A2A4D);
   static const darkSuccessBg = Color(0xFF123D2E);
@@ -53,16 +90,52 @@ class AppGradients {
     colors: [AppColors.primary, AppColors.primaryDeep],
   );
 
+  /// Акцентная карточка (абонемент, кредиты): в тёмной теме — глубокий сливовый вместо светло-розового.
+  static LinearGradient get promo => LinearGradient(
+    colors: AppColors.isDark
+        ? const [Color(0xFF3B2447), Color(0xFF2E1B3C)]
+        : const [Color(0xFFFFE8F5), Color(0xFFFDD5EC)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
   /// Фон экрана: мягкий розовый сверху, почти белый внизу.
-  static const page = LinearGradient(
+  static LinearGradient get page => LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
-    colors: [Color(0xFFFBEFF4), Color(0xFFFEFAFD)],
+    colors: AppColors.isDark
+        ? const [Color(0xFF1B1424), Color(0xFF14101A)]
+        : const [Color(0xFFFBEFF4), Color(0xFFFEFAFD)],
   );
 }
 
 TextTheme _textTheme(Color ink, Color muted) {
-  final base = GoogleFonts.manropeTextTheme();
+  // google_fonts 9 возвращает TextTheme из пакета material_ui, который не совместим
+  // с TextTheme из flutter/material. TextStyle у них общий, поэтому шрифт Manrope
+  // применяем к каждому стилю вручную (GoogleFonts.manrope подгружает нужную толщину).
+  final themed = _textThemeBase(ink, muted);
+  TextStyle? manrope(TextStyle? style) => style == null ? null : GoogleFonts.manrope(textStyle: style);
+  return TextTheme(
+    displayLarge: manrope(themed.displayLarge),
+    displayMedium: manrope(themed.displayMedium),
+    displaySmall: manrope(themed.displaySmall),
+    headlineLarge: manrope(themed.headlineLarge),
+    headlineMedium: manrope(themed.headlineMedium),
+    headlineSmall: manrope(themed.headlineSmall),
+    titleLarge: manrope(themed.titleLarge),
+    titleMedium: manrope(themed.titleMedium),
+    titleSmall: manrope(themed.titleSmall),
+    bodyLarge: manrope(themed.bodyLarge),
+    bodyMedium: manrope(themed.bodyMedium),
+    bodySmall: manrope(themed.bodySmall),
+    labelLarge: manrope(themed.labelLarge),
+    labelMedium: manrope(themed.labelMedium),
+    labelSmall: manrope(themed.labelSmall),
+  );
+}
+
+TextTheme _textThemeBase(Color ink, Color muted) {
+  final base = ThemeData(brightness: ink == AppColors.darkInk ? Brightness.dark : Brightness.light).textTheme;
   return base.copyWith(
     headlineLarge: base.headlineLarge?.copyWith(fontSize: 26, fontWeight: FontWeight.w800, color: ink),
     headlineMedium: base.headlineMedium?.copyWith(fontSize: 22, fontWeight: FontWeight.w800, color: ink),
@@ -121,6 +194,14 @@ ThemeData _build({
         textStyle: GoogleFonts.manrope(fontSize: 16, fontWeight: FontWeight.w700),
       ),
     ),
+    // В тёмной теме стандартное уведомление светлое и слепит: делаем его тёмным, в тон карточкам
+    snackBarTheme: brightness == Brightness.dark
+        ? SnackBarThemeData(
+            backgroundColor: line,
+            contentTextStyle: GoogleFonts.manrope(fontSize: 14, fontWeight: FontWeight.w600, color: ink),
+            actionTextColor: AppColors.primaryText,
+          )
+        : null,
     chipTheme: ChipThemeData(
       backgroundColor: surface,
       selectedColor: AppColors.primary,
@@ -147,23 +228,37 @@ ThemeData _build({
         GoogleFonts.manrope(fontSize: 11, fontWeight: FontWeight.w600),
       ),
     ),
+    // Переключатель: состояние читается без подсказок.
+    // Включён — розовая дорожка, белый ползунок справа с галочкой.
+    // Выключен — серая дорожка с контуром, серый ползунок слева с крестиком.
     switchTheme: SwitchThemeData(
       trackColor: WidgetStateProperty.resolveWith(
-        (s) => s.contains(WidgetState.selected) ? AppColors.primary : line,
+        (s) => s.contains(WidgetState.selected)
+            ? AppColors.primary
+            : (brightness == Brightness.dark ? const Color(0xFF2A2234) : const Color(0xFFE9E4E8)),
       ),
-      thumbColor: const WidgetStatePropertyAll(Colors.white),
+      trackOutlineColor: WidgetStateProperty.resolveWith(
+        (s) => s.contains(WidgetState.selected) ? Colors.transparent : muted,
+      ),
+      trackOutlineWidth: const WidgetStatePropertyAll(1.5),
+      thumbColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? Colors.white : muted),
+      thumbIcon: WidgetStateProperty.resolveWith(
+        (s) => s.contains(WidgetState.selected)
+            ? const Icon(Icons.check, color: AppColors.primary)
+            : Icon(Icons.close, color: surface),
+      ),
     ),
   );
 }
 
 final ThemeData lightTheme = _build(
   brightness: Brightness.light,
-  background: AppColors.background,
-  surface: AppColors.surface,
-  ink: AppColors.ink,
-  muted: AppColors.muted,
-  tint: AppColors.primaryTint,
-  line: const Color(0xFFF3DCE8), // оценка, не измерено
+  background: AppColors.lightBackground,
+  surface: AppColors.lightSurface,
+  ink: AppColors.lightInk,
+  muted: AppColors.lightMuted,
+  tint: AppColors.lightPrimaryTint,
+  line: AppColors.lightLine,
 );
 
 final ThemeData darkTheme = _build(

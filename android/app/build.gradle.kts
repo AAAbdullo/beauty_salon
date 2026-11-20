@@ -1,11 +1,14 @@
+import com.android.build.api.dsl.ApplicationExtension
+import java.util.Properties
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     id("com.android.application")
-    id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-android {
+configure<ApplicationExtension> {
     namespace = "com.example.beauty_salons"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
@@ -15,13 +18,9 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
-    }
-
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.beauty_salons"
+        // Должен совпадать с ограничением ключа Yandex MapKit в кабинете разработчика.
+        applicationId = "com.abdullo.beautySalons"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 26
@@ -29,6 +28,21 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         multiDexEnabled = true
+
+        // Ключ Yandex MapKit не хранится в git: берётся из android/local.properties
+        // (YANDEX_MAPKIT_API_KEY=...) или из переменной окружения на CI.
+        val localProps = Properties().apply {
+            val file = rootProject.file("local.properties")
+            if (file.exists()) file.inputStream().use { load(it) }
+        }
+        val mapkitKey = localProps.getProperty("YANDEX_MAPKIT_API_KEY")
+            ?: System.getenv("YANDEX_MAPKIT_API_KEY")
+            ?: ""
+        buildConfigField("String", "YANDEX_MAPKIT_API_KEY", "\"$mapkitKey\"")
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 
     buildTypes {
@@ -40,6 +54,19 @@ android {
     }
 }
 
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
+    }
+}
+
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // Нужна приложению напрямую: MainApplication вызывает MapKitFactory.setApiKey.
+    // Плагин yandex_mapkit подключает библиотеку как implementation, поэтому снаружи она не видна.
+    // Версия и вариант (full) должны совпадать с yandexMapkit.variant в gradle.properties и с версией плагина yandex_mapkit.
+    implementation("com.yandex.android:maps.mobile:4.39.1-full")
 }

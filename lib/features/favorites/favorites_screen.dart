@@ -1,11 +1,18 @@
-import 'package:flutter/material.dart';
-import '../../core/services/app_state_service.dart';
+import 'dart:async';
+import 'package:flutter/material.dart' hide Text;
+import '../../core/l10n/app_text.dart';
+import '../../core/data/app_dependencies.dart';
+import '../../core/data/app_scope.dart';
+import '../../core/data/repository_exception.dart';
 import '../../core/services/masters_repository.dart';
 import '../../core/services/salons_repository.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/formatters.dart';
 import '../../core/widgets/badges/app_status_badge.dart';
 import '../../core/widgets/buttons/app_pill_button.dart';
 import '../../core/widgets/cards/app_card.dart';
+import '../../core/widgets/states/async_screen.dart';
+import '../../core/l10n/app_locale.dart';
 
 /// Экран «Избранное» (ТЗ M-15: Избранные салоны и мастера)
 class FavoritesScreen extends StatefulWidget {
@@ -29,15 +36,59 @@ class FavoritesScreen extends StatefulWidget {
 class _FavoritesScreenState extends State<FavoritesScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final _appState = AppStateService();
-  final _salonsRepo = SalonsRepository();
-  final _mastersRepo = MastersRepository();
+  late final _appState = AppScope.read(context).appState;
+  late final AppDependencies _deps;
+
+  // Избранное хранится как id; сами салоны и мастера приходят из каталога
+  List<SalonModel> _allSalons = const [];
+  List<MasterProfileModel> _allMasters = const [];
+  bool _loading = true;
+  Object? _error;
 
   @override
   void initState() {
     super.initState();
+    _deps = AppScope.read(context);
     _tabController = TabController(length: 2, vsync: this);
     _appState.addListener(_onStateChanged);
+    _appState.reviewChanges.addListener(_refreshRatings);
+    unawaited(_load());
+  }
+
+  /// Отзыв оставили или изменили: рейтинги перечитываются без индикатора загрузки
+  Future<void> _refreshRatings() async {
+    try {
+      final results = await Future.wait([_deps.catalog.getSalons(), _deps.catalog.getMasters()]);
+      if (!mounted) return;
+      setState(() {
+        _allSalons = results[0] as List<SalonModel>;
+        _allMasters = results[1] as List<MasterProfileModel>;
+      });
+    } on RepositoryException {
+      // Остаются прежние числа
+    }
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final results = await Future.wait([_deps.catalog.getSalons(), _deps.catalog.getMasters()]);
+      if (!mounted) return;
+      setState(() {
+        _allSalons = results[0] as List<SalonModel>;
+        _allMasters = results[1] as List<MasterProfileModel>;
+        _loading = false;
+      });
+    } on RepositoryException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = e;
+      });
+    }
   }
 
   void _onStateChanged() {
@@ -47,6 +98,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
   @override
   void dispose() {
     _appState.removeListener(_onStateChanged);
+    _appState.reviewChanges.removeListener(_refreshRatings);
     _tabController.dispose();
     super.dispose();
   }
@@ -54,19 +106,17 @@ class _FavoritesScreenState extends State<FavoritesScreen>
   @override
   Widget build(BuildContext context) {
     // Получаем избранные салоны и мастера
-    final allSalons = _salonsRepo.getSalons();
-    final favoriteSalons = allSalons
-        .where((s) => _appState.isSalonFavorite(s.name))
+    final favoriteSalons = _allSalons
+        .where((s) => _appState.isSalonFavorite(s.id))
         .toList();
 
-    final allMasters = _mastersRepo.getMasters();
-    final favoriteMasters = allMasters
-        .where((m) => _appState.isMasterFavorite(m.name))
+    final favoriteMasters = _allMasters
+        .where((m) => _appState.isMasterFavorite(m.id))
         .toList();
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'Избранное',
           style: TextStyle(
             fontSize: 22,
@@ -82,7 +132,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
           child: CircleAvatar(
             backgroundColor: AppColors.surface,
             child: IconButton(
-              icon: const Icon(Icons.arrow_back, color: AppColors.ink, size: 20),
+              icon: Icon(Icons.arrow_back, color: AppColors.ink, size: 20),
               onPressed: widget.onBack,
             ),
           ),
@@ -109,8 +159,8 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                 unselectedLabelColor: AppColors.muted,
                 labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
                 tabs: [
-                  Tab(text: 'Салоны (${favoriteSalons.length})'),
-                  Tab(text: 'Мастера (${favoriteMasters.length})'),
+                  Tab(text: tr('Салоны (${favoriteSalons.length})')),
+                  Tab(text: tr('Мастера (${favoriteMasters.length})')),
                 ],
               ),
             ),
@@ -118,10 +168,18 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         ),
       ),
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: AppGradients.page,
         ),
-        child: TabBarView(
+        child: _loading || _error != null
+            ? AsyncSection(
+                isLoading: _loading,
+                error: _error,
+                onRetry: () => unawaited(_load()),
+                minHeight: 240,
+                child: const SizedBox.shrink(),
+              )
+            : TabBarView(
           controller: _tabController,
           children: [
             _buildSalonsList(favoriteSalons),
@@ -143,7 +201,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
       itemCount: salons.length,
       itemBuilder: (context, index) {
         final s = salons[index];
@@ -152,7 +210,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
           child: AppCard(
             padding: const EdgeInsets.all(14),
             child: InkWell(
-              onTap: () => widget.onSalonTap(s.name),
+              onTap: () => widget.onSalonTap(s.id),
               borderRadius: BorderRadius.circular(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -164,8 +222,10 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                         width: 52,
                         height: 52,
                         decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFFFFD1DC), Color(0xFFFFB6C1)],
+                          gradient: LinearGradient(
+                            colors: AppColors.isDark
+                                ? const [Color(0xFF5A3350), Color(0xFF47273F)]
+                                : const [Color(0xFFFFD1DC), Color(0xFFFFB6C1)],
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                           ),
@@ -192,7 +252,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                             const SizedBox(height: 2),
                             Text(
                               '${s.district} · ${s.address}',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 12,
                                 color: AppColors.muted,
                               ),
@@ -215,15 +275,15 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                                 const SizedBox(width: 4),
                                 Text(
                                   '(${s.reviewsCount})',
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 11,
                                     color: AppColors.muted,
                                   ),
                                 ),
                                 const Spacer(),
                                 Text(
-                                  'от ${s.minCredits} кр.',
-                                  style: const TextStyle(
+                                  s.minPriceLabel,
+                                  style: TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w800,
                                     color: AppColors.primaryText,
@@ -236,20 +296,20 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                       ),
                       IconButton(
                         onPressed: () {
-                          _appState.toggleSalonFavorite(s.name);
+                          _appState.toggleSalonFavorite(s.id);
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              backgroundColor: AppColors.ink,
+                              backgroundColor: AppColors.snackBackground,
                               behavior: SnackBarBehavior.floating,
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12)),
                               content: Text(
                                   '«${s.name}» удален из избранного'),
                               action: SnackBarAction(
-                                label: 'Отменить',
+                                label: tr('Отменить'),
                                 textColor: AppColors.primaryBright,
                                 onPressed: () =>
-                                    _appState.toggleSalonFavorite(s.name),
+                                    _appState.toggleSalonFavorite(s.id),
                               ),
                             ),
                           );
@@ -268,22 +328,22 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                     runSpacing: 4,
                     children: [
                       if (s.onlyWomen)
-                        const AppStatusBadge(
+                        AppStatusBadge(
                           text: 'Faqat ayollar',
-                          backgroundColor: Color(0xFFFFECEF),
+                          backgroundColor: AppColors.soft(const Color(0xFFFFECEF)),
                           textColor: AppColors.primary,
                         ),
                       if (s.homeVisit)
                         AppStatusBadge(
                           text: 'Uyga chiqish',
-                          backgroundColor: Colors.blue.shade50,
-                          textColor: Colors.blue.shade800,
+                          backgroundColor: AppColors.soft(Colors.blue.shade50),
+                          textColor: AppColors.onSoft(Colors.blue.shade800),
                         ),
                       if (s.creditsAccepted)
-                        const AppStatusBadge(
+                        AppStatusBadge(
                           text: 'Kredit bilan',
-                          backgroundColor: Color(0xFFE8F5E9),
-                          textColor: Color(0xFF2E7D32),
+                          backgroundColor: AppColors.soft(const Color(0xFFE8F5E9)),
+                          textColor: AppColors.onSoft(const Color(0xFF2E7D32)),
                         ),
                     ],
                   ),
@@ -292,7 +352,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                     width: double.infinity,
                     height: 38,
                     child: ElevatedButton(
-                      onPressed: () => widget.onBookSalon(s.name),
+                      onPressed: () => widget.onBookSalon(s.id),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         elevation: 0,
@@ -330,7 +390,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
       itemCount: masters.length,
       itemBuilder: (context, index) {
         final m = masters[index];
@@ -339,7 +399,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
           child: AppCard(
             padding: const EdgeInsets.all(14),
             child: InkWell(
-              onTap: () => widget.onMasterTap(m.name),
+              onTap: () => widget.onMasterTap(m.id),
               borderRadius: BorderRadius.circular(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -358,7 +418,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
                               ),
-                              border: Border.all(color: Colors.white, width: 2),
+                              border: Border.all(color: AppColors.surface, width: 2),
                               boxShadow: const [
                                 BoxShadow(
                                   color: Colors.black12,
@@ -367,9 +427,15 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                                 )
                               ],
                             ),
-                            child: const Center(
-                              child: Icon(Icons.person,
-                                  size: 30, color: Colors.white),
+                            child: ClipOval(
+                              child: Image.asset(
+                                m.avatarAsset,
+                                fit: BoxFit.cover,
+                                cacheWidth: 200,
+                                errorBuilder: (_, _, _) => const Center(
+                                  child: Icon(Icons.person, size: 30, color: Colors.white),
+                                ),
+                              ),
                             ),
                           ),
                           Positioned(
@@ -382,7 +448,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                                 color: const Color(0xFF1AAA4C),
                                 shape: BoxShape.circle,
                                 border:
-                                    Border.all(color: Colors.white, width: 2),
+                                    Border.all(color: AppColors.surface, width: 2),
                               ),
                             ),
                           ),
@@ -403,7 +469,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                             const SizedBox(height: 2),
                             Text(
                               '${m.specialty} · ${m.salonName}',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 12,
                                 color: AppColors.muted,
                               ),
@@ -423,16 +489,16 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
-                                  '(${m.reviewsCount} отзывов)',
-                                  style: const TextStyle(
+                                  '(${Formatters.reviews(m.reviewsCount)})',
+                                  style: TextStyle(
                                     fontSize: 11,
                                     color: AppColors.muted,
                                   ),
                                 ),
                                 const Spacer(),
                                 Text(
-                                  'Стаж ${m.experienceYears} лет',
-                                  style: const TextStyle(
+                                  'Стаж ${Formatters.years(m.experienceYears)}',
+                                  style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w600,
                                     color: AppColors.muted,
@@ -445,20 +511,20 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                       ),
                       IconButton(
                         onPressed: () {
-                          _appState.toggleMasterFavorite(m.name);
+                          _appState.toggleMasterFavorite(m.id);
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              backgroundColor: AppColors.ink,
+                              backgroundColor: AppColors.snackBackground,
                               behavior: SnackBarBehavior.floating,
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12)),
                               content:
-                                  Text('Мастер ${m.name} удалена из избранного'),
+                                  Text('Удалено из избранного: ${m.name}'),
                               action: SnackBarAction(
-                                label: 'Отменить',
+                                label: tr('Отменить'),
                                 textColor: AppColors.primaryBright,
                                 onPressed: () =>
-                                    _appState.toggleMasterFavorite(m.name),
+                                    _appState.toggleMasterFavorite(m.id),
                               ),
                             ),
                           );
@@ -476,7 +542,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                     width: double.infinity,
                     height: 38,
                     child: OutlinedButton(
-                      onPressed: () => widget.onMasterTap(m.name),
+                      onPressed: () => widget.onMasterTap(m.id),
                       style: OutlinedButton.styleFrom(
                         side: const BorderSide(color: AppColors.primary),
                         shape: RoundedRectangleBorder(
@@ -523,7 +589,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
             Text(
               subtitle,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 12, color: AppColors.muted),
+              style: TextStyle(fontSize: 12, color: AppColors.muted),
             ),
             const SizedBox(height: 16),
             AppPillButton(

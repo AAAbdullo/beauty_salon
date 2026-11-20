@@ -1,105 +1,327 @@
 import 'package:flutter/foundation.dart';
+import '../models/booking_error.dart';
+import '../models/credit_package.dart';
+import '../models/booking_item.dart';
+import '../models/booking_rules.dart';
+import '../models/master_review.dart';
+import '../utils/clock.dart';
+import '../utils/formatters.dart';
+import '../utils/result.dart';
+import '../utils/slot_pricing.dart';
+import '../utils/uuid.dart';
+import 'booking_seed.dart';
+import 'booking_store.dart';
+import 'master_cabinet_store.dart';
+import 'masters_repository.dart';
+import 'portfolio_store.dart';
+import 'review_store.dart';
+import 'slot_service.dart';
 
-/// Модель записи на услугу
-class BookingItem {
-  final String id;
-  final String salonName;
-  final String serviceName;
-  final String masterName;
-  String date;
-  String time;
-  final int credits;
-  final int sumPrice;
-  final String paymentMethod;
-  String status; // 'active', 'completed', 'cancelled'
-  int? reviewRating;
-  List<String>? reviewTags;
-  String? reviewComment;
-  DateTime? reviewDate;
-  DateTime? appointmentDateTime;
+// Экраны подключают только этот файл — модели записей доступны через него.
+export '../models/booking_error.dart';
+export '../models/booking_item.dart';
+export '../models/master_review.dart';
+export '../models/portfolio_work.dart';
 
-  BookingItem({
-    required this.id,
-    required this.salonName,
-    required this.serviceName,
-    required this.masterName,
-    required this.date,
-    required this.time,
-    required this.credits,
-    required this.sumPrice,
-    required this.paymentMethod,
-    this.status = 'active',
-    this.reviewRating,
-    this.reviewTags,
-    this.reviewComment,
-    this.reviewDate,
-    this.appointmentDateTime,
-  });
+/// Результат проверки QR-кода визита мастером
+class VisitQrResult {
+  final BookingItem? booking;
+  final String? error;
 
-  /// Вычисленная дата и время визита
-  DateTime get resolvedDateTime {
-    if (appointmentDateTime != null) return appointmentDateTime!;
-    final now = DateTime.now();
-    int hour = 16;
-    int minute = 30;
-    if (time.contains(':')) {
-      final parts = time.split(':');
-      hour = int.tryParse(parts[0].trim()) ?? 16;
-      minute = int.tryParse(parts[1].trim()) ?? 30;
-    }
+  const VisitQrResult.success(BookingItem this.booking) : error = null;
+  const VisitQrResult.failure(String this.error) : booking = null;
 
-    final lowerDate = date.toLowerCase();
-    if (lowerDate.contains('сегодня')) {
-      return DateTime(now.year, now.month, now.day, hour, minute);
-    }
-    if (lowerDate.contains('завтра')) {
-      final tomorrow = now.add(const Duration(days: 1));
-      return DateTime(tomorrow.year, tomorrow.month, tomorrow.day, hour, minute);
-    }
-
-    final months = {
-      'янв': 1, 'фев': 2, 'мар': 3, 'апр': 4, 'май': 5, 'мая': 5,
-      'июн': 6, 'июл': 7, 'авг': 8, 'сен': 9, 'окт': 10, 'ноя': 11, 'дек': 12
-    };
-    for (final entry in months.entries) {
-      if (lowerDate.contains(entry.key)) {
-        final dayMatch = RegExp(r'\d+').firstMatch(lowerDate);
-        final day = dayMatch != null ? int.parse(dayMatch.group(0)!) : 1;
-        return DateTime(now.year, entry.value, day, hour, minute);
-      }
-    }
-
-    return DateTime(now.year, now.month, now.day, hour, minute);
-  }
-
-  /// Проверка правила сервиса: отмена разрешена строго не менее чем за 2 часа (>= 120 минут)
-  /// Если осталось < 120 мин (например, 1 ч 59 мин или меньше), отмена строго блокируется!
-  bool get canCancel {
-    final diff = resolvedDateTime.difference(DateTime.now());
-    return diff.inMinutes >= 120;
-  }
-
-  Duration get timeUntilAppointment => resolvedDateTime.difference(DateTime.now());
+  bool get isSuccess => booking != null;
 }
 
-/// Синглтон-сервис локального состояния (Mock Data Store)
+/// Синглтон-сервис локального состояния (Mock Data Store): клиент, абонемент, избранное, настройки.
+///
+/// Записи хранятся в едином [BookingStore], занятость слотов считает [SlotService]; здесь —
+/// правила: кому и когда можно записаться, отменить, перенести, оставить отзыв, купить пакет.
+/// Каждая операция проверяет правила сама (UI-проверки — только подсказка пользователю)
+/// и возвращает [Result] с причиной отказа.
+/// Стандартное фото мастера (Sabina Nur)
+const seedMasterAvatar = 'assets/images/masters/master_sabina.jpg';
+
 class AppStateService extends ChangeNotifier {
   static final AppStateService _instance = AppStateService._internal();
   factory AppStateService() => _instance;
-  AppStateService._internal();
+  AppStateService._internal() {
+    _applySeed();
+    // Любое изменение записей (в том числе от кабинета мастера) обновляет все экраны
+    _store.addListener(notifyListeners);
+  }
+
+  final BookingStore _store = BookingStore();
+  final SlotService _slots = SlotService();
+
+  /// Меняется только при изменении записей (новая, отмена, перенос, визит по QR), а не при смене избранного,
+  /// аватара или настроек. Кабинет мастера перечитывает данные по этому событию.
+  Listenable get bookingChanges => _store;
+
+  // Бизнес-правила (ТЗ) — значения живут в BookingRules
+  static const freeCancelMinutes = BookingRules.freeCancelMinutes;
+  static const minLeadMinutes = BookingRules.minLeadMinutes;
+  static const maxCreditBookingsPerSalonMonth = BookingRules.maxCreditBookingsPerSalonMonth;
+  static const reviewWindowDays = BookingRules.reviewWindowDays;
+  static const freezeMinDays = BookingRules.freezeMinDays;
+  static const freezeMaxDays = BookingRules.freezeMaxDays;
+  static const freezeCooldownDays = BookingRules.freezeCooldownDays;
+  static const qrLifetimeSeconds = BookingRules.qrLifetimeSeconds;
+  static const qrGraceSeconds = BookingRules.qrGraceSeconds;
+  static const qrEarlyMinutes = BookingRules.qrEarlyMinutes;
+  static const qrLateMinutes = BookingRules.qrLateMinutes;
 
   // Состояние клиента
-  String clientName = 'Wazow';
-  String clientPhone = '+998 90 123 45 67';
-  String clientAvatar = 'assets/images/clients/client_wazow.jpg';
-  int clientCredits = 86;
-  int usedCredits = 14;
-  int totalCreditsPlan = 20;
-  String subscriptionPlan = 'Премиум';
-  String subscriptionExpiry = '12 ноября 2026';
-  String clientBirthDate = '14.05.1998';
-  String clientGender = 'Женский';
-  bool isFrozen = false;
+  late String clientId;
+  late String clientName;
+  late String clientPhone;
+  late String clientAvatar;
+  late int clientCredits;
+  late String subscriptionPlan;
+  late DateTime subscriptionExpiresAt;
+  late String clientBirthDate;
+  late String clientGender;
+
+  // Заморозка абонемента (K-08)
+  DateTime? frozenUntil;
+  DateTime? lastFreezeStartedAt;
+
+  // Настройки приложения
+  late bool promoNotificationsEnabled;
+  late bool newsNotificationsEnabled;
+  /// Настройка устройства, а не аккаунта: при выходе не сбрасывается (см. [resetSession])
+  bool useLocationEnabled = true;
+
+  // Избранные салоны и мастера (ТЗ M-15) — только по id
+  late Set<String> _favoriteSalonIds;
+  late Set<String> _favoriteMasterIds;
+
+  // Состояние мастера: связь с каталогом — только по id, имя и салон — для отображения
+  late String masterId;
+  late String masterName;
+  late String masterSalonId;
+  late String masterSalon;
+  late String masterAvatar;
+  late double salonCommissionPercent;
+
+  // Уведомления клиента
+  late List<AppNotification> _notifications;
+
+  /// Отзывы о мастерах (мок «сервера»); пересоздаются вместе с записями при выходе из аккаунта
+  late ReviewStore reviews;
+
+  /// Портфолио мастеров (мок «сервера»); при выходе из аккаунта пересоздаётся
+  late PortfolioStore portfolio;
+
+  /// Использованные nonce QR-кодов (мок серверной защиты от повторного предъявления одного кода)
+  late Set<String> _usedQrNonces;
+
+  /// Начальные (мок) данные. Вызывается при создании и при выходе из аккаунта,
+  /// чтобы следующий пользователь не видел данные предыдущего.
+  void _applySeed() {
+    clientId = seedClientId;
+    clientName = seedClientName;
+    clientPhone = '+998 90 123 45 67';
+    clientAvatar = seedClientAvatar;
+    clientCredits = 86;
+    subscriptionPlan = 'Premium';
+    // Мок: срок считается от текущих часов, чтобы демо не «протухало» с календарём
+    subscriptionExpiresAt = AppClock.now().add(const Duration(days: 20));
+    clientBirthDate = '14.05.1998';
+    clientGender = 'Женский';
+
+    frozenUntil = null;
+    lastFreezeStartedAt = null;
+    _usedQrNonces = {};
+
+    promoNotificationsEnabled = true;
+    newsNotificationsEnabled = true;
+
+    _favoriteSalonIds = {'s-001', 's-003'};
+    _favoriteMasterIds = {'m-001', 'm-002'};
+
+    reviews = ReviewStore.seed(masters: MastersRepository().getMasters(), bookings: seedBookings());
+    portfolio = PortfolioStore.seed(masters: MastersRepository().getMasters());
+
+    masterId = 'm-002';
+    masterName = 'Sabina Nur';
+    masterSalonId = 's-001';
+    masterSalon = 'Nur Beauty';
+    masterAvatar = seedMasterAvatar;
+    salonCommissionPercent = 10.0;
+
+    // [BACKEND NOTE]: GET /api/v1/notifications, PATCH /api/v1/notifications/:id/read
+    _notifications = [
+      AppNotification(
+        id: 'n-001',
+        type: AppNotificationType.reminder,
+        title: 'Напоминание о визите',
+        body: 'Скоро визит: «Архитектура бровей + окрашивание» в Nur Beauty. Не забудьте QR-код.',
+        timeLabel: '10 мин назад',
+      ),
+      AppNotification(
+        id: 'n-002',
+        type: AppNotificationType.credits,
+        title: 'Кредиты заканчиваются',
+        body: 'На балансе осталось меньше 100 кредитов. Пополните, чтобы не потерять запись.',
+        timeLabel: '2 ч назад',
+      ),
+      AppNotification(
+        id: 'n-003',
+        type: AppNotificationType.promo,
+        title: 'Новый салон рядом',
+        body: 'Lola Studio в Яшнабадском районе теперь принимает кредиты.',
+        timeLabel: 'Вчера',
+        salonId: 's-002',
+      ),
+      AppNotification(
+        id: 'n-004',
+        type: AppNotificationType.review,
+        title: 'Оцените визит',
+        body: 'Как прошла стрижка в Mira Hair? Ваш отзыв поможет другим.',
+        timeLabel: '3 дня назад',
+        isRead: true,
+      ),
+    ];
+  }
+
+  /// Выход из аккаунта: вернуть всё состояние к начальному (клиент, записи, график мастера, избранное)
+  void resetSession() {
+    _applySeed();
+    _store.reset();
+    MasterCabinetStore().reset();
+    notifyListeners();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Абонемент
+  // ---------------------------------------------------------------------------
+
+  /// Заморозка действует, пока не наступил [frozenUntil]; по истечении снимается сама
+  bool get isFrozen {
+    final until = frozenUntil;
+    return until != null && AppClock.now().isBefore(until);
+  }
+
+  /// Срок абонемента вышел: кредитами платить нельзя, пока не куплен новый пакет
+  bool get isSubscriptionExpired => !AppClock.now().isBefore(subscriptionExpiresAt);
+
+  String get subscriptionExpiry => Formatters.fullDate(subscriptionExpiresAt);
+
+  /// Объём кредитов текущего тарифа
+  int get planTotalCredits => mockCreditPackages.where((p) => p.name == subscriptionPlan).firstOrNull?.credits ?? 60;
+
+  /// Израсходовано кредитов в текущем периоде (для прогресс-бара)
+  int get usedPlanCredits => (planTotalCredits - clientCredits).clamp(0, planTotalCredits);
+
+  /// Можно ли сейчас заморозить абонемент; если нет — причина
+  String? get freezeBlockReason {
+    if (isFrozen) return null;
+    final last = lastFreezeStartedAt;
+    if (last != null) {
+      final daysSince = AppClock.now().difference(last).inDays;
+      if (daysSince < freezeCooldownDays) {
+        final available = last.add(const Duration(days: freezeCooldownDays));
+        return 'Заморозка доступна 1 раз в 3 месяца. Следующая — с ${Formatters.fullDate(available)}.';
+      }
+    }
+    return null;
+  }
+
+  /// Заморозка абонемента на [days] дней (K-08): срок действия сдвигается на время заморозки
+  bool freezeSubscription(int days) {
+    if (isFrozen || freezeBlockReason != null) return false;
+    final clamped = days.clamp(freezeMinDays, freezeMaxDays);
+    final now = AppClock.now();
+    lastFreezeStartedAt = now;
+    frozenUntil = now.add(Duration(days: clamped));
+    subscriptionExpiresAt = subscriptionExpiresAt.add(Duration(days: clamped));
+    notifyListeners();
+    return true;
+  }
+
+  /// Досрочная разморозка: неиспользованные дни заморозки снимаются со срока действия.
+  /// Неполный день считается целым (округление вверх), чтобы заморозка не давала лишнего срока.
+  void unfreezeSubscription() {
+    if (!isFrozen) return;
+    final unused = frozenUntil!.difference(AppClock.now());
+    final unusedDays = (unused.inHours / 24).ceil();
+    subscriptionExpiresAt = subscriptionExpiresAt.subtract(Duration(days: unusedDays));
+    frozenUntil = null;
+    notifyListeners();
+  }
+
+  /// K-01: сколько кредитов останется после покупки пакета на [credits] кредитов.
+  /// При продлении переносится не больше 20% объёма прежнего пакета, остальное сгорает.
+  ({int carried, int burned, int total}) previewPurchase(int credits) {
+    final cap = (planTotalCredits * BookingRules.rolloverShare).floor();
+    final carried = clientCredits < cap ? clientCredits : cap;
+    return (carried: carried, burned: clientCredits - carried, total: credits + carried);
+  }
+
+  /// Покупка/смена пакета: новый период на 30 дней (K-01), перенос остатка по [previewPurchase]
+  void purchasePackage(String planName, int credits) {
+    clientCredits = previewPurchase(credits).total;
+    subscriptionPlan = planName;
+    final now = AppClock.now();
+    final base = subscriptionExpiresAt.isAfter(now) ? subscriptionExpiresAt : now;
+    subscriptionExpiresAt = base.add(const Duration(days: 30));
+    notifyListeners();
+  }
+
+  /// Покупка пакета кредитов
+  void addCredits(int credits) {
+    clientCredits += credits;
+    notifyListeners();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Профиль и настройки
+  // ---------------------------------------------------------------------------
+
+  void updateSettings({bool? promo, bool? news, bool? location}) {
+    promoNotificationsEnabled = promo ?? promoNotificationsEnabled;
+    newsNotificationsEnabled = news ?? newsNotificationsEnabled;
+    useLocationEnabled = location ?? useLocationEnabled;
+    notifyListeners();
+  }
+
+  /// Фото профиля: путь к файлу, выбранному пользователем, или встроенный ресурс
+  void updateClientAvatar(String path) {
+    clientAvatar = path;
+    notifyListeners();
+  }
+
+  /// Вернуть стандартный аватар (фото удалено)
+  void resetClientAvatar() => updateClientAvatar(seedClientAvatar);
+
+  /// Фото мастера в его кабинете: путь к файлу или встроенный ресурс
+  void updateMasterAvatar(String path) {
+    masterAvatar = path;
+    notifyListeners();
+  }
+
+  void resetMasterAvatar() => updateMasterAvatar(seedMasterAvatar);
+
+  /// Мок «сервера»: завести нового клиента при регистрации. Данные демо-клиента не наследуются:
+  /// ни кредитов, ни записей, ни избранного, ни уведомлений.
+  /// [BACKEND NOTE]: после входа кэш заполняется ответом GET /me.
+  void startNewClient({required String name, required String phone, required String birthDate, required String gender}) {
+    _applySeed();
+    clientId = 'c-${Uuid.v4()}';
+    clientName = name;
+    clientPhone = phone;
+    clientBirthDate = birthDate;
+    clientGender = gender;
+    clientCredits = 0;
+    // Абонемента нет: тариф-заглушка с истёкшим сроком (до покупки пакета кредитами платить нельзя)
+    subscriptionExpiresAt = AppClock.now();
+    _favoriteSalonIds = {};
+    _favoriteMasterIds = {};
+    _notifications = [];
+    notifyListeners();
+  }
 
   void updateClientProfile({
     required String name,
@@ -114,229 +336,634 @@ class AppStateService extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Избранные салоны и мастера (ТЗ M-15)
-  final Set<String> _favoriteSalonNames = {'Nur Beauty', 'Mira Hair'};
-  final Set<String> _favoriteMasterNames = {'Алена', 'Сабина'};
+  // ---------------------------------------------------------------------------
+  // Избранное
+  // ---------------------------------------------------------------------------
 
-  Set<String> get favoriteSalonNames => Set.unmodifiable(_favoriteSalonNames);
-  Set<String> get favoriteMasterNames => Set.unmodifiable(_favoriteMasterNames);
-  int get totalFavoritesCount => _favoriteSalonNames.length + _favoriteMasterNames.length;
+  Set<String> get favoriteSalonIds => Set.unmodifiable(_favoriteSalonIds);
+  Set<String> get favoriteMasterIds => Set.unmodifiable(_favoriteMasterIds);
+  int get totalFavoritesCount => _favoriteSalonIds.length + _favoriteMasterIds.length;
 
-  bool isSalonFavorite(String salonName) => _favoriteSalonNames.contains(salonName);
-  bool isMasterFavorite(String masterName) =>
-      _favoriteMasterNames.contains(masterName) ||
-      _favoriteMasterNames.any((fav) => masterName.contains(fav) || fav.contains(masterName));
+  bool isSalonFavorite(String salonId) => _favoriteSalonIds.contains(salonId);
+  bool isMasterFavorite(String masterId) => _favoriteMasterIds.contains(masterId);
 
   /// Переключение статуса «Избранное» для салона (M-15)
   /// [BACKEND NOTE]: При подключении NestJS заменяется на POST /api/v1/favorites/salons/:id
-  void toggleSalonFavorite(String salonName) {
-    if (_favoriteSalonNames.contains(salonName)) {
-      _favoriteSalonNames.remove(salonName);
-    } else {
-      _favoriteSalonNames.add(salonName);
-    }
+  void toggleSalonFavorite(String salonId) {
+    if (!_favoriteSalonIds.remove(salonId)) _favoriteSalonIds.add(salonId);
     notifyListeners();
   }
 
   /// Переключение статуса «Избранное» для мастера (M-15)
   /// [BACKEND NOTE]: При подключении NestJS заменяется на POST /api/v1/favorites/masters/:id
-  void toggleMasterFavorite(String masterName) {
-    if (isMasterFavorite(masterName)) {
-      _favoriteMasterNames.removeWhere((fav) => masterName.contains(fav) || fav.contains(masterName));
-    } else {
-      _favoriteMasterNames.add(masterName);
-    }
+  void toggleMasterFavorite(String masterId) {
+    if (!_favoriteMasterIds.remove(masterId)) _favoriteMasterIds.add(masterId);
     notifyListeners();
   }
 
-  // Состояние мастера
-  String masterName = 'Sabina Nur';
-  String masterSalon = 'Nur Beauty';
-  String masterAvatar = 'assets/images/masters/master_sabina.jpg';
-  int masterVisitsToday = 8;
-  int masterMonthlyVisits = 21;
-  int masterDailyRevenue = 2450000;
-  int masterMonthlyRevenue = 1240000;
-  double salonCommissionPercent = 10.0;
+  // ---------------------------------------------------------------------------
+  // Записи клиента (данные — в BookingStore)
+  // ---------------------------------------------------------------------------
 
-  // Список записей
-  final List<BookingItem> _bookings = [
-    BookingItem(
-      id: 'b-001',
-      salonName: 'Nur Beauty',
-      serviceName: 'Маникюр классический',
-      masterName: 'Алена',
-      date: 'Сегодня',
-      time: '17:30',
-      credits: 34,
-      sumPrice: 150000,
-      paymentMethod: 'Кредиты',
-      status: 'active',
-      // Осталось ~1 час 20 минут (< 2 часов) для проверки блокировки отмены
-      appointmentDateTime: DateTime.now().add(const Duration(minutes: 80)),
-    ),
-    BookingItem(
-      id: 'b-005',
-      salonName: 'Elite Barber & Style',
-      serviceName: 'Стрижка и стайлинг',
-      masterName: 'Тимур',
-      date: 'Завтра',
-      time: '14:00',
-      credits: 26,
-      sumPrice: 110000,
-      paymentMethod: 'Кредиты',
-      status: 'active',
-      // Осталось > 2 часов для проверки успешной отмены с возвратом кредитов
-      appointmentDateTime: DateTime.now().add(const Duration(hours: 22)),
-    ),
-    BookingItem(
-      id: 'b-002',
-      salonName: 'Lola Studio',
-      serviceName: 'Окрашивание бровей',
-      masterName: 'Сабина',
-      date: '5 окт 2026',
-      time: '14:00',
-      credits: 20,
-      sumPrice: 80000,
-      paymentMethod: 'Кредиты',
-      status: 'completed',
-    ),
-    BookingItem(
-      id: 'b-003',
-      salonName: 'Mira Hair',
-      serviceName: 'Женская стрижка',
-      masterName: 'Дилноза',
-      date: '28 сен 2026',
-      time: '10:00',
-      credits: 25,
-      sumPrice: 90000,
-      paymentMethod: 'Онлайн оплата',
-      status: 'completed',
-      reviewRating: 5,
-      reviewTags: ['Профессионализм мастера', 'Чистота и гигиена'],
-      reviewComment: 'Очень понравилась стрижка! Мастер Дилноза учла все пожелания.',
-      reviewDate: DateTime(2026, 9, 28, 12, 30),
-    ),
-  ];
+  static int _byStart(BookingItem a, BookingItem b) => a.startsAt.compareTo(b.startsAt);
 
-  List<BookingItem> get bookings => List.unmodifiable(_bookings);
-  List<BookingItem> get activeBookings => _bookings.where((b) => b.status == 'active').toList();
-  List<BookingItem> get completedBookings => _bookings.where((b) => b.status == 'completed').toList();
-  List<BookingItem> get cancelledBookings => _bookings.where((b) => b.status == 'cancelled').toList();
+  /// Все записи текущего клиента
+  List<BookingItem> get bookings => List.unmodifiable(_store.forClient(clientId));
 
-  /// Создание новой брони клиентом
-  void createBooking({
-    required String salonName,
-    required String serviceName,
-    required String masterName,
-    required String date,
-    required String time,
+  /// Запись по id (любого клиента — нужна и кабинету мастера); `null`, если такой нет
+  BookingItem? bookingById(String id) => _store.byId(id);
+
+  /// Активные — от ближайшего визита к дальнему
+  List<BookingItem> get activeBookings =>
+      _store.forClient(clientId).where((b) => b.status == BookingStatus.active).toList()..sort(_byStart);
+
+  /// Прошедшие и отменённые — сначала свежие
+  List<BookingItem> get completedBookings =>
+      _store.forClient(clientId).where((b) => b.status == BookingStatus.completed).toList()
+        ..sort((a, b) => _byStart(b, a));
+  List<BookingItem> get cancelledBookings =>
+      _store.forClient(clientId).where((b) => b.status == BookingStatus.cancelled).toList()
+        ..sort((a, b) => _byStart(b, a));
+
+  /// Ближайший активный визит (для QR из профиля)
+  BookingItem? get nearestActiveBooking {
+    final active = activeBookings;
+    return active.isEmpty ? null : active.first;
+  }
+
+  /// K-03: сколько записей за кредиты в этот салон в месяце визита.
+  /// [excludeBookingId] — не считать эту запись (при её переносе).
+  int creditBookingsInMonth(String salonId, DateTime month, {String? excludeBookingId}) {
+    return _store
+        .forClient(clientId)
+        .where(
+          (b) =>
+              b.id != excludeBookingId &&
+              b.salonId == salonId &&
+              b.isPaidWithCredits &&
+              b.status != BookingStatus.cancelled &&
+              b.startsAt.year == month.year &&
+              b.startsAt.month == month.month,
+        )
+        .length;
+  }
+
+  /// Почему нельзя оплатить [credits] кредитов (null — можно): заморозка, нехватка, лимит K-03
+  BookingError? _creditsBlock({
+    required String salonId,
     required int credits,
-    required int sumPrice,
+    required DateTime dateTime,
+    String? excludeBookingId,
+  }) {
+    if (isFrozen) {
+      return const BookingError(BookingErrorCode.creditsFrozen, 'Абонемент заморожен');
+    }
+    if (isSubscriptionExpired) {
+      return const BookingError(BookingErrorCode.subscriptionExpired, 'Абонемент истёк');
+    }
+    if (clientCredits < credits) {
+      return BookingError(BookingErrorCode.notEnoughCredits, 'Не хватает ${credits - clientCredits} кр.');
+    }
+    if (creditBookingsInMonth(salonId, dateTime, excludeBookingId: excludeBookingId) >=
+        maxCreditBookingsPerSalonMonth) {
+      return const BookingError(
+        BookingErrorCode.creditsLimit,
+        'Лимит $maxCreditBookingsPerSalonMonth записи в месяц в этот салон',
+      );
+    }
+    return null;
+  }
+
+  /// Подсказка для UI: почему нельзя оплатить кредитами (null — можно)
+  String? creditsBlockReason({required String salonId, required int credits, required DateTime dateTime}) =>
+      _creditsBlock(salonId: salonId, credits: credits, dateTime: dateTime)?.message;
+
+  /// Не пересекается ли время с другими активными записями этого клиента
+  bool _overlapsOwnBooking(DateTime startsAt, int durationMinutes, {String? excludeBookingId}) {
+    final endsAt = startsAt.add(Duration(minutes: durationMinutes));
+    return _store
+        .forClient(clientId)
+        .any((b) => b.id != excludeBookingId && b.status == BookingStatus.active && b.overlaps(startsAt, endsAt));
+  }
+
+  /// Общая проверка новой записи (используется и перед оплатой онлайн, и при создании):
+  /// время в будущем, слот свободен у мастера, нет пересечения с другими записями клиента,
+  /// а при оплате кредитами — хватает кредитов, нет заморозки и лимита K-03.
+  Result<void, BookingError> validateNewBooking({
+    required String salonId,
+    String? masterId,
+    required String serviceId,
+    required DateTime startsAt,
+    required int durationMinutes,
+    required int baseCredits,
     required String paymentMethod,
   }) {
-    final newBooking = BookingItem(
-      id: 'b-${DateTime.now().millisecondsSinceEpoch}',
+    if (startsAt.isBefore(AppClock.now().add(const Duration(minutes: minLeadMinutes)))) {
+      return const Result.failure(
+        BookingError(
+          BookingErrorCode.inPast,
+          'Это время уже прошло или начинается слишком скоро: записаться можно не позднее чем за $minLeadMinutes минут.',
+        ),
+      );
+    }
+    final available = _slots.isAvailable(
+      salonId: salonId,
+      masterId: masterId,
+      serviceId: serviceId,
+      startsAt: startsAt,
+      durationMinutes: durationMinutes,
+    );
+    if (!available) {
+      return const Result.failure(
+        BookingError(BookingErrorCode.slotUnavailable, 'Это время недоступно. Выберите другой слот.'),
+      );
+    }
+    if (_overlapsOwnBooking(startsAt, durationMinutes)) {
+      return const Result.failure(
+        BookingError(BookingErrorCode.overlapsOwnBooking, 'У вас уже есть запись на это время.'),
+      );
+    }
+    if (paymentMethod == PaymentMethods.credits) {
+      final block = _creditsBlock(
+        salonId: salonId,
+        credits: SlotPricing.credits(baseCredits, startsAt),
+        dateTime: startsAt,
+      );
+      if (block != null) return Result.failure(block);
+    }
+    return const Result.success(null);
+  }
+
+  /// Создание новой брони клиентом: все правила проверяются здесь заново.
+  /// Для «Любой мастер» ([masterId] == null) подбирается свободный мастер салона.
+  /// Кредиты резервируются при создании, списание по итогу визита (K-07).
+  /// [BACKEND NOTE]: POST /api/v1/bookings
+  Result<BookingItem, BookingError> createBooking({
+    required String salonId,
+    required String salonName,
+    required String serviceId,
+    required String serviceName,
+    String? masterId,
+    required String masterName,
+    required DateTime dateTime,
+    required int durationMinutes,
+    required int baseCredits,
+    required int sumPrice,
+    required String paymentMethod,
+    String? paymentReceiptId,
+    int? paidAmount,
+  }) {
+    final check = validateNewBooking(
+      salonId: salonId,
+      masterId: masterId,
+      serviceId: serviceId,
+      startsAt: dateTime,
+      durationMinutes: durationMinutes,
+      baseCredits: baseCredits,
+      paymentMethod: paymentMethod,
+    );
+    if (check case Failure(:final error)) return Result.failure(error);
+
+    final resolvedMasterId =
+        masterId ??
+        _slots.resolveMasterId(
+          salonId: salonId,
+          serviceId: serviceId,
+          startsAt: dateTime,
+          durationMinutes: durationMinutes,
+        );
+    final resolvedMaster = resolvedMasterId == null ? null : MastersRepository().getMasterById(resolvedMasterId);
+    final credits = SlotPricing.credits(baseCredits, dateTime);
+
+    final booking = BookingItem(
+      id: 'b-${Uuid.v4()}',
+      clientId: clientId,
+      clientName: clientName,
+      clientAvatar: clientAvatar,
+      salonId: salonId,
       salonName: salonName,
+      serviceId: serviceId,
       serviceName: serviceName,
-      masterName: masterName,
-      date: date,
-      time: time,
+      masterId: resolvedMasterId,
+      masterName: resolvedMaster?.shortName ?? masterName,
+      durationMinutes: durationMinutes,
+      startsAt: dateTime,
+      baseCredits: baseCredits,
       credits: credits,
       sumPrice: sumPrice,
       paymentMethod: paymentMethod,
-      status: 'active',
+      paymentReceiptId: paymentReceiptId,
+      paidAmount: paidAmount,
     );
 
-    _bookings.insert(0, newBooking);
+    if (booking.isPaidWithCredits) clientCredits -= credits;
+    _store.add(booking);
+    notifyListeners();
+    return Result.success(booking);
+  }
 
-    // Если оплачено кредитами, списываем с баланса
-    if (paymentMethod == 'Кредиты') {
-      if (clientCredits >= credits) {
-        clientCredits -= credits;
-      }
+  /// Запись текущего клиента или причина, почему с ней нельзя работать
+  Result<BookingItem, BookingError> _ownActiveBooking(String bookingId) {
+    final b = _store.byId(bookingId);
+    if (b == null || b.clientId != clientId) {
+      return const Result.failure(BookingError(BookingErrorCode.notFound, 'Запись не найдена.'));
+    }
+    if (b.status != BookingStatus.active) {
+      return Result.failure(
+        BookingError(
+          BookingErrorCode.notActive,
+          b.status == BookingStatus.cancelled ? 'Запись уже отменена.' : 'Визит уже состоялся.',
+        ),
+      );
+    }
+    return Result.success(b);
+  }
+
+  /// Отмена бронирования: только активная запись и не позднее чем за 2 часа.
+  /// Повторный вызов не вернёт кредиты второй раз. Возврат онлайн-оплаты по квитанции записи делает «сервер»
+  /// (`MockBookingsRepository`): здесь только состояние записи и кредиты.
+  Result<BookingItem, BookingError> cancelBooking(String bookingId) {
+    final own = _ownActiveBooking(bookingId);
+    if (own case Failure()) return own;
+    final b = own.valueOrNull!;
+
+    if (!b.canCancel) {
+      return const Result.failure(
+        BookingError(BookingErrorCode.tooLate, 'Отмена возможна не позднее чем за 2 часа до визита.'),
+      );
     }
 
-    // Обновляем показатели мастера
-    masterVisitsToday++;
-    masterDailyRevenue += sumPrice;
+    // Возврат кредитов по правилу ТЗ
+    if (b.isPaidWithCredits) clientCredits += b.credits;
+    final updated = b.copyWith(status: BookingStatus.cancelled);
+    _store.replace(updated);
+    notifyListeners();
+    return Result.success(updated);
+  }
 
+  /// Перенос записи (M-10). Проходит те же проверки, что и создание: слот свободен у того же мастера,
+  /// нет пересечений, время в будущем. Для оплаты кредитами цена пересчитывается по k_slot нового слота:
+  /// доплата списывается (с проверкой баланса), разница возвращается.
+  /// [BACKEND NOTE]: PATCH /api/v1/bookings/:id/reschedule
+  Result<BookingItem, BookingError> rescheduleBooking({required String bookingId, required DateTime newDateTime}) {
+    final own = _ownActiveBooking(bookingId);
+    if (own case Failure()) return own;
+    final b = own.valueOrNull!;
+
+    if (!b.canReschedule) {
+      return const Result.failure(
+        BookingError(BookingErrorCode.tooLate, 'Перенос возможен не позднее чем за 2 часа до визита.'),
+      );
+    }
+    if (newDateTime == b.startsAt) {
+      return const Result.failure(BookingError(BookingErrorCode.slotUnavailable, 'Запись уже на это время.'));
+    }
+    if (newDateTime.isBefore(AppClock.now().add(const Duration(minutes: minLeadMinutes)))) {
+      return const Result.failure(
+        BookingError(BookingErrorCode.inPast, 'Это время уже прошло или начинается слишком скоро.'),
+      );
+    }
+    final available = _slots.isAvailable(
+      salonId: b.salonId,
+      masterId: b.masterId,
+      serviceId: b.serviceId,
+      startsAt: newDateTime,
+      durationMinutes: b.durationMinutes,
+      excludeBookingId: b.id,
+    );
+    if (!available) {
+      return const Result.failure(
+        BookingError(BookingErrorCode.slotUnavailable, 'Это время недоступно. Выберите другой слот.'),
+      );
+    }
+    if (_overlapsOwnBooking(newDateTime, b.durationMinutes, excludeBookingId: b.id)) {
+      return const Result.failure(
+        BookingError(BookingErrorCode.overlapsOwnBooking, 'У вас уже есть запись на это время.'),
+      );
+    }
+
+    var newCredits = b.credits;
+    if (b.isPaidWithCredits) {
+      newCredits = SlotPricing.credits(b.baseCredits, newDateTime);
+      final extra = newCredits - b.credits;
+      // Лимит K-03 проверяем всегда (месяц мог смениться), заморозку и баланс — только если нужна доплата
+      final block = _creditsBlock(
+        salonId: b.salonId,
+        credits: extra > 0 ? extra : 0,
+        dateTime: newDateTime,
+        excludeBookingId: b.id,
+      );
+      if (block != null && (extra > 0 || block.code == BookingErrorCode.creditsLimit)) {
+        return Result.failure(block);
+      }
+      clientCredits -= extra;
+    }
+
+    final updated = b.copyWith(startsAt: newDateTime, credits: newCredits);
+    _store.replace(updated);
+    notifyListeners();
+    return Result.success(updated);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Отзывы о мастере (M-13)
+  // ---------------------------------------------------------------------------
+
+  /// Меняется при любом изменении отзывов: экраны с рейтингами перечитывают каталог по этому событию
+  final ValueNotifier<int> reviewChanges = ValueNotifier(0);
+
+  void _reviewsChanged() {
+    reviewChanges.value++;
     notifyListeners();
   }
 
-  /// Отмена бронирования (с проверкой правила 2 часов)
-  bool cancelBooking(String bookingId) {
-    final index = _bookings.indexWhere((b) => b.id == bookingId);
-    if (index != -1) {
-      final b = _bookings[index];
-      if (!b.canCancel) {
-        return false; // Отмена строго заблокирована (до визита осталось менее 2 часов)
-      }
-      b.status = 'cancelled';
-
-      // Возврат кредитов по правилу ТЗ
-      if (b.paymentMethod == 'Кредиты') {
-        clientCredits += b.credits;
-      }
-
-      notifyListeners();
-      return true;
+  /// Содержимое отзыва: оценка, длина, контакты, причина низкой оценки. Одно место для создания и правки.
+  ReviewError? _validateReview(int rating, List<String> tags, String comment) {
+    if (rating < 1 || rating > 5) {
+      return const ReviewError(ReviewErrorCode.ratingRequired, 'Выберите оценку от 1 до 5.');
     }
-    return false;
+    final text = comment.trim();
+    if (text.length > ReviewRules.maxCommentLength) {
+      return const ReviewError(ReviewErrorCode.tooLong, 'Комментарий не длиннее ${ReviewRules.maxCommentLength} символов.');
+    }
+    if (ContactsInText.found(text)) {
+      return const ReviewError(ReviewErrorCode.contactsInText, 'Уберите из отзыва контакты и ссылки.');
+    }
+    final allowedTags = {...ReviewTags.master(rating), ...ReviewTags.salon(rating)};
+    if (tags.any((t) => !allowedTags.contains(t))) {
+      return const ReviewError(ReviewErrorCode.unknownTag, 'Выберите причины из списка.');
+    }
+    if (rating <= ReviewRules.lowRatingMax && tags.isEmpty && text.length < ReviewRules.minReasonCommentLength) {
+      return const ReviewError(
+        ReviewErrorCode.reasonRequired,
+        'Выберите причину или опишите, что не понравилось (от ${ReviewRules.minReasonCommentLength} символов).',
+      );
+    }
+    return null;
   }
 
-  /// Перенос времени бронирования (M-10)
-  /// [BACKEND NOTE]: При интеграции с NestJS заменяется на PATCH /api/v1/bookings/:id/reschedule
-  void rescheduleBooking({
-    required String bookingId,
-    required String newDate,
-    required String newTime,
-  }) {
-    final index = _bookings.indexWhere((b) => b.id == bookingId);
-    if (index != -1) {
-      _bookings[index].date = newDate;
-      _bookings[index].time = newTime;
-      notifyListeners();
-    }
-  }
-
-  /// Добавление оценки и отзыва о визите (M-13)
-  /// [BACKEND NOTE]: При интеграции с NestJS заменяется на POST /api/v1/bookings/:id/review
-  /// body: { "rating": rating, "tags": tags, "comment": comment }
-  void addReview({
+  /// Отзыв о мастере по завершённой записи: один раз, в течение 7 дней после визита.
+  /// Отзыв и проекция в записи (`review*`) пишутся одной операцией; мастер получает уведомление.
+  /// [BACKEND NOTE]: POST /api/v1/bookings/:id/review  body: { rating, tags, comment }
+  Result<MasterReview, ReviewError> submitReview({
     required String bookingId,
     required int rating,
     required List<String> tags,
     required String comment,
   }) {
-    final index = _bookings.indexWhere((b) => b.id == bookingId);
-    if (index != -1) {
-      _bookings[index].reviewRating = rating;
-      _bookings[index].reviewTags = tags;
-      _bookings[index].reviewComment = comment;
-      _bookings[index].reviewDate = DateTime.now();
-      notifyListeners();
+    final b = _store.byId(bookingId);
+    if (b == null || b.clientId != clientId) {
+      return const Result.failure(ReviewError(ReviewErrorCode.notFound, 'Запись не найдена.'));
     }
+    if (b.status != BookingStatus.completed) {
+      return const Result.failure(
+        ReviewError(ReviewErrorCode.notCompleted, 'Отзыв можно оставить только после подтверждённого визита.'),
+      );
+    }
+    if (b.reviewId != null) {
+      return const Result.failure(ReviewError(ReviewErrorCode.alreadyReviewed, 'Вы уже оставили отзыв о визите.'));
+    }
+    if (!b.isReviewWindowOpen) {
+      return const Result.failure(
+        ReviewError(ReviewErrorCode.windowClosed, 'Отзыв можно оставить в течение $reviewWindowDays дней после визита.'),
+      );
+    }
+    final invalid = _validateReview(rating, tags, comment);
+    if (invalid != null) return Result.failure(invalid);
+
+    final masterId = b.masterId;
+    final master = masterId == null ? null : MastersRepository().getMasterById(masterId);
+    if (masterId == null || master == null) {
+      return const Result.failure(ReviewError(ReviewErrorCode.notFound, 'Мастер не найден.'));
+    }
+    final now = AppClock.now();
+    final review = MasterReview(
+      id: 'r-${Uuid.v4()}',
+      bookingId: b.id,
+      masterId: masterId,
+      masterName: shortPersonName(master.name),
+      salonId: b.salonId,
+      serviceName: b.serviceName,
+      authorId: clientId,
+      authorName: shortPersonName(clientName),
+      rating: rating,
+      tags: tags,
+      comment: comment.trim(),
+      createdAt: now,
+    );
+    reviews.put(review);
+    // [BACKEND NOTE]: здесь уведомление уходит только демо-мастеру (masterId == this.masterId).
+    // На сервере его получает мастер из записи — через push или ленту GET /masters/me/notifications.
+    if (masterId == this.masterId) {
+      MasterCabinetStore().addNotification(
+        MasterNotification(
+          title: 'Новый отзыв: $rating ★',
+          body: 'Автор: ${review.authorName} · ${b.serviceName}',
+          timeAgo: 'Только что',
+        ),
+      );
+    }
+    _store.replace(
+      b.copyWith(
+        reviewId: review.id,
+        reviewRating: review.rating,
+        reviewTags: review.tags,
+        reviewComment: review.comment,
+        reviewDate: now,
+      ),
+    );
+    _reviewsChanged();
+    return Result.success(review);
   }
 
-  /// Подтверждение визита через QR
-  void completeVisit(String bookingId) {
-    final index = _bookings.indexWhere((b) => b.id == bookingId);
-    if (index != -1) {
-      _bookings[index].status = 'completed';
-      notifyListeners();
+  /// Отзывы салона: отзывы его мастеров; у салона без мастеров в каталоге — общие отзывы (мок)
+  /// [BACKEND NOTE]: GET /api/v1/salons/:id/reviews
+  List<MasterReview> salonReviews(String salonId, {int limit = ReviewRules.pageSize}) {
+    if (MastersRepository().getMastersForSalon(salonId).isEmpty) {
+      return ReviewStore.legacySalonReviews(salonId).take(limit).toList();
     }
+    return reviews.forSalon(salonId, limit: limit);
   }
 
-  /// Заморозка / разморозка абонемента
-  void toggleFreeze() {
-    isFrozen = !isFrozen;
+  /// Правка своего отзыва, пока открыто окно в 7 дней после визита.
+  /// [BACKEND NOTE]: PATCH /api/v1/reviews/:id  body: { rating, tags, comment }
+  Result<MasterReview, ReviewError> editReview({
+    required String reviewId,
+    required int rating,
+    required List<String> tags,
+    required String comment,
+  }) {
+    final review = reviews.byId(reviewId);
+    if (review == null) return const Result.failure(ReviewError(ReviewErrorCode.notFound, 'Отзыв не найден.'));
+    final b = _store.byId(review.bookingId);
+    if (review.authorId != clientId || b == null) {
+      return const Result.failure(ReviewError(ReviewErrorCode.notAuthor, 'Править можно только свой отзыв.'));
+    }
+    if (!b.isReviewWindowOpen) {
+      return const Result.failure(
+        ReviewError(ReviewErrorCode.windowClosed, 'Отзыв можно изменить в течение $reviewWindowDays дней после визита.'),
+      );
+    }
+    final invalid = _validateReview(rating, tags, comment);
+    if (invalid != null) return Result.failure(invalid);
+
+    final now = AppClock.now();
+    final updated = review.copyWith(rating: rating, tags: tags, comment: comment.trim(), editedAt: now);
+    reviews.put(updated);
+    _store.replace(b.copyWith(reviewRating: updated.rating, reviewTags: updated.tags, reviewComment: updated.comment));
+    _reviewsChanged();
+    return Result.success(updated);
+  }
+
+  /// Публичный ответ мастера на отзыв о нём: один ответ, его можно править.
+  /// [BACKEND NOTE]: PUT /api/v1/reviews/:id/reply  body: { text }
+  Result<MasterReview, ReviewError> replyToReview({required String reviewId, required String text, String? asMasterId}) {
+    final review = reviews.byId(reviewId);
+    if (review == null) return const Result.failure(ReviewError(ReviewErrorCode.notFound, 'Отзыв не найден.'));
+    if (review.masterId != (asMasterId ?? masterId)) {
+      return const Result.failure(ReviewError(ReviewErrorCode.notYourReview, 'Отвечать можно только на отзывы о вас.'));
+    }
+    final body = text.trim();
+    if (body.isEmpty) return const Result.failure(ReviewError(ReviewErrorCode.textRequired, 'Напишите ответ.'));
+    if (body.length > ReviewRules.maxReplyLength) {
+      return const Result.failure(ReviewError(ReviewErrorCode.tooLong, 'Ответ не длиннее ${ReviewRules.maxReplyLength} символов.'));
+    }
+    if (ContactsInText.found(body)) {
+      return const Result.failure(ReviewError(ReviewErrorCode.contactsInText, 'Уберите из ответа контакты и ссылки.'));
+    }
+    final updated = review.copyWith(reply: ReviewReply(text: body, createdAt: AppClock.now()));
+    reviews.put(updated);
+    _reviewsChanged();
+    return Result.success(updated);
+  }
+
+  /// Подтверждение визита (после проверки QR): только активная запись
+  Result<BookingItem, BookingError> completeVisit(String bookingId) {
+    final b = _store.byId(bookingId);
+    if (b == null) {
+      return const Result.failure(BookingError(BookingErrorCode.notFound, 'Запись не найдена.'));
+    }
+    if (b.status != BookingStatus.active) {
+      return Result.failure(
+        BookingError(
+          BookingErrorCode.notActive,
+          b.status == BookingStatus.completed ? 'Этот визит уже подтверждён.' : 'Запись отменена.',
+        ),
+      );
+    }
+    final updated = b.copyWith(status: BookingStatus.completed);
+    _store.replace(updated);
+    notifyListeners();
+    return Result.success(updated);
+  }
+
+  // ---------------------------------------------------------------------------
+  // QR визита
+  // ---------------------------------------------------------------------------
+
+  /// Динамический токен QR визита: `GZL|bookingId|issuedAtMillis|nonce`.
+  /// [BACKEND NOTE]: на сервере токен подписывается (HMAC), клиент лишь отображает его.
+  /// Здесь подписи нет — это мок серверной логики; nonce делает код одноразовым.
+  String visitQrToken(BookingItem booking) =>
+      'GZL|${booking.id}|${AppClock.now().millisecondsSinceEpoch}|${Uuid.v4()}';
+
+  /// Проверка QR мастером: формат, срок жизни кода, статус записи, салон, окно −30/+60 мин.
+  /// При успехе визит отмечается выполненным и попадает в доход мастера.
+  /// [ignoreTimeWindow] — только для демо-режима мока и тестов; репозиторий наружу его не отдаёт.
+  VisitQrResult validateVisitQr(String raw, {bool ignoreTimeWindow = false}) {
+    final parts = raw.split('|');
+    if (parts.length != 4 || parts[0] != 'GZL') {
+      return const VisitQrResult.failure('Это не QR-код визита Go\'zallik.');
+    }
+    final issuedAt = int.tryParse(parts[2]);
+    if (issuedAt == null) {
+      return const VisitQrResult.failure('QR-код повреждён. Попросите клиента открыть его заново.');
+    }
+    final age = AppClock.now().difference(DateTime.fromMillisecondsSinceEpoch(issuedAt)).inSeconds;
+    if (age < -qrGraceSeconds) {
+      // Код «из будущего» — признак подделки или сбитых часов; принимать его нельзя
+      return const VisitQrResult.failure('QR-код не прошёл проверку времени. Попросите клиента открыть код заново.');
+    }
+    if (age > qrLifetimeSeconds + qrGraceSeconds) {
+      return const VisitQrResult.failure('QR-код устарел. Попросите клиента показать обновлённый код.');
+    }
+    if (_usedQrNonces.contains(parts[3])) {
+      return const VisitQrResult.failure('Этот QR-код уже использован. Попросите клиента показать обновлённый код.');
+    }
+
+    final booking = _store.byId(parts[1]);
+    if (booking == null) {
+      return const VisitQrResult.failure('Запись не найдена.');
+    }
+    if (booking.status != BookingStatus.active) {
+      return VisitQrResult.failure(
+        booking.status == BookingStatus.completed ? 'Этот визит уже подтверждён.' : 'Запись отменена.',
+      );
+    }
+    if (booking.salonId != masterSalonId) {
+      return VisitQrResult.failure('Запись оформлена в другой салон: ${booking.salonName}.');
+    }
+    if (!ignoreTimeWindow) {
+      final minutesToStart = booking.startsAt.difference(AppClock.now()).inMinutes;
+      if (minutesToStart > qrEarlyMinutes || minutesToStart < -qrLateMinutes) {
+        return VisitQrResult.failure(
+          'Визит запланирован на ${booking.date}, ${booking.time}. '
+          'Подтвердить можно за $qrEarlyMinutes мин до начала и до $qrLateMinutes мин после.',
+        );
+      }
+    }
+
+    return switch (completeVisit(booking.id)) {
+      Success(:final value) => () {
+        _usedQrNonces.add(parts[3]);
+        return VisitQrResult.success(value);
+      }(),
+      Failure(:final error) => VisitQrResult.failure(error.message),
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Уведомления клиента
+  // ---------------------------------------------------------------------------
+
+  List<AppNotification> get notifications => List.unmodifiable(_notifications);
+  int get unreadNotificationsCount => _notifications.where((n) => !n.isRead).length;
+
+  void markNotificationRead(String id) {
+    final index = _notifications.indexWhere((n) => n.id == id);
+    if (index == -1 || _notifications[index].isRead) return;
+    _notifications[index].isRead = true;
     notifyListeners();
   }
 
-  /// Покупка пакета кредитов
-  void addCredits(int credits) {
-    clientCredits += credits;
+  void markAllNotificationsRead() {
+    for (final n in _notifications) {
+      n.isRead = true;
+    }
     notifyListeners();
   }
+}
+
+enum AppNotificationType { reminder, credits, promo, review }
+
+class AppNotification {
+  final String id;
+  final AppNotificationType type;
+  final String title;
+  final String body;
+  final String timeLabel;
+
+  /// Салон, на который ведёт уведомление (если есть)
+  final String? salonId;
+  bool isRead;
+
+  AppNotification({
+    required this.id,
+    required this.type,
+    required this.title,
+    required this.body,
+    required this.timeLabel,
+    this.salonId,
+    this.isRead = false,
+  });
 }

@@ -1,2 +1,3 @@
 #include "Generated.xcconfig"
 YANDEX_MAPKIT_VARIANT = full
+#include? "Secrets.xcconfig"
