@@ -37,14 +37,20 @@ class ReviewTags {
 class ContactsInText {
   ContactsInText._();
 
-  static final _phoneRun = RegExp(r'\+?[\d\s\-().]{7,}');
+  /// Номер: цифры подряд или через пробелы, дефисы и скобки (точки разделяют даты 12.10.2026, поэтому не считаются)
+  static final _digitRun = RegExp(r'\+?\d(?:[\s\-()]{0,2}\d)*');
+
+  /// Сумма «1 250 000 сум»: группы по три цифры и валюта рядом
+  static final _amount = RegExp(r"\d{1,3}(?:[\s\u00A0]\d{3})+\s*(?:сум|сўм|so'm|som)", caseSensitive: false);
+
   static final _other = RegExp(r'https?://|www\.|@\w{2,}|\b[\w-]+\.(com|ru|uz|org|net|me|io|ly|info)\b', caseSensitive: false);
 
   static bool found(String text) {
     if (_other.hasMatch(text)) return true;
-    for (final m in _phoneRun.allMatches(text)) {
-      final digits = m.group(0)!.replaceAll(RegExp(r'\D'), '').length;
-      if (digits >= 7) return true;
+    for (final m in _digitRun.allMatches(text.replaceAll(_amount, ' '))) {
+      final raw = m.group(0)!;
+      final digits = raw.replaceAll(RegExp(r'\D'), '').length;
+      if (digits >= 9) return true;
     }
     return false;
   }
@@ -165,6 +171,7 @@ enum ReviewErrorCode {
   notAuthor,
   notYourReview,
   textRequired,
+  unknownTag,
   notFound,
 }
 

@@ -137,6 +137,24 @@ void main() {
       }
     });
 
+    test('даты, суммы и время не считаются телефоном', () {
+      for (final text in ['Была 12.10.2026, всё отлично', 'Отдала 1 250 000 сум, но того стоит', '10 000 000 сум', 'Пришла в 10:00']) {
+        expect(ContactsInText.found(text), isFalse, reason: text);
+      }
+    });
+
+    test('номера, ссылки и ники распознаются', () {
+      for (final text in ['+998 90 123 45 67', '90 123 45 67', '901234567', 't.me/x', '@nick', 'site.uz']) {
+        expect(ContactsInText.found(text), isTrue, reason: text);
+      }
+    });
+
+    test('теги только из списка для этой оценки', () async {
+      expect(codeOf(await submit('b-002', rating: 5, tags: const ['Придуманный тег'])), ReviewErrorCode.unknownTag);
+      expect(codeOf(await submit('b-002', rating: 2, tags: [ReviewTags.masterPositive.first])), ReviewErrorCode.unknownTag);
+      expect((await submit('b-002', rating: 5, tags: [ReviewTags.masterPositive.first])).isSuccess, isTrue);
+    });
+
     test('обычный текст с цифрами проходит', () async {
       expect((await submit('b-002', comment: 'Была 2 раза, держится 4 недели, 5 из 5')).isSuccess, isTrue);
     });

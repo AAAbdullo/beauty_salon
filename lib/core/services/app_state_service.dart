@@ -689,6 +689,10 @@ class AppStateService extends ChangeNotifier {
     if (ContactsInText.found(text)) {
       return const ReviewError(ReviewErrorCode.contactsInText, 'Уберите из отзыва контакты и ссылки.');
     }
+    final allowedTags = {...ReviewTags.master(rating), ...ReviewTags.salon(rating)};
+    if (tags.any((t) => !allowedTags.contains(t))) {
+      return const ReviewError(ReviewErrorCode.unknownTag, 'Выберите причины из списка.');
+    }
     if (rating <= ReviewRules.lowRatingMax && tags.isEmpty && text.length < ReviewRules.minReasonCommentLength) {
       return const ReviewError(
         ReviewErrorCode.reasonRequired,
@@ -748,6 +752,8 @@ class AppStateService extends ChangeNotifier {
       createdAt: now,
     );
     reviews.put(review);
+    // [BACKEND NOTE]: здесь уведомление уходит только демо-мастеру (masterId == this.masterId).
+    // На сервере его получает мастер из записи — через push или ленту GET /masters/me/notifications.
     if (masterId == this.masterId) {
       MasterCabinetStore().addNotification(
         MasterNotification(
